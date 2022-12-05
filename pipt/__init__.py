@@ -3,9 +3,7 @@
 .. include:: ./README.md
 """
 
-__pdoc__ = {'plot':False,'simulator.log_gp':False, 'simulator.log':False,
-            'simulator.shallowlogs':False,'simulator.subsurf_flow':False,
-             'simulator.flow_rock':False, 'simulator.flow_rock_feat':False}
+__pdoc__ = {}
 
 # import replacement module and override submodule in pipt
 # import sys
