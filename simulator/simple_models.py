@@ -10,7 +10,7 @@ import time  # To wait a bit before loading files
 import h5py     # To load matlab .mat files
 from scipy import interpolate
 
-class lin_1d(lin_onedimmodel):
+class lin_1d:
     """
     linear 1x150 model (or whatever), just make observations of the state at given positions.
     """

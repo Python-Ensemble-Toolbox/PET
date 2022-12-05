@@ -5,7 +5,7 @@ from numpy import linalg as la
 # Internal imports
 from popt.misc_tools import optim_tools as ot, basic_tools as bt
 from pipt.misc_tools import analysis_tools as at
-from popt.fwd_sim.ensemble import Ensemble
+from popt.loop.ensemble import Ensemble
 
 
 class EnOpt(Ensemble):

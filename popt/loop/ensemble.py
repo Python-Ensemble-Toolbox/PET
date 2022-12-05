@@ -17,7 +17,7 @@ import datetime as dt
 from p_tqdm import p_map
 
 # Internal imports
-import ensemble.ensemble.Ensemble as PETEnsemble
+from ensemble.ensemble import Ensemble as PETEnsemble
 
 # Internal imports
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
