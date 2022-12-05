@@ -4,8 +4,7 @@ set -eu
 [ "$GH_PASSWORD" ] || exit 12
 
 sitemap() {
-    # TODO: change to pipt_devo and enable pages
-    WEBSITE='https://nansencenter.github.io/DAPPER'
+    WEBSITE='https://Python-Ensemble-Toolbox.github.io/PET'
     find -name '*.html' |
         sed "s,^\.,$WEBSITE," |
         sed 's/index.html$//' |
@@ -15,7 +14,7 @@ sitemap() {
 }
 
 # The docs were generated from master, but here we need the gh-pages branch
-git clone -b gh-pages "https://NORCE-Energy:$GH_PASSWORD@github.com/$GITHUB_REPOSITORY.git" gh-pages
+git clone -b gh-pages "https://github.com/Python-Ensemble-Toolbox/PET.git" gh-pages
 cp -R docs/* gh-pages/docs/
 cd gh-pages
 # sitemap
