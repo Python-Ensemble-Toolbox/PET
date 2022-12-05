@@ -41,7 +41,7 @@ jobs:
       - name: Build
         run: |
           pdoc --force --html --template-dir docs/templates -o ./docs/ \
-          docs/dev_guide.py pipt
+          docs/dev_guide.py ensemble pipt popt input_output simulator misc
 
       - name: Deploy
         if: ${{ github.event_name != 'pull_request' }}
