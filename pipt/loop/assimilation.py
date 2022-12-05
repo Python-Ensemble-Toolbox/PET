@@ -16,7 +16,7 @@ from importlib import import_module
 # Internal imports
 from pipt.misc_tools import qaqc_tools
 from pipt.loop.ensemble import Ensemble
-from pipt.system_tools.environ_var import OpenBlasSingleThread
+from misc.system_tools.environ_var import OpenBlasSingleThread
 from pipt.misc_tools import analysis_tools as at
 
 

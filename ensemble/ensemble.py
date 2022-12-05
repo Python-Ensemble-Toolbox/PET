@@ -21,7 +21,7 @@ from pipt.geostat.decomp import Cholesky  # Making realizations
 from pipt.misc_tools import cov_regularization
 from pipt.misc_tools import wavelet_tools as wt
 from misc import read_input_csv as rcsv
-from pipt.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
+from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
 class Ensemble:
     """
     Class for organizing misc. variables and simulator for an ensemble-based inversion run. Here, the forecast step

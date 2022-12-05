@@ -6,7 +6,7 @@ implementing, leave it in that class.
 # External imports
 import numpy as np          # Numerical tools
 from scipy import linalg    # Linear algebra tools
-from pipt.system_tools.environ_var import OpenBlasSingleThread # only single thread
+from misc.system_tools.environ_var import OpenBlasSingleThread # only single thread
 import multiprocessing as mp # parallel updates
 import time
 import pickle
