@@ -1,0 +1,51 @@
+
+
+name: Generate and deploy docs
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - uses: actions/cache@v2
+        name: Set up caches
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}
+
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 3
+
+      - name: Install dependencies
+        run: |
+          pip install -U pip setuptools wheel
+          pip install pdoc3
+          pip install $(./.parse_requirements.py)
+
+      - name: Build
+        run: |
+          pdoc --force --html --template-dir docs/templates -o ./docs/ \
+          docs/dev_guide.py pipt
+
+      - name: Deploy
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          GH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: .github/push-docs.sh
+
