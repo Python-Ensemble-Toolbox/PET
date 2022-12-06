@@ -9,8 +9,10 @@ from multiprocessing import Process
 import datetime as dt
 from scipy import interpolate
 from subprocess import call, DEVNULL
-from pyresito.io import ecl
+from pyresito.io import ecl, grdecl
 from shutil import rmtree  # rmtree for removing folders
+import time
+#import rips
 
 # Internal imports
 from misc.system_tools.environ_var import EclipseRunEnvironment
@@ -900,6 +902,28 @@ class eclipse:
 
             np.savez('fwd_debug_%i' %(assimstep), **save_dict)
 
+    def write_to_grid(self,value,propname, path,dim,t_ind=None):
+        if t_ind == None:
+            trans_dict = {}
+            def _lookup(kw):
+                return trans_dict[kw] if kw in trans_dict else kw
+
+            # Write a quantity to the grid as a grdecl file
+            with open(path + propname + '.grdecl', 'wb') as fileobj:
+                grdecl._write_kw(fileobj, propname, value, _lookup, dim)
+        else:
+            pass
+            # some errors with rips
+            #p = Process(target=_write_to_resinsight, args=(list(value[~value.mask]),propname, t_ind))
+            # Find an open resinsight case
+            #p.start()
+            #time.sleep(1)
+            #p.terminate()
+
+# def _write_to_resinsight(value, name,t_ind):
+#     resinsight = rips.Instance.find()
+#     case = resinsight.project.case(case_id=0)
+#     case.set_active_cell_property(value, 'GENERATED', name,t_ind)
 
 class ecl_100(eclipse):
     '''
