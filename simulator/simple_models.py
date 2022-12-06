@@ -92,7 +92,7 @@ class nonlin_onedimmodel:
         self.all_data_types = self.input_dict['datatype']
         self.l_prim = [int(i) for i in range(len(self.true_prim[1]))]
 
-    def setup_fwd_run(self, assimIndex=None, trueOrder=None,pred_data=None, redundant_sim=None):
+    def setup_fwd_run(self):
         assimIndex = [i for i in range(len(self.l_prim))]
         trueOrder = self.true_order
 
