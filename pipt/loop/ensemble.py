@@ -5,12 +5,12 @@ import sys
 from copy import deepcopy
 
 # Internal import
-import ensemble.ensemble as PETEnsemble
+from ensemble.ensemble import Ensemble as PETEnsemble
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
 from pipt.misc_tools import cov_regularization
 
-class Ensemble(PETEnsemble.Ensemble):
+class Ensemble(PETEnsemble):
     """
     Class for organizing/initializing misc. variables and simulator for an ensemble-based inversion run. Inherits the
     PET ensemble structure
