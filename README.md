@@ -29,8 +29,6 @@ python3 -m pip install -e .
 
 Note that the ```-e``` option installs the package in a way you can make changes to the source code and have the changes take effect immediately (no re-installation required). Alternatively, you can install with ``` python3 -m pip install .``` where it installs it like a third-party package. Note also that if you do not install PET inside a virtual environment, you may have to add a ```--user``` option to install to your local Python site packages (usually located in ```~/.local```).
 
-If you have not added your SSH key to Github, you might get problems installing the ```pyresito``` package. If so, you have to install it separately and ensure that they are a part of the ```PYTHONPATH```.
-
 ## Examples
 
 PET needs to be setup with a configuration file. See the example folder for inspiration.

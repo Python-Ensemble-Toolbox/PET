@@ -3,7 +3,7 @@ from importlib import import_module
 import datetime as dt
 import numpy as np
 import os,time
-from pyresito.io import ecl,grdecl
+from misc import ecl,grdecl
 import shutil,glob
 from subprocess import Popen, PIPE
 import mat73

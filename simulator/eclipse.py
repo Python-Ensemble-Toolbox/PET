@@ -9,7 +9,7 @@ from multiprocessing import Process
 import datetime as dt
 from scipy import interpolate
 from subprocess import call, DEVNULL
-from pyresito.io import ecl, grdecl
+from misc import ecl, grdecl
 from shutil import rmtree  # rmtree for removing folders
 import time
 #import rips
