@@ -30,10 +30,13 @@ def read_data_csv(filename, datatype, truedataindex):
             row = row.values[0]  # select the values of the dataframe row
             csv_data = [None] * dnumber
             for col in range(dnumber):
-                try:  # Making a float
-                    csv_data[col] = float(row[pos[col]])
-                except:  # It is a string
-                    csv_data[col] = row[pos[col]]
+                if np.isnan(row[pos[col]]):
+                    csv_data[col] = None
+                else:
+                    try:  # Making a float
+                        csv_data[col] = float(row[pos[col]])
+                    except:  # It is a string
+                        csv_data[col] = row[pos[col]]
             imported_data.append(csv_data)
     else:  # No row headers (the rows in the csv file must correspond to the order in truedataindex)
         if tlength == df.shape[0]:  # File has column headers
@@ -46,19 +49,25 @@ def read_data_csv(filename, datatype, truedataindex):
             pos = list(range(df.shape[1]))  # Assume the data is in the correct order
             csv_data = [None] * len(temp)
             for col in range(len(temp)):
-                try:  # Making a float
-                    csv_data[col] = float(temp[col])
-                except:  # It is a string
-                    csv_data[col] = temp[col]
+                if np.isnan(temp[col]):
+                    csv_data[col] = None
+                else:
+                    try:  # Making a float
+                        csv_data[col] = float(temp[col])
+                    except:  # It is a string
+                        csv_data[col] = temp[col]
             imported_data.append(csv_data)
 
         for rows in df.values:
             csv_data = [None] * dnumber
             for col in range(dnumber):
-                try:  # Making a float
-                    csv_data[col] = float(rows[pos[col]])
-                except:  # It is a string
-                    csv_data[col] = rows[pos[col]]
+                if np.isnan(rows[pos[col]]):
+                    csv_data[col] = None
+                else:
+                    try:  # Making a float
+                        csv_data[col] = float(rows[pos[col]])
+                    except:  # It is a string
+                        csv_data[col] = rows[pos[col]]
             imported_data.append(csv_data)
 
     return imported_data
