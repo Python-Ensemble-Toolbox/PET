@@ -1,6 +1,47 @@
 from misc import read_input_csv as ricsv
 from copy import deepcopy
 from input_output.organize import Organize_input
+import tomli, tomli_w
+
+
+def convert_pipt_to_toml(init_file):
+    # Read .pipt file
+    da, fwd = read_txt(init_file)
+
+    # Write dictionaries to toml file with same base file name
+    with open(init_file.rstrip('pipt') + 'toml', 'wb') as f:
+        tomli_w.dump({'dataassim': da, 'fwdsim': fwd}, f)
+
+
+def read_toml(init_file):
+    """
+    Read .toml configuration file, parse and output dictionaries for PIPT/POPT
+
+    Parameters
+    ----------
+    init_file : str
+        toml configuration file
+    """
+    # Read
+    with open(init_file, 'rb') as fid:
+        t = tomli.load(fid)
+
+    # Check for dataassim and fwdsim
+    if 'dataassim' not in t.keys() or 'fwdsim' not in t.keys():
+        raise KeyError
+    
+    # Split to two dictionaries
+    keys_da, keys_fwd = t['dataassim'], t['fwdsim']
+
+    # Check for mandatory keywords
+    check_mand_keywords_da_fwdsim(keys_da, keys_fwd)
+
+    # Organize keywords
+    org = Organize_input(keys_da,keys_fwd)
+    org.organize()
+
+    return org.get_keys_da(), org.get_keys_fwd()
+
 
 def read_txt(init_file):
     """
