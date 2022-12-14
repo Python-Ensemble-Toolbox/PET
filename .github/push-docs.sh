@@ -14,7 +14,7 @@ sitemap() {
 }
 
 # The docs were generated from master, but here we need the gh-pages branch
-git clone -b gh_pages "https://github.com/Python-Ensemble-Toolbox/PET.git" gh-pages
+git clone -b gh_pages "https://KriFos1:$GH_PASSWORD@github.com/$GITHUB_REPOSITORY.git" gh-pages
 cp -R docs/* gh-pages/docs/
 cd gh-pages
 # sitemap
