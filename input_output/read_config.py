@@ -1,6 +1,64 @@
 from misc import read_input_csv as ricsv
 from copy import deepcopy
 from input_output.organize import Organize_input
+import yaml
+from yaml.loader import FullLoader
+import numpy as np
+
+
+def convert_pipt_to_yaml(init_file):
+    # Read .pipt file
+    da, fwd = read_txt(init_file)
+
+    # Write dictionaries to yaml file with same base file name
+    with open(init_file.rstrip('pipt') + 'toml', 'wb') as f:
+        yaml.dump({'dataassim': da, 'fwdsim': fwd}, f)
+
+
+def read_yaml(init_file):
+    """
+    Read .yaml input file, parse and return dictionaries for PIPT/POPT.
+
+    Parameters
+    ----------
+    init_file : str
+        .yaml file
+
+    Returns
+    -------
+    keys_da : dict
+        Parsed keywords from dataassim
+    keys_fwd : dict
+        Parsed keywords from fwdsim
+    """
+    # Make a !ndarray tag to convert a sequence to np.array
+    def ndarray_constructor(loader, node):
+        array = loader.construct_sequence(node)
+        return np.array(array)
+        
+    # Add constructor to yaml with tag !ndarray
+    yaml.add_constructor('!ndarray', ndarray_constructor)
+
+    # Read
+    with open(init_file, 'rb') as fid:
+        y = yaml.load(fid, Loader=FullLoader)
+
+    # Check for dataassim and fwdsim
+    if 'dataassim' not in y.keys() or 'fwdsim' not in y.keys():
+        raise KeyError
+    
+    # Split to two dictionaries
+    keys_da, keys_fwd = y['dataassim'], y['fwdsim']
+
+    # Check for mandatory keywords
+    check_mand_keywords_da_fwdsim(keys_da, keys_fwd)
+
+    # Organize keywords
+    org = Organize_input(keys_da,keys_fwd)
+    org.organize()
+
+    return org.get_keys_da(), org.get_keys_fwd()
+    
 
 def read_txt(init_file):
     """
