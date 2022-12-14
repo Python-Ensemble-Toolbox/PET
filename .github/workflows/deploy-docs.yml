@@ -35,8 +35,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -U pip setuptools wheel
-          pip install pdoc3
-          pip install $(./.parse_requirements.py)
+          pip install -e .[dev]
 
       - name: Build
         run: |
