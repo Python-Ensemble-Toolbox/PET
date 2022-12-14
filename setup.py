@@ -10,5 +10,6 @@ setup(
     author_email='krfo@norceresearch.no',
     description='Python Ensemble Toolbox',
     install_requires=['numpy', 'scipy', 'matplotlib', 'h5py', 'mako', 'tqdm', 'PyWavelets', 
-                      'psutil', 'pdoc3', 'pytest', 'pandas', 'p_tqdm', 'mat73','opencv-python','rips'],
+                      'psutil', 'pdoc3', 'pytest', 'pandas', 'p_tqdm', 'mat73','opencv-python','rips', 'tomli', 
+                      'tomli-w', 'pyyaml'],
 )
