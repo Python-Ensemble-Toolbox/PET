@@ -17,7 +17,7 @@ import sys
 
 # import these from the common package, since we may need to use the same
 # enumeration across file formats
-from .common import Phase, Prop
+from .ecl_common import Phase, Prop
 
 
 # add a valid log in case we are not run through the main program which
