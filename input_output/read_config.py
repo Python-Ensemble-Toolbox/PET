@@ -11,7 +11,7 @@ def convert_pipt_to_yaml(init_file):
     da, fwd = read_txt(init_file)
 
     # Write dictionaries to yaml file with same base file name
-    with open(init_file.rstrip('pipt') + 'toml', 'wb') as f:
+    with open(init_file.rstrip('pipt') + 'yaml', 'w') as f:
         yaml.dump({'dataassim': da, 'fwdsim': fwd}, f)
 
 
