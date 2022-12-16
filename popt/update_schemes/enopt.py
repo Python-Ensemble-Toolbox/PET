@@ -1,14 +1,16 @@
 # External imports
 import numpy as np
 from numpy import linalg as la
+from copy import deepcopy
+import logging
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot, basic_tools as bt
 from pipt.misc_tools import analysis_tools as at
-from popt.loop.ensemble import Ensemble
+from ensemble.ensemble import Ensemble as PETEnsemble
 
 
-class EnOpt(Ensemble):
+class EnOpt(PETEnsemble):
     """
     This is an implementation of the steepest ascent ensemble optimization algorithm given in, e.g., Chen et al.,
     2009, 'Efficient Ensemble-Based Closed-Loop Production Optimization', SPE Journal, 14 (4): 634-645.
@@ -20,32 +22,36 @@ class EnOpt(Ensemble):
     R is a smoothing matrix (e.g., covariance matrix for x), and S is the ensemble gradient (or sensitivity).
     """
 
-    def __init__(self, keys_opt, sim, obj_func):
+    def __init__(self, keys_opt, keys_en, sim, obj_func):
 
-        # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_opt, sim)
+        # init PETEnsemble
+        super(EnOpt, self).__init__(keys_en, sim)
 
-        # EnOPT parameters
+        # set logger
+        self.logger = logging.getLogger('PET.POPT')
+
+        # Optimization keys
+        self.keys_opt = keys_opt
+
+        # Initialize EnOPT parameters
+        self.upper_bound = []
+        self.lower_bound = []
+        self.step = 0  # state step
+        self.cov = np.array([])  # ensemble covariance
+        self.cov_step = 0  # covariance step
+        self.num_samples = self.ne
+        self.alpha_iter = 0  # number of backtracking steps
+        self.num_func_eval = 0  # Total number of function evaluations
         self._ext_enopt_param()
-        self.step = 0  # Iteration step
-        self.cov_step = 0
-
-        # Load initial state (control variable)
-        self._load_state()
-
-        # Scale the initial state to [0, 1]
-        self._scale_state()
-
-        # Load information needed to calculate the sensitivity matrix
-        self.cov = None
-        self._load_sensitivity_info()
 
         # Get objective function
         self.obj_func = obj_func
 
         # Calculate objective function of startpoint
-        self.run_ensemble()
-        self.obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.report)
+        self.ne = self.num_models
+        self.calc_prediction()
+        self.obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
+        self.save_analysis_debug(0)
 
         # Initialize function values and covariance
         self.sens_matrix = None
@@ -60,6 +66,7 @@ class EnOpt(Ensemble):
         list_states = list(self.state.keys())
 
         # Current state vector
+        self._scale_state()
         current_state = self.state
 
         # Calc sensitivity
@@ -67,16 +74,14 @@ class EnOpt(Ensemble):
 
         improvement = False
         success = False
-        alpha_iter = 0
+        self.alpha_iter = 0
         alpha = self.alpha
         while improvement is False:
 
             # Augment state
             aug_state = ot.aug_optim_state(current_state, list_states)
 
-            # Compute the steepest ascent step
-            # Scale the gradient with 2-norm (or inf-norm: np.inf)
-
+            # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
             new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, 2) + self.beta * self.step
 
             # Can set different stepsize for covariance update, e.g. change self.alpha to self.beta.
@@ -90,13 +95,17 @@ class EnOpt(Ensemble):
             self.cov = self.get_sym_pos_semidef(self.cov)
 
             # Make sure update is within bounds
-            lowerBound, upperBound = self.keys_opt['scaling'][0], self.keys_opt['scaling'][1]
-            np.clip(aug_state_upd, lowerBound, upperBound, out=aug_state_upd)
+            if self.upper_bound and self.lower_bound:
+                np.clip(aug_state_upd, 0, 1, out=aug_state_upd)
 
             # Calculate new objective function
             self.state = ot.update_optim_state(aug_state_upd, self.state, list_states)
-            self.run_ensemble()
-            new_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.report)
+            self.ne = self.num_models
+            self._invert_scale_state()
+            run_success = self.calc_prediction()
+            new_func_values = 0
+            if run_success:
+                new_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
 
             if np.mean(new_func_values) - np.mean(self.obj_func_values) > self.obj_func_tol:
 
@@ -111,43 +120,23 @@ class EnOpt(Ensemble):
                 # Write logging info
                 if logger is not None:
                     info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
-                        format(iteration, alpha_iter, np.mean(self.obj_func_values), alpha, self.cov[0, 0])
+                        format(iteration, self.alpha_iter, np.mean(self.obj_func_values), alpha, self.cov[0, 0])
                     logger.info(info_str_iter)
 
             else:
 
                 # If we do not have a reduction in the objective function, we reduce the step limiter
-                if alpha_iter < self.alpha_iter_max:
+                if self.alpha_iter < self.alpha_iter_max:
                     # Decrease alpha
                     self.alpha /= 2
-                    alpha_iter += 1
+                    self.alpha_iter += 1
                 else:
                     success = False
                     break
 
         # Save variables defined in ANALYSISDEBUG keyword.
-        if 'analysisdebug' in self.keys_opt and success:
-
-            # Init dict. of variables to save
-            save_dict = {}
-
-            # Make sure "ANALYSISDEBUG" gives a list
-            if isinstance(self.keys_opt['analysisdebug'], list):
-                analysisdebug = self.keys_opt['analysisdebug']
-            else:
-                analysisdebug = [self.keys_opt['analysisdebug']]
-
-            # Loop over variables to store in save list
-            for save_typ in analysisdebug:
-                if save_typ in locals():
-                    save_dict[save_typ] = eval('{}'.format(save_typ))
-                elif hasattr(self, save_typ):
-                    save_dict[save_typ] = eval('self.{}'.format(save_typ))
-                else:
-                    print(f'Cannot save {save_typ}!\n\n')
-
-            # Save the variables
-            np.savez('debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
+        if success:
+            self.save_analysis_debug(iteration)
 
         return success
 
@@ -156,34 +145,24 @@ class EnOpt(Ensemble):
     def get_sym_pos_semidef(a):
 
         rtol = 1e-05
-        S,U = np.linalg.eigh(a)
-        S=np.clip(S,0,None) + rtol
+        S, U = np.linalg.eigh(a)
+        S = np.clip(S, 0, None) + rtol
         a = (U*S)@U.T
         return a
 
     def _ext_enopt_param(self):
         """
         Extract ENOPT parameters in OPTIM part if inputted.
-
-        YC 24/9-19
         """
+
         # Default value for max. iterations
         default_obj_func_tol = 1e-6
         default_step_tol = 1e-6
         default_alpha = 0.1
         default_alpha_cov = 0.001
-        default_beta = 0.9
+        default_beta = 0.0
         default_alpha_iter_max = 5
         default_num_models = 1
-
-        # Todo: check self.keys_opt, self.orig_lb & self.orig_ub are not used for now
-        if 'origbounds' in self.keys_opt:
-            if isinstance(self.keys_opt['origbounds'][0], list):
-                origbounds = np.array(self.keys_opt['origbounds'])
-            else:
-                origbounds = np.array([self.keys_opt['origbounds']])
-            self.orig_lb = origbounds[:, 0]
-            self.orig_ub = origbounds[:, 1]
 
         # Check if ENOPT has been given in OPTIM. If it is not present, we assign a default value
         if 'enopt' not in self.keys_opt:
@@ -257,6 +236,19 @@ class EnOpt(Ensemble):
             if self.num_models > 1:
                 self.aux_input = list(np.arange(self.num_models))
 
+            value_cov = np.array([])
+            for name in self.prior_info.keys():
+                self.state[name] = self.prior_info[name]['mean']
+                value_cov = np.append(value_cov, self.prior_info[name]['variance'] * np.ones((len(self.state[name]),)))
+                if 'limits' in self.prior_info[name].keys():
+                    self.lower_bound.append(self.prior_info[name]['limits'][0])
+                    self.upper_bound.append(self.prior_info[name]['limits'][1])
+
+            # Augment state
+            list_state = list(self.state.keys())
+            aug_state = ot.aug_optim_state(self.state, list_state)
+            self.cov = value_cov * np.eye(len(aug_state))
+
     def calc_ensemble_sensitivity(self):
         """
         Calculate the sensitivity matrix normally associated with ensemble optimization algorithms, usually defined as:
@@ -278,10 +270,11 @@ class EnOpt(Ensemble):
         YC 2/10-19: Added calcuating gradient of covariance.
         """
         # Generate ensemble of states
+        self.ne = self.num_samples
         self.state = self._gen_state_ensemble()
-
-        self.run_ensemble()
-        obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.report)
+        self._invert_scale_state()
+        self.calc_prediction()
+        obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
         obj_func_values = np.array(obj_func_values)
 
         # Finally, we calculate the ensemble sensitivity matrix.
@@ -299,67 +292,89 @@ class EnOpt(Ensemble):
         g_c = np.zeros(self.cov.shape)
         g_m = np.zeros(aug_state.shape[0])
         for i in np.arange(self.ne):
-            g_m = g_m + pert_obj_func[i]*pert_state[:, i]
+            g_m = g_m + pert_obj_func[i] * pert_state[:, i]
             g_c = g_c + pert_obj_func[i] * (np.outer(pert_state[:, i], pert_state[:, i]))
 
         self.cov_sens_matrix = g_c / (self.ne - 1)
         self.sens_matrix = g_m / (self.ne - 1)
 
-    def _load_sensitivity_info(self):
+    def _gen_state_ensemble(self):
         """
-        Load  information on how to calculate the sensitvity matrix.
+        Generate an ensemble of states (control variables) to run in calc_ensemble_sensitivity. It is assumed that
+        the covariance function needed to generate realizations has been inputted via the SENSITIVITY keyword (with
+        METHOD option ENSEMBLE).
 
         ST 4/5-18
         """
-        # METHOD - Check which method has been choosen.
-        # If SENSITIVITY contains more than one line, we need to search for METHOD
-        if isinstance(self.keys_opt['sensitivity'][0], list):
-            # Get indices
-            ind = bt.index2d(self.keys_opt['sensitivity'], 'method')
+        # TODO: Gen. realizations for control variables at separate time steps (cov is a block diagonal matrix),
+        # and for more than one STATENAME
 
-            # Check if METHOD has been inputted
-            assert None not in ind, 'METHOD not found in keyword SENSITIVITY!'
+        # # Initialize Cholesky class
+        # chol = decomp.Cholesky()
+        #
+        # # Augment state
+        # list_state = list(self.state.keys())
+        # aug_state = ot.aug_optim_state(self.state, list_state)
 
-            # Assign method name
-            self.sens_method = self.keys_opt['sensitivity'][ind[0]][ind[1] + 1]
+        # Generate ensemble with the current state (control variable) as the mean and using the imported covariance
+        # matrix
+        state_en = {}
+        for i, statename in enumerate(self.state.keys()):
+            # state_en[statename] = chol.gen_real(self.state[statename], self.cov[i, i], self.ne)
+            mean = self.state[statename]
+            len_state = len(self.state[statename])
+            cov = self.cov[len_state * i:len_state * (i + 1), len_state * i:len_state * (i + 1)]
+            if len(cov) != len(mean):  # make sure cov is diagonal matrix
+                print('\033[1;31mERROR: Covariance must be diagonal matrix!\033[1;31m')
+            #     cov = cov*np.identity(len(mean))
+            if ['nesterov'] in self.keys_opt['enopt']:
+                if not isinstance(self.step, int):
+                    mean += self.beta * self.step[len_state * i:len_state * (i + 1)]
+                    cov += self.beta * self.cov_step[len_state * i:len_state * (i + 1), len_state * i:len_state * (i + 1)]
+                    cov = self.get_sym_pos_semidef(cov)
+            temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
+            if self.upper_bound and self.lower_bound:
+                np.clip(temp_state_en, 0, 1, out=temp_state_en)
 
-        # If SENSITIVITY contains only one line, this should be METHOD
-        elif isinstance(self.keys_opt['sensitivity'], list):
-            # Really check if METHOD has been inputted
-            assert self.keys_opt['sensitivity'] == 'method', 'METHOD not found in keyword SENSITIVITY!'
+            state_en[statename] = temp_state_en
 
-            # Assign method name
-            self.sens_method = self.keys_opt['sensitivity'][1]
+        return state_en
 
-        # If we have ensemble sensitivity matrix, we need to load the covariance matrix from which realizations of
-        # the state is made
-        if self.sens_method == 'ensemble':
-            # Search for COVARIANCE in SENSITIVTY
-            ind_cov = bt.index2d(self.keys_opt['sensitivity'], 'cov')
+    def _scale_state(self):
+        if self.upper_bound and self.lower_bound:
+            for i, key in enumerate(self.state):
+                self.state[key] = (self.state[key] - self.lower_bound[i]) / (self.upper_bound[i] - self.lower_bound[i])
+                if np.min(self.state[key]) < 0:
+                    self.state[key] = 0
+                elif np.max(self.state[key]) > 1:
+                    self.state[key] = 1
 
-            # Check if COVARIANCE has been inputted
-            assert None not in ind_cov, 'You have chosen ENSEMBLE as sensitivity method but COV has not been found!'
+    def _invert_scale_state(self):
+        if self.upper_bound and self.lower_bound:
+            for i, key in enumerate(self.state):
+                self.state[key] = self.lower_bound[i] + self.state[key] * (self.upper_bound[i] - self.lower_bound[i])
 
-            value_cov = self.keys_opt['sensitivity'][ind_cov[0]][ind_cov[1] + 1]
-            if isinstance(value_cov, str):
-                # Load covariance matrix
-                load_file = np.load(value_cov)
-                self.cov = load_file[load_file.files[0]]
+    def save_analysis_debug(self, iteration):
+        if 'analysisdebug' in self.keys_opt:
+
+            # Init dict. of variables to save
+            save_dict = {}
+
+            # Make sure "ANALYSISDEBUG" gives a list
+            if isinstance(self.keys_opt['analysisdebug'], list):
+                analysisdebug = self.keys_opt['analysisdebug']
             else:
-                # Augment state
-                list_state = list(self.state.keys())
-                aug_state = ot.aug_optim_state(self.state, list_state)
-                self.cov = value_cov * np.eye(len(aug_state))
-                # Loop over the statename to assign covariance values.
-                # for i, statename in enumerate(self.state.keys()):
-                #     self.cov[statename] = value_cov * np.eye(self.state[statename].shape[0])
+                analysisdebug = [self.keys_opt['analysisdebug']]
 
-                # Search for NE (no. of ensemble members)
-            ind_ne = bt.index2d(self.keys_opt['sensitivity'], 'ne')
+            # Loop over variables to store in save list
+            for save_typ in analysisdebug:
+                if save_typ in locals():
+                    save_dict[save_typ] = eval('{}'.format(save_typ))
+                elif hasattr(self, save_typ):
+                    save_dict[save_typ] = eval('self.{}'.format(save_typ))
+                else:
+                    print(f'Cannot save {save_typ}!\n\n')
 
-            # Check if NE has been inputted
-            assert None not in ind_ne, 'You have chosen ENSEMBLE as sensitivity method but NE has not been found!'
-
-            # Assign NE
-            self.ne = int(self.keys_opt['sensitivity'][ind_ne[0]][ind_ne[1] + 1])
+            # Save the variables
+            np.savez('debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
 

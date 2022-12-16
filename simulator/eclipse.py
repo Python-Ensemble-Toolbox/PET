@@ -67,8 +67,6 @@ class eclipse:
         self.inv_stat = None
         self.static_state = None
 
-
-
     def _extInfoInputDict(self):
         """
         Extract the manditory and optional information from the input_dict dictionary.
@@ -84,9 +82,9 @@ class eclipse:
         assert 'reporttype' in self.input_dict, 'Reporttype is missing, please specify this'
         assert 'reportpoint' in self.input_dict, 'Reportpoint is missing, please specify this'
 
-        self.true_prim = [self.input_dict['reporttype'],self.input_dict['reportpoint']]
+        self.true_prim = [self.input_dict['reporttype'], self.input_dict['reportpoint']]
 
-        self.true_order = [self.input_dict['reporttype'],self.input_dict['reportpoint']]
+        self.true_order = [self.input_dict['reporttype'], self.input_dict['reportpoint']]
         self.all_data_types = self.input_dict['datatype']
         self.l_prim = [int(i) for i in range(len(self.true_prim[1]))]
 
@@ -803,7 +801,7 @@ class eclipse:
                     if ext_data_info is not None:  # Get the data at a specific well and time
                         yFlow = self.ecl_case.summary_data(whichResponse, time)
             elif len(whichResponse.split(' ')) == 1:  # field data
-                if whichResponse in ['FOPT', 'FWPT', 'FGPT', 'FWIT', 'FGIT']:
+                if whichResponse.upper() in ['FOPT', 'FWPT', 'FGPT', 'FWIT', 'FGIT']:
                     if ext_data_info is not None:
                         yFlow = self.ecl_case.summary_data(whichResponse, time)
                 else:
