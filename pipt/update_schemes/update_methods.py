@@ -41,7 +41,7 @@ class approx_update():
 
             # we must perform localization
             # store the size of all data
-            data_size = [[self.real_obs_data[int(time)][data].size if self.real_obs_data[int(time)][data] is not None else 0
+            data_size = [[self.obs_data[int(time)][data].size if self.obs_data[int(time)][data] is not None else 0
                           for data in self.list_datatypes] for time in self.assim_index[1]]
             list_states = self.list_states
             f = self.keys_da['localization']

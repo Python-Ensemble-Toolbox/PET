@@ -5,10 +5,10 @@ name: Generate and deploy docs
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 
 jobs:
   deploy:
@@ -35,13 +35,12 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -U pip setuptools wheel
-          pip install pdoc3
-          pip install $(./.parse_requirements.py)
+          pip install -e .[dev]
 
       - name: Build
         run: |
           pdoc --force --html --template-dir docs/templates -o ./docs/ \
-          docs/dev_guide.py pipt
+          docs/dev_guide.py ensemble pipt popt input_output simulator misc
 
       - name: Deploy
         if: ${{ github.event_name != 'pull_request' }}

@@ -22,13 +22,15 @@ from pipt.misc_tools import cov_regularization
 from pipt.misc_tools import wavelet_tools as wt
 from misc import read_input_csv as rcsv
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
+
+
 class Ensemble:
     """
     Class for organizing misc. variables and simulator for an ensemble-based inversion run. Here, the forecast step
     and prediction runs are performed. General methods that are useful in various ensemble loops have also been
     implemented here.
     """
-    def __init__(self, keys_en,sim,redund_sim=None):
+    def __init__(self, keys_en, sim, redund_sim=None):
         """
         Class extends the ReadInitFile class. First the PIPT init. file is passed to the parent class for reading and
         parsing. Rest of the initialization uses the keywords parsed in ReadInitFile (parent) class to set up observed,
@@ -453,10 +455,15 @@ class Ensemble:
                                         the responses at each time step given in PREDICTION.
 
         """
-
+        # Number of parallel runs
         no_tot_run = int(self.sim.input_dict['parallel'])
+
+        # Setup forward simulator and redundant simulator
+        if self.redund_sim is not None:
+            self.redund_sim.setup_fwd_run()
         self.sim.setup_fwd_run()
-        # ensure that we put all the states in a list
+
+        # Ensure that we put all the states in a list
         list_state = [deepcopy({}) for _ in range(self.ne)]
         for i in range(self.ne):
             for key in self.state.keys():
@@ -465,42 +472,52 @@ class Ensemble:
                 else:
                     list_state[i][key] = deepcopy(input_state[key][:, i])
 
-        list_member_index = [i for i in range(self.ne)]
+        # Index list of ensemble members
+        list_member_index = list(range(self.ne))
 
+        # Run prediction in parallel using p_map
         en_pred = p_map(self.sim.run_fwd_sim, list_state, list_member_index, num_cpus=no_tot_run)
 
+        # List successful runs and crashes
         list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
         list_success = [indx for indx, el in enumerate(en_pred) if el is not False]
 
-        if not len(list_success):  # all runs have crashed
+        # Dump all information and print error if all runs have crashed
+        if not list_success:
             self.save()
             print('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-            self.logger.info('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+            self.logger.info('\n\033[1;31mERROR: All started simulations has failed! We dump all information and '
+                'exit!\033[1;m')
             sys.exit(1)
 
-        if len(list_crash):
-            if len(list_crash) < len(list_success):  # more successfull than crashed runs
+        # Check crashed runs 
+        if list_crash:
+            # Replace crashed runs with (random) successful runs. If there are more crashed runs than successful once,
+            # we draw with replacement.
+            if len(list_crash) < len(list_success):
                 copy_member = np.random.choice(list_success, size=len(list_crash), replace=False)
             else:
                 copy_member = np.random.choice(list_success, size=len(list_crash), replace=True)
 
+            # Insert the replaced runs in prediction list
             for indx, el in enumerate(copy_member):
-                print(
-                    f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member {el}! ---\033[92m')
-                self.logger.info(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member {el}! ---\033[92m')
+                print(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member '
+                    f'{el}! ---\033[92m')
+                self.logger.info(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by '
+                    f'ensemble member {el}! ---\033[92m')
                 for key in self.state.keys():
                     self.state[key][:, list_crash[indx]] = deepcopy(self.state[key][:, el])
                 en_pred[list_crash[indx]] = deepcopy(en_pred[el])
 
-        # convert ensemble specific result into pred_data, and filter for NONE data
-        self.pred_data = [{typ:np.concatenate(tuple((el[ind][typ][:,np.newaxis]) for el in en_pred),axis=1)
+        # Convert ensemble specific result into pred_data, and filter for NONE data
+        self.pred_data = [{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
                            if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
                            else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))]
 
-        # some predicted data might need to be adjusted (e.g. scaled or compressed if it is 4D seis data). Do not include
-        # this here.
+        # some predicted data might need to be adjusted (e.g. scaled or compressed if it is 4D seis data). Do not
+        # include this here.
 
-        # Store results or return prediction
+        # Store results if needed
         if save_prediction is not None:
             np.savez(f'{save_prediction}.npz', **{'pred_data': self.pred_data})
 

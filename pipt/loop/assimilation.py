@@ -407,17 +407,17 @@ class Assimilate:
         OBS: It is assumed that no underscore is inputted in DATATYPE. If there are underscores in DATATYPE
         entries, well, then we may have a problem when finding out which response to extract in get_sim_results below.
         """
-
         # Add an option to load existing sim results. The user must actively create the restart file by renaming an
         # existing sim_results.p file to restart_sim_results.p. 
         if os.path.exists('restart_sim_results.p'):
-            with open('restart_sim_results.p','rb') as f:
+            with open('restart_sim_results.p', 'rb') as f:
                 self.ensemble.pred_data = pickle.load(f)
-            os.rename('restart_sim_results.p','sim_results.p')
+            os.rename('restart_sim_results.p', 'sim_results.p')
             print('--- Restart sim results used ---')
             return
 
-        if len(self.ensemble.keys_da['assimindex']) > 1 : # if we are doing an sequential assimilation, such as enkf, we loop over assimilation steps
+        # If we are doing an sequential assimilation, such as enkf, we loop over assimilation steps
+        if len(self.ensemble.keys_da['assimindex']) > 1:
             assim_step = self.ensemble.iteration
         else:
             assim_step = 0
@@ -432,17 +432,6 @@ class Assimilate:
         # Get TRUEDATAINDEX
         true_order = [self.ensemble.keys_da['obsname'], self.ensemble.keys_da['truedataindex']]
 
-        # Initialize variables for the while-loop
-        self.successive_runs = []                            # List of runs that have finished successfully
-        current_run = []                                # List of simulations currently running
-        not_run_yet = [True] * self.ensemble.ne                  # List of which simulations that have been run
-        del_folder_list = []                            # List of En_* folders to delete
-        no_tot_run = int(self.ensemble.sim.input_dict['parallel'])     # How many to run in parallel
-        #self.ensemble._init_pred_data(assim_ind)                 # Initiallization is done in the simulator
-        lproc = [None] * self.ensemble.ne                        # List of process objects (multiprocessing or subprocess)
-        sim_start = [None] * self.ensemble.ne                    # List of simulation time start
-        restart_list = [0] * self.ensemble.ne                    # List of no. of restarts
-
         # List assim. index
         if isinstance(true_order[1], list):  # Check if true data prim. ind. is a list
             true_prim = [true_order[0], [x for x in true_order[1]]]
@@ -453,78 +442,79 @@ class Assimilate:
         else:  # Float
             l_prim = [int(assim_ind[1])]
 
-        pred_data_tmp = [{}] * len(true_prim[1])  # temporary storage of seismic data that need to be scaled
+        # Run forecast. Predicted data solved in self.ensemble.pred_data
+        self.ensemble.calc_prediction()
 
-        if self.ensemble.redund_sim is not None:
-            self.ensemble.redund_sim.setup_fwd_run() #assim_ind, true_order, l_prim, self.ensemble.pred_data)
-            self.ensemble.sim.setup_fwd_run() #assim_ind, true_order, l_prim, self.ensemble.pred_data, self.redund_sim)
-        else:
-            self.ensemble.sim.setup_fwd_run() #assim_ind, true_order, l_prim, self.ensemble.pred_data)
+        # Filter pred. data needed at current assimilation step. This essentially means deleting pred. data not
+        # contained in the assim. indices for current assim. step or does not have obs. data at this index
+        self.ensemble.pred_data = [elem for i, elem in enumerate(self.ensemble.pred_data) if i in l_prim or 
+            true_prim[1][i] is not None]
 
-        list_state = [deepcopy({}) for _ in range(self.ensemble.ne)]
-        for i in range(self.ensemble.ne):
-            for key in self.ensemble.state.keys():
-                list_state[i][key] = deepcopy(self.ensemble.state[key][:, i])
+        # Scale data if required (currently only one group of data can be scaled)
+        if 'scale' in self.ensemble.keys_da:
+            for pred_data in self.ensemble.pred_data:
+                for key in pred_data:
+                    if key in self.ensemble.keys_da['scale'][0]:
+                        pred_data[key] *= self.ensemble.keys_da['scale'][1]
 
-        list_member_index = [i for i in range(self.ensemble.ne)]
+        # Post process predicted data if wanted
+        if 'post_process_forecast' in self.ensemble.keys_da and self.ensemble.keys_da['post_process_forecast'] == 'yes':
+            self.post_process_forecast()
 
-        en_pred = p_map(self.ensemble.sim.run_fwd_sim, list_state, list_member_index, num_cpus=no_tot_run)
+        # If we have dynamic variables, and we are in the first assimilation step, we must convert lists to (2D)
+        # numpy arrays
+        if 'dynamicvar' in self.ensemble.keys_da and assim_step == 0:
+            for dyn_state in self.ensemble.keys_da['dynamicvar']:
+                self.ensemble.state[dyn_state] = np.array(self.ensemble.state[dyn_state]).T
 
-        # replace failed runs
-        list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
-        list_success = [indx for indx, el in enumerate(en_pred) if el is not False]
+        # Extra option debug
+        if 'saveforecast' in self.ensemble.sim.input_dict:
+            with open('sim_results.p','wb') as f:
+                pickle.dump(self.ensemble.pred_data, f)
 
-        if not len(list_success):  # all runs have crashed
-            self.ensemble.save()
-            print('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-            sys.exit(1)
+    def post_process_forecast(self):
+        """
+        Post processing of predicted data after a forecast run
+        """
+        # Temporary storage of seismic data that need to be scaled
+        pred_data_tmp = [None for _ in self.ensemble.pred_data]
 
-        if len(list_crash):
-            if len(list_crash) < len(list_success):  # more successfull than crashed runs
-                copy_member = np.random.choice(list_success, size=len(list_crash), replace=False)
-            else:
-                copy_member = np.random.choice(list_success, size=len(list_crash), replace=True)
+        # Loop over pred data and store temporary
+        if self.ensemble.sparse_info is not None:
+            for i, pred_data in enumerate(self.ensemble.pred_data):
+                for key in pred_data:
+                    # Reset vintage
+                    vintage = 0
 
-            for indx, el in enumerate(copy_member):
-                print(
-                    f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member {el}! ---\033[92m')
-                for key in self.ensemble.state.keys():
-                    self.ensemble.state[key][:, list_crash[indx]] = deepcopy(self.ensemble.state[key][:, el])
-                en_pred[list_crash[indx]] = deepcopy(en_pred[el])
-        
-        for member in range(self.ensemble.ne):
-            vintage = 0
-            for prim_ind in l_prim:
-                # # Loop over all keys in pred_data (all data types)
-                for key in self.ensemble.pred_data[prim_ind]:
-                    if self.ensemble.pred_data[prim_ind][key] is not None:
-                        data_array = en_pred[member][prim_ind][key]
-                        if self.ensemble.sparse_info is not None and vintage < len(self.ensemble.sparse_info['actnum']) and \
-                                len(data_array) == int(np.sum(self.ensemble.sparse_info['actnum'][vintage])):
-                            if not pred_data_tmp[prim_ind] or key not in pred_data_tmp[prim_ind].keys():
-                                pred_data_tmp[prim_ind] = {key: np.zeros((len(data_array), self.ensemble.ne))}
-                            pred_data_tmp[prim_ind][key][:,
-                            member] = data_array  # save it here until all data are scaled
-                            vintage = vintage + 1
+                    # Store according to sparse_info
+                    if vintage < len(self.ensemble.sparse_info['actnum']) and \
+                        pred_data[key].shape[0] == int(np.sum(self.ensemble.sparse_info['actnum'][vintage])):
+
+                        # If first entry in pred_data_tmp
+                        if pred_data_tmp[i] is None:
+                            pred_data_tmp[i] = {key: pred_data[key]}
+                        
                         else:
-                            self.ensemble.pred_data[prim_ind][key][:, member] = data_array
+                            pred_data_tmp[i][key] = pred_data[key]
 
-                        # Scale data if required (currently only one group of data can be scaled)
-                        if 'scale' in self.ensemble.keys_da and self.ensemble.keys_da['scale'][0] in key:
-                            self.ensemble.pred_data[prim_ind][key][:, member] *= self.ensemble.keys_da['scale'][1]
+                        # Update vintage
+                        vintage += 1
 
-        if os.path.exists('scale_results.p'):  # scaling used in sim2seis
+        # Scaling used in sim2seis
+        if os.path.exists('scale_results.p'):
             if not self.scale_val:
                 with open('scale_results.p', 'rb') as f:
                     scale = pickle.load(f)
                 # base the scaling on the first dataset and the first iteration
                 self.scale_val = np.sum(scale[0]) / len(scale[0])
+            
             if self.ensemble.sparse_info is not None:
                 for i in range(len(pred_data_tmp)):  # INDEX
                     if pred_data_tmp[i] is not None:
                         for k in pred_data_tmp[i]:  # DATATYPE
                             if 'sim2seis' in k and pred_data_tmp[i][k] is not None:
                                 pred_data_tmp[i][k] = pred_data_tmp[i][k] / self.scale_val
+
             else:
                 for i in range(len(self.ensemble.pred_data)):  # TRUEDATAINDEX
                     for k in self.ensemble.pred_data[i]:  # DATATYPE
@@ -540,25 +530,22 @@ class Assimilate:
                         if vintage < len(self.ensemble.sparse_info['actnum']) and \
                                 len(pred_data_tmp[i][k]) == int(np.sum(self.ensemble.sparse_info['actnum'][vintage])):
                             for m in range(pred_data_tmp[i][k].shape[1]):
-                                data_array = self.ensemble.sim.compress(pred_data_tmp[i][k][:, m], vintage, self.ensemble.sparse_info['use_ensemble'])
+                                data_array = self.ensemble.sim.compress(pred_data_tmp[i][k][:, m], vintage, 
+                                    self.ensemble.sparse_info['use_ensemble'])
                                 self.ensemble.pred_data[i][k][:, m] = data_array
                             vintage = vintage + 1
             if self.ensemble.sparse_info['use_ensemble']:
                 self.ensemble.sim.compress()
                 self.ensemble.sparse_info['use_ensemble'] = None
 
-        # If we have dynamic variables, and we are in the first assimilation step, we must convert lists to (2D)
-        # numpy arrays
-        if 'dynamicvar' in self.ensemble.keys_da and assim_step == 0:
-            for dyn_state in self.ensemble.keys_da['dynamicvar']:
-                self.ensemble.state[dyn_state] = np.array(self.ensemble.state[dyn_state]).T
         # Extra option debug
         if 'saveforecast' in self.ensemble.sim.input_dict:
-            with open('sim_results.p','wb') as f:
-                pickle.dump(self.ensemble.pred_data, f)
-            if self.ensemble.sparse_data:  # also save the reconstructed signal for later analysis
-                with open('rec_results.p','wb') as f:
-                    pickle.dump(np.asarray(self.ensemble.data_rec).transpose(), f)
-            if hasattr(self.ensemble.sim,'scale') and self.ensemble.sim.scale.size:  # scaling used in sim2seis (dumped as one long array)
+            # Save the reconstructed signal for later analysis
+            if self.ensemble.sparse_data:  
+                    with open('rec_results.p','wb') as f:
+                        pickle.dump(np.asarray(self.ensemble.data_rec).transpose(), f)
+            
+            # Scaling used in sim2seis (dumped as one long array)
+            if hasattr(self.ensemble.sim,'scale') and self.ensemble.sim.scale.size:  
                 with open('scale_results.p','wb') as f:
                     pickle.dump(self.ensemble.sim.scale, f)
