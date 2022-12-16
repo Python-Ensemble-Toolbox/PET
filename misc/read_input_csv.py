@@ -30,8 +30,8 @@ def read_data_csv(filename, datatype, truedataindex):
             row = row.values[0]  # select the values of the dataframe row
             csv_data = [None] * dnumber
             for col in range(dnumber):
-                if np.isnan(row[pos[col]]):
-                    csv_data[col] = None
+                if (not type(row[pos[col]]) == str) and (np.isnan(row[pos[col]])): # do not check strings
+                    csv_data[col] = 'n/a'
                 else:
                     try:  # Making a float
                         csv_data[col] = float(row[pos[col]])
@@ -49,8 +49,8 @@ def read_data_csv(filename, datatype, truedataindex):
             pos = list(range(df.shape[1]))  # Assume the data is in the correct order
             csv_data = [None] * len(temp)
             for col in range(len(temp)):
-                if np.isnan(temp[col]):
-                    csv_data[col] = None
+                if (not type(temp[col]) == str) and (np.isnan(temp[col])): # do not check strings
+                    csv_data[col] = 'n/a'
                 else:
                     try:  # Making a float
                         csv_data[col] = float(temp[col])
@@ -61,8 +61,8 @@ def read_data_csv(filename, datatype, truedataindex):
         for rows in df.values:
             csv_data = [None] * dnumber
             for col in range(dnumber):
-                if np.isnan(rows[pos[col]]):
-                    csv_data[col] = None
+                if (not type(rows[pos[col]]) == str) and (np.isnan(rows[pos[col]])): # do not check strings
+                    csv_data[col] = 'n/a'
                 else:
                     try:  # Making a float
                         csv_data[col] = float(rows[pos[col]])

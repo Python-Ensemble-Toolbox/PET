@@ -138,7 +138,7 @@ class esmdaMixIn(Ensemble):
             self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
                                    np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
         else:
-            self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+            self.pert_preddata = scilinalg.solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
         aug_state = at.aug_state(self.current_state, self.list_states)
 
@@ -304,7 +304,7 @@ class esmdaMixIn(Ensemble):
         # Generate the data auto-covariance matrix
         if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
             if hasattr(self, 'cov_data'):  # cd matrix has been imported
-                tmp_E = np.dot(cholesky(self.cov_data).T,
+                tmp_E = np.dot(scilinalg.cholesky(self.cov_data).T,
                     np.random.randn(self.cov_data.shape[0], self.ne))
             else:
                 tmp_E = at.extract_tot_empirical_cov(self.datavar, self.assim_index, self.list_datatypes, self.ne)
