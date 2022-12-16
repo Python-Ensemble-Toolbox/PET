@@ -47,7 +47,12 @@ class Ensemble:
         self.keys_en = keys_en
         self.sim = sim
         self.redund_sim = redund_sim
-        
+        self.pred_data = None
+
+        # Auxilliary input to the simulator - can be used e.g.,
+        # to allow for different models when optimizing.
+        self.aux_input = None
+
         # Setup logger
         logging.basicConfig(level=logging.INFO,
                             filename='pet_logger.log',
@@ -131,27 +136,28 @@ class Ensemble:
 
     def _ext_prior_info(self):
         """
-        Extract prior information on STATICVAR from keyword(s) PRIOR_<STATICVAR entries>.
+        Extract prior information on STATE from keyword(s) PRIOR_<STATE entries>.
         """
-        # Parse prior info on each state entered in STATICVAR.
-        # Store names given in STATICVAR
-        if not isinstance(self.keys_en['staticvar'], list):  # Single string
-            state_names = [self.keys_en['staticvar']]
+        # Parse prior info on each state entered in STATE.
+        # Store names given in STATE
+        if not isinstance(self.keys_en['state'], list):  # Single string
+            state_names = [self.keys_en['state']]
         else:  # List
-            state_names = self.keys_en['staticvar']
+            state_names = self.keys_en['state']
 
-        # Check if PRIOR_<state names> exists for each entery in STATICVAR
+        # Check if PRIOR_<state names> exists for each entery in STATE
         for name in state_names:
             assert 'prior_' + name in self.keys_en, \
                 'PRIOR_{0} is missing! This keyword is needed to make initial ensemble for {0} entered in ' \
-                'STATICVAR'.format(name.upper())
+                'STATE'.format(name.upper())
 
         # Init. prior info variable
         self.prior_info = {keys: None for keys in state_names}
 
-        # Loop over each prior keyword and make an initial. ensemble for each state in STATICVAR,
+        # Loop over each prior keyword and make an initial. ensemble for each state in STATE,
         # which is subsequently stored in the state dictionary. If 3D grid dimensions are inputted, information for
         # each layer must be inputted, else the single information will be copied to all layers.
+        grid_dim = np.array([0, 0])
         for name in state_names:
             # initiallize an empty dictionary inside the dictionary.
             self.prior_info[name] = {}
@@ -338,7 +344,7 @@ class Ensemble:
                         print('\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
                         self.prior_info[name]['limits'] = [limits] * nz
 
-            else:  # 2D grid only
+            else:  # 2D grid only, or optimization case
                 nz = 1
                 self.prior_info[name]['mean'] = mean
                 self.prior_info[name]['vario'] = vario
@@ -358,7 +364,10 @@ class Ensemble:
         # Loop over keys and input
 
     def gen_init_ensemble(self):
-        """Generate the initial ensemble of (joint) state vectors using the GeoStat class in the "geostat" package."""
+        """
+        Generate the initial ensemble of (joint) state vectors using the GeoStat class in the "geostat" package.
+        TODO: Merge this function with the perturbation function _gen_state_ensemble in popt.
+        """
         # Initialize GeoStat class
         init_en = Cholesky()
 
@@ -375,6 +384,8 @@ class Ensemble:
             mean = self.prior_info[name]['mean']
             nx = self.prior_info[name]['nx']
             ny = self.prior_info[name]['ny']
+            if nx == ny == 0:  # assume ensemble will be generated elsewhere if dimensions are zero
+                break
             variance = self.prior_info[name]['variance']
             corr_length = self.prior_info[name]['corr_length']
             aniso = self.prior_info[name]['aniso']
@@ -468,9 +479,17 @@ class Ensemble:
         for i in range(self.ne):
             for key in self.state.keys():
                 if input_state is None:
-                    list_state[i][key] = deepcopy(self.state[key][:, i])
+                    if self.state[key].ndim == 1:
+                        list_state[i][key] = deepcopy(self.state[key])
+                    else:
+                        list_state[i][key] = deepcopy(self.state[key][:, i])
                 else:
-                    list_state[i][key] = deepcopy(input_state[key][:, i])
+                    if input_state[key].ndim == 1:
+                        list_state[i][key] = deepcopy(input_state[key])
+                    else:
+                        list_state[i][key] = deepcopy(input_state[key][:, i])
+                if self.aux_input is not None:  # several models are used
+                    list_state[i]['aux_input'] = self.aux_input[i]
 
         # Index list of ensemble members
         list_member_index = list(range(self.ne))
@@ -481,14 +500,16 @@ class Ensemble:
         # List successful runs and crashes
         list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
         list_success = [indx for indx, el in enumerate(en_pred) if el is not False]
+        success = True
 
         # Dump all information and print error if all runs have crashed
         if not list_success:
             self.save()
-            print('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-            self.logger.info('\n\033[1;31mERROR: All started simulations has failed! We dump all information and '
-                'exit!\033[1;m')
-            sys.exit(1)
+            success = False
+            if len(list_crash) > 1:
+                print('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+                self.logger.info('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+                sys.exit(1)
 
         # Check crashed runs 
         if list_crash:
@@ -521,6 +542,7 @@ class Ensemble:
         if save_prediction is not None:
             np.savez(f'{save_prediction}.npz', **{'pred_data': self.pred_data})
 
+        return success
 
     def save(self):
         """

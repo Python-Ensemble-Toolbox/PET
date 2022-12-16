@@ -47,7 +47,7 @@ class Optimize:
         if 'restart' in method.keys_opt and method.keys_opt['restart'] == 'yes':
 
             # Check if the pickle save file exists in folder
-            assert (self.pickle_restart_file in [f for f in os.listdir('.') if os.path.isfile(f)]), \
+            assert (self.pickle_restart_file in [f for f in os.listdir('..') if os.path.isfile(f)]), \
                 'The restart file "{0}" does not exist in folder. Cannot restart!'.format(self.pickle_restart_file)
 
             # Load restart file

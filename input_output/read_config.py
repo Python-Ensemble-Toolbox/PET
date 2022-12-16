@@ -102,7 +102,8 @@ def read_toml(init_file):
 
 def read_txt(init_file):
     """
-    Read a PIPT input file (.pipt), parse and output dictionaries for data assimilation and simulator classes.
+    Read a PIPT or POPT input file (.pipt or .popt), parse and output dictionaries for data assimilation or
+    optimization,  and simulator classes.
 
     Parameters
     ----------
@@ -111,51 +112,61 @@ def read_txt(init_file):
 
     Returns
     -------
-    keys_da : dict
-        Parsed keywords from DATAASSIM
+    keys_pr : dict
+        Parsed keywords from DATAASSIM or OPTIM
     keys_fwd : dict
         Parsed keywords from FWDSSIM
     """
+
     # Check for .pipt suffix
-    if not init_file.endswith('.pipt'):
-        raise FileNotFoundError(f'No PIPT input file (.pipt) found! If {init_file} is  a PIPT input file, change '
-                                'suffix to .pipt')
+    if not init_file.endswith('.pipt') and not init_file.endswith('.popt'):
+        raise FileNotFoundError(f'No PIPT or POPT input file (.pipt or .popt) found! If {init_file} is  '
+                                f'a PIPT or POPT input file, change suffix to .pipt or .popt')
 
     # Read the init file and output lines without comments (lines starting with '#')
     lines = read_clean_file(init_file)
 
     # Find where the separate parts are located in the file. FWDSIM will always be a part, but the
     # inversion/optimiztation part may be DATAASSIM or OPTIM
+    prind = None
+    pr_part = None
+    fwdsimind = None
     for i in range(len(lines)):
         if lines[i].strip().lower() == 'dataassim' or lines[i].strip().lower() == 'optim':
-            ipind = i
-            ip_part = lines[i].strip().lower()
+            prind = i
+            pr_part = lines[i].strip().lower()
         elif lines[i].strip().lower() == 'fwdsim':
             fwdsimind = i
 
     # Split the file into the two separate parts. Each part will (only) contain the keywords of each part:
-    if ipind < fwdsimind:  # Data assim. part is the first part of file
-        lines_ip = lines[2:fwdsimind]
+    if prind < fwdsimind:  # Data assim. part is the first part of file
+        lines_pr = lines[2:fwdsimind]
         lines_fwd = lines[fwdsimind + 2:]
     else:  # Fwd sim. part is the first part of file
-        lines_fwd = lines[2:ipind]
-        lines_ip = lines[ipind + 2:]
+        lines_fwd = lines[2:prind]
+        lines_pr = lines[prind + 2:]
 
-    # Get rid of empty lines in lines_ip and lines_fwd
-    clean_lines_ip = remove_empty_lines(lines_ip)
+    # Get rid of empty lines in lines_pr and lines_fwd
+    clean_lines_pr = remove_empty_lines(lines_pr)
     clean_lines_fwd = remove_empty_lines(lines_fwd)
 
     # Assign the keys and values to different dictionaries depending on whether we have data assimilation (DATAASSIM)
     # or optimization (OPTIM). FWDSIM info is always assigned to keys_fwd
-    if ip_part == 'dataassim' or ip_part == 'optim':
-        keys_da = parse_keywords(clean_lines_ip)
+    keys_pr = None
+    if pr_part == 'dataassim':
+        keys_pr = parse_keywords(clean_lines_pr)
+        check_mand_keywords_da(keys_pr)
+    elif pr_part == 'optim':
+        keys_pr = parse_keywords(clean_lines_pr)
+        check_mand_keywords_opt(keys_pr)
     keys_fwd = parse_keywords(clean_lines_fwd)
+    check_mand_keywords_fwd(keys_fwd)
 
-    check_mand_keywords_da_fwdsim(keys_da, keys_fwd)
-    org = Organize_input(keys_da,keys_fwd)
+    org = Organize_input(keys_pr, keys_fwd)
     org.organize()
 
     return org.get_keys_da(), org.get_keys_fwd()
+
 
 def read_clean_file(init_file):
     """
@@ -214,7 +225,7 @@ def remove_empty_lines(lines):
 def parse_keywords(lines):
     """
     Here we parse the lines in the init. file to a Python dictionary. The keys of the dictionary is the keywords
-    entered in the PIPT init. file, and the information entered in each keyword is stored in each key of the
+    in the PIPT init. file, and the information in each keyword is stored in each key of the
     dictionary. To know how the keyword-information is organized in the keys of the dictionary, confront the
     manual located in the doc folder.
 
@@ -302,21 +313,34 @@ def parse_keywords(lines):
     # Return dict.
     return keys
 
-def check_mand_keywords_da_fwdsim(keys_da, keys_fwd):
-    """Check for mandatory keywords in `DATAASSIM` and `FWDSIM` part, and output error if they are not present"""
+
+def check_mand_keywords_fwd(keys_fwd):
+    """Check for mandatory keywords in `FWDSIM` part, and output error if they are not present"""
+
+    # Mandatory keywords in FWDSIM
+    assert 'simulator' in keys_fwd, 'SIMULATOR not in FWDSIM!'
+    assert 'parallel' in keys_fwd, 'PARALLEL not in FWDSIM!'
+    assert 'datatype' in keys_fwd, 'DATATYPE not in FWDSIM!'
+
+
+def check_mand_keywords_da(keys_da):
+    """Check for mandatory keywords in `DATAASSIM` part, and output error if they are not present"""
+
     # Mandatory keywords in DATAASSIM
     assert 'ne' in keys_da, 'NE not in DATAASSIM!'
     assert 'truedataindex' in keys_da, 'TRUEDATAINDEX not in DATAASSIM!'
     assert 'assimindex' in keys_da, 'ASSIMINDEX not in DATAASSIM!'
     assert 'truedata' in keys_da, 'TRUEDATA not in DATAASSIM!'
-    assert 'staticvar' in keys_da, 'STATICVAR not in DATAASSIM!'
+    assert 'state' in keys_da, 'STATE not in DATAASSIM!'
     assert 'datavar' in keys_da, 'DATAVAR not in DATAASSIM!'
     assert 'obsname' in keys_da, 'OBSNAME not in DATAASSIM!'
     if 'importstaticvar' not in keys_da:
         assert filter(list(keys_da.keys()), 'prior_*') != [], 'No PRIOR_<STATICVAR> in DATAASSIM'
     assert 'energy' in keys_da, 'ENERGY not in DATAASSIM!'
 
-    # Mandatory keywords in FWDSIM
-    assert 'simulator' in keys_fwd, 'SIMULATOR not in FWDSIM!'
-    assert 'parallel' in keys_fwd, 'PARALLEL not in FWDSIM!'
-    assert 'datatype' in keys_fwd, 'DATATYPE not in FWDSIM!'
+
+def check_mand_keywords_opt(keys_opt):
+    """Check for mandatory keywords in `OPTIM` part, and output error if they are not present"""
+
+    # Mandatory keywords in OPTIM
+    assert 'ne' in keys_opt, 'NE not in DATAASSIM!'
