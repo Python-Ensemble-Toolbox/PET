@@ -1,0 +1,36 @@
+# Single input
+KEYWORD1
+STRING1
+
+KEYWORD2
+1
+
+# Multiple input in single row
+KEYWORD3
+STRING1	STRING2	STRING3
+
+KEYWORD4
+1 2 3 4
+
+# Multiple input on multiple rows
+KEYWORD5
+STRING1	STRING2
+STRING3
+
+KEYWORD6
+1 2 3
+4 5
+
+# Combining strings and numbers, single row
+KEYWORD7
+STRING1	1 2	STRING3
+
+# Combining strings and numbers, multiple rows
+KEYWORD8
+STRING1	1 2	3 4	STRING2	5
+STRING3	6 7 8
+
+# String without tab
+KEYWORD9
+STRING1 STRING2
+
