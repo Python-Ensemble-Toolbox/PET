@@ -14,10 +14,11 @@ import pickle  # Save python variables
 from pipt.loop.ensemble import Ensemble
 from pipt.misc_tools import analysis_tools as at
 from pipt.geostat.decomp import Cholesky
-from pipt.update_schemes.update_methods import approx_update
-from pipt.update_schemes.update_methods import full_update
-from pipt.update_schemes.update_methods import subspace_update
+from pipt.update_schemes.update_methods import *
 
+# Import from standalone repository
+#sys.path.append('Relevant/path')
+#from update_methods import margIS_update
 
 class lmenrmlMixIn(Ensemble):
     """
@@ -469,6 +470,14 @@ class gnenrmlMixIn(Ensemble):
             self.W = self.current_W + self.gamma*self.w_step
             aug_prior_state = at.aug_state(self.prior_state, self.list_states)
             aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+        if hasattr(self,'sqrt_w_step'): # if we do a sqrt update
+            self.w = self.current_w + self.gamma*self.sqrt_w_step
+            new_mean_state = self.mean_prior + np.dot(self.X, self.w)
+            u, sigma, v = np.linalg.svd(self.C_w, full_matrices=True)
+            sigma_inv_sqrt = np.diag([el_s ** (-1 / 2) for el_s in sigma])
+            C_w_inv_sqrt = np.dot(np.dot(u, sigma_inv_sqrt), v.T)
+            self.W = C_w_inv_sqrt * np.sqrt(self.ne - 1)
+            aug_state_upd = np.tile(new_mean_state, (self.ne, 1)).T + np.dot(self.X, self.W)
 
         # Extract updated state variables from aug_update
         self.state = at.update_state(aug_state_upd, self.state, self.list_states)
@@ -641,6 +650,14 @@ class gnenrml_full(gnenrmlMixIn, full_update):
 
 class gnenrml_subspace(gnenrmlMixIn,subspace_update):
     pass
+
+class gnenrml_margis(gnenrmlMixIn, margIS_update):
+    '''
+    The marg-IS scheme is currently not available in this version of PIPT. To utilize the scheme you have to import the
+    *margIS_update* class from a standalone repository.
+    '''
+    pass
+
 
 class co_lm_enrml(lmenrmlMixIn,approx_update):
     """

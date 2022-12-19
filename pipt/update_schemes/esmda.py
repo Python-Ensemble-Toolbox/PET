@@ -13,9 +13,10 @@ from pipt.misc_tools import analysis_tools as at
 from pipt.geostat.decomp import Cholesky
 
 # import update schemes
-from pipt.update_schemes.update_methods import approx_update
-from pipt.update_schemes.update_methods import full_update
-from pipt.update_schemes.update_methods import subspace_update
+from pipt.update_schemes.update_methods import *
+# from pipt.update_schemes.update_methods import approx_update
+# from pipt.update_schemes.update_methods import full_update
+# from pipt.update_schemes.update_methods import subspace_update
 
 
 class esmdaMixIn(Ensemble):
