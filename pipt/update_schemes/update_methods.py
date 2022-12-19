@@ -266,3 +266,8 @@ class subspace_update():
         #                                                solve((np.eye(len(Lam)) + (self.lam+1)*np.diag(Lam)),
         #                                                       np.dot(X2.T, scaled_misfit))))
         self.w_step = -self.current_W/(1+self.lam) - (step_d - step_m/(1+self.lam))
+
+class margIS_update():
+    '''
+    Update scheme not available now.
+    '''
