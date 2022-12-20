@@ -84,15 +84,8 @@ class EnOpt(PETEnsemble):
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
             new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, 2) + self.beta * self.step
 
-            # Can set different stepsize for covariance update, e.g. change self.alpha to self.beta.
-            # todo: add stepsize of covariance to the init.txt file, here we put 10 for now.
-            self.cov_step = self.alpha_cov * self.cov_sens_matrix / la.norm(self.cov_sens_matrix, 2) + self.beta * self.cov_step
-
             # Calculate updated state
             aug_state_upd = aug_state + np.squeeze(new_step)
-
-            self.cov = np.squeeze(self.cov + self.cov_step)
-            self.cov = self.get_sym_pos_semidef(self.cov)
 
             # Make sure update is within bounds
             if self.upper_bound and self.lower_bound:
@@ -116,6 +109,12 @@ class EnOpt(PETEnsemble):
                 # Update objective function values and step
                 self.obj_func_values = new_func_values
                 self.step = new_step
+
+                # Update covariance (currently we don't apply backtracking for alpha_cov)
+                self.cov_step = self.alpha_cov * self.cov_sens_matrix / la.norm(self.cov_sens_matrix, 2) + \
+                    self.beta * self.cov_step
+                self.cov = np.squeeze(self.cov + self.cov_step)
+                self.cov = self.get_sym_pos_semidef(self.cov)
 
                 # Write logging info
                 if logger is not None:
