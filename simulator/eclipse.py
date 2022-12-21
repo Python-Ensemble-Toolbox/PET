@@ -181,14 +181,6 @@ class eclipse:
                 self.upscale['radius'] = []
                 self.upscale['wells'] = []
 
-        # The simulator should run on different levels
-        if 'multilevel' in self.input_dict:
-            # extract list of levels
-            self.multilevel = self.input_dict['multilevel']
-        else:
-            # if not initiallize as list with one element
-            self.multilevel = [False]
-
     def setup_fwd_run(self, assimIndex=None, trueOrder=None,pred_data=None, redundant_sim=None):
         """
         Setup the simulator.
@@ -264,64 +256,51 @@ class eclipse:
         ---------------------------------------------------------------------------------------------------------------
         """
 
-        # we must distribute the realizations among the levels.
-        # Since, state is given by the generic calc forecast, we must store it and
-        # extract the level specific members
-        if self.multilevel[0]:
-            orig_state = deepcopy(state)
-        # Run for all levels (one level if multilevel is not specified)
-        for level in self.multilevel:
-            if level: # if we do not perform a ML scheme level is False
-                # extract the level specific values
-                state['level'] = level
-                en_num = 100
-                for elem in state.keys():
-                    state[elem] = orig_state[elem][:,en_num]
+        os.mkdir('En_' + str(member_i))
+        folder = 'En_' + str(member_i) + os.sep
 
-            os.mkdir('En_' + str(member_i))
-            folder = 'En_' + str(member_i) + os.sep
+        # If the run is upscaled, run the upscaling procedure
+        if self.upscale is not None:
+            if hasattr(self, 'level'):  # if this is a multilevel run, we must set the level
+                self.upscale['maxtrunc'] = self.trunc_level[self.level]
+            if self.upscale['maxtrunc'] > 0:  # if the truncation level is 0, we do not perform upscaling
+                self.coarsen(folder, state)
+            elif hasattr(self, 'coarse'):  # if the level is 0, and upscaling has been performed earlier this must be
+                # removed
+                del self.coarse
 
-            # If the run is upscaled, run the upscaling procedure
-            if self.upscale is not None:
-                self.upscale['maxtrunc'] = self.trunc_level[level]
-                if self.upscale['maxtrunc'] > 0:  # if the truncation level is 0, we do not perform upscaling
-                    self.coarsen(folder, state)
-                elif hasattr(self, 'coarse'):  # if the level is 0, and upscaling has been performed earlier this must be
-                    # removed
-                    del self.coarse
-
-            # start by generating the .DATA file, using the .mako template situated in ../folder
-            self._runMako(folder, state)
-            success = False
-            rerun = self.rerun
-            while rerun >= 0 and not success:
-                success = self.call_sim(folder, True)
-                rerun -= 1
-            if success:
-                self.extract_data(member_i)
-                if del_folder:
-                    if self.saveinfo is not None:  # Try to save information
-                        store_ensemble_sim_information(self.saveinfo, member_i)
-                    self.remove_folder(member_i)
-                return self.pred_data
-            else:
-                if self.redundant_sim is not None:
-                    success = self.redundant_sim.call_sim(folder, True)
-                    if success:
-                        self.extract_data(member_i)
-                        if del_folder:
-                            if self.saveinfo is not None:  # Try to save information
-                                store_ensemble_sim_information(self.saveinfo, member_i)
-                            self.remove_folder(member_i)
-                        return self.pred_data
-                    else:
-                        if del_folder:
-                            self.remove_folder(member_i)
-                        return False
+        # start by generating the .DATA file, using the .mako template situated in ../folder
+        self._runMako(folder, state)
+        success = False
+        rerun = self.rerun
+        while rerun >= 0 and not success:
+            success = self.call_sim(folder, True)
+            rerun -= 1
+        if success:
+            self.extract_data(member_i)
+            if del_folder:
+                if self.saveinfo is not None:  # Try to save information
+                    store_ensemble_sim_information(self.saveinfo, member_i)
+                self.remove_folder(member_i)
+            return self.pred_data
+        else:
+            if self.redundant_sim is not None:
+                success = self.redundant_sim.call_sim(folder, True)
+                if success:
+                    self.extract_data(member_i)
+                    if del_folder:
+                        if self.saveinfo is not None:  # Try to save information
+                            store_ensemble_sim_information(self.saveinfo, member_i)
+                        self.remove_folder(member_i)
+                    return self.pred_data
                 else:
                     if del_folder:
                         self.remove_folder(member_i)
                     return False
+            else:
+                if del_folder:
+                    self.remove_folder(member_i)
+                return False
 
     def remove_folder(self, member):
         folder = 'En_' + str(member) + os.sep
