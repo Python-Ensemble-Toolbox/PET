@@ -181,7 +181,16 @@ class eclipse:
                 self.upscale['radius'] = []
                 self.upscale['wells'] = []
 
-    def setup_fwd_run(self, assimIndex=None, trueOrder=None,pred_data=None, redundant_sim=None):
+        # The simulator should run on different levels
+        if 'multilevel' in self.input_dict:
+            # extract list of levels
+            self.multilevel = self.input_dict['multilevel']
+        else:
+            # if not initiallize as list with one element
+            self.multilevel = [False]
+
+    def setup_fwd_run(self, **kwargs):
+        self.__dict__.update(kwargs) # parse kwargs input into class attributes
         """
         Setup the simulator.
 
@@ -192,22 +201,7 @@ class eclipse:
         ---------------------------------------------------------------------------------------------------------------
         """
 
-        if assimIndex is not None and trueOrder is not None:
-            assert assimIndex[0] == trueOrder[0]
-            report = {}
-            if isinstance(assimIndex[1], list):
-                # Several data steps are assimilated, we must select the highest.
-                highAssim = int(np.max(assimIndex[1]))
-                # Since we start the assimIndex at element 0, it is necessary to add one extra date
-                dates = trueOrder[1][:highAssim + 1]
-            else:
-                highAssim = int(assimIndex[1])
-                dates = trueOrder[1][:highAssim + 1]
-
-            report[assimIndex[0]] = dates
-            # Only store this if we give index and dates
-            self.report = report
-        elif hasattr(self, 'reportdates'):
+        if hasattr(self, 'reportdates'):
             self.report = {'dates': self.reportdates}
         elif 'reportmonths' in self.input_dict:  # for optimization
             self.report = {'days': [30 * i for i in range(1, int(self.input_dict['reportmonths'][1]))]}
@@ -225,8 +219,6 @@ class eclipse:
         else:  # Float
             self.true_prim = [trueOrder[0], [trueOrder[1]]]
         # self.all_data_types = list(pred_data[0].keys())
-
-        self.redundant_sim = redundant_sim
 
         # Initiallise space to store the number of active cells. This is only for the upscaling option.
         if 'upscale' in self.input_dict:
@@ -258,6 +250,9 @@ class eclipse:
 
         os.mkdir('En_' + str(member_i))
         folder = 'En_' + str(member_i) + os.sep
+
+        if self.multilevel[0]: # this is a ML run. Pass the level to the state
+            state['level'] = self.level
 
         # If the run is upscaled, run the upscaling procedure
         if self.upscale is not None:
