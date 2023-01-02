@@ -190,7 +190,6 @@ class eclipse:
             self.multilevel = [False]
 
     def setup_fwd_run(self, **kwargs):
-        self.__dict__.update(kwargs) # parse kwargs input into class attributes
         """
         Setup the simulator.
 
@@ -200,6 +199,7 @@ class eclipse:
             - trueOrder: Gives the index-type (e.g. step,time,etc.) and the index of the true data
         ---------------------------------------------------------------------------------------------------------------
         """
+        self.__dict__.update(kwargs)  # parse kwargs input into class attributes
 
         if hasattr(self, 'reportdates'):
             self.report = {'dates': self.reportdates}
@@ -251,8 +251,8 @@ class eclipse:
         os.mkdir('En_' + str(member_i))
         folder = 'En_' + str(member_i) + os.sep
 
-        if self.multilevel[0]: # this is a ML run. Pass the level to the state
-            state['level'] = self.level
+        # Set the simulator fidelity.
+        state['level'] = self.level
 
         # If the run is upscaled, run the upscaling procedure
         if self.upscale is not None:
