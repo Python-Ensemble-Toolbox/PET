@@ -499,13 +499,17 @@ class Ensemble:
                     if input_state is None:
                         if self.state[key].ndim == 1:
                             list_state[i][key] = deepcopy(self.state[key])
-                        else:
+                    elif self.state[key].ndim == 2:
                             list_state[i][key] = deepcopy(self.state[key][:, i])
+                    elif self.state[key].ndim == 3:
+                        list_state[i][key] = deepcopy(self.state[key][:,:, i])
                     else:
                         if input_state[key].ndim == 1:
                             list_state[i][key] = deepcopy(input_state[key])
-                        else:
+                    elif input_state[key].ndim == 2:
                             list_state[i][key] = deepcopy(input_state[key][:, i])
+                    elif input_state[key].ndim == 3:
+                        list_state[i][key] = deepcopy(input_state[key][:,:, i])
                     if self.aux_input is not None:  # several models are used
                         list_state[i]['aux_input'] = self.aux_input[i]
 
