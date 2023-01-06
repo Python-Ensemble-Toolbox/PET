@@ -76,13 +76,14 @@ class EnOpt(PETEnsemble):
         success = False
         self.alpha_iter = 0
         alpha = self.alpha
+        beta = self.beta
         while improvement is False:
 
             # Augment state
             aug_state = ot.aug_optim_state(current_state, list_states)
 
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
-            new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, 2) + self.beta * self.step
+            new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, 2) + beta * self.step
 
             # Calculate updated state
             aug_state_upd = aug_state + np.squeeze(new_step)
@@ -112,7 +113,7 @@ class EnOpt(PETEnsemble):
 
                 # Update covariance (currently we don't apply backtracking for alpha_cov)
                 self.cov_step = self.alpha_cov * self.cov_sens_matrix / la.norm(self.cov_sens_matrix, 2) + \
-                    self.beta * self.cov_step
+                    beta * self.cov_step
                 self.cov = np.squeeze(self.cov + self.cov_step)
                 self.cov = self.get_sym_pos_semidef(self.cov)
 
@@ -127,7 +128,8 @@ class EnOpt(PETEnsemble):
                 # If we do not have a reduction in the objective function, we reduce the step limiter
                 if self.alpha_iter < self.alpha_iter_max:
                     # Decrease alpha
-                    self.alpha /= 2
+                    alpha /= 2
+                    beta /= 2
                     self.alpha_iter += 1
                 else:
                     success = False
@@ -335,7 +337,7 @@ class EnOpt(PETEnsemble):
             if self.upper_bound and self.lower_bound:
                 np.clip(temp_state_en, 0, 1, out=temp_state_en)
 
-            state_en[statename] = temp_state_en
+            state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en,1)]).T
 
         return state_en
 

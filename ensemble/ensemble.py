@@ -510,6 +510,8 @@ class Ensemble:
                 print('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
                 self.logger.info('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
                 sys.exit(1)
+            else:
+                return success
 
         # Check crashed runs 
         if list_crash:
