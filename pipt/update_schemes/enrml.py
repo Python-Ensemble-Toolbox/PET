@@ -1,29 +1,40 @@
 """
 EnRML type schemes
 """
-import sys
-
 # External imports
+import sys
+import pkgutil
+import inspect
 import numpy as np
-from copy import deepcopy
 import copy as cp
-from scipy.linalg import solve, solve_banded, cholesky, lu_solve, lu_factor, inv
-import pickle  # Save python variables
+from scipy.linalg import cholesky,solve
+
+# List all available packages in the namespace package
+# Import those that are present
+import pipt.update_schemes.update_methods_ns as ns_pkg
+tot_ns_pkg = []
+for finder, name, ispkg in pkgutil.walk_packages(ns_pkg.__path__): # extract all class methods from namespace
+    _module =finder.find_module(name).load_module(f'{name}')
+    tot_ns_pkg.extend(inspect.getmembers(_module,inspect.isclass))
+
+# import standard libraries
+from pipt.update_schemes.update_methods_ns.approx_update import approx_update
+from pipt.update_schemes.update_methods_ns.full_update import full_update
+from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
+
+# Check and import (if present) from other namespace packages
+if 'margIS_update' in [el[0] for el in tot_ns_pkg]: # only compare package name
+    from pipt.update_schemes.update_methods_ns.margIS_update import margIS_update
 
 # Internal imports
 from pipt.loop.ensemble import Ensemble
-from pipt.misc_tools import analysis_tools as at
 from pipt.geostat.decomp import Cholesky
-from pipt.update_schemes.update_methods import *
-
-# Import from standalone repository
-#sys.path.append('Relevant/path')
-#from update_methods import margIS_update
+import pipt.misc_tools.analysis_tools as at
 
 class lmenrmlMixIn(Ensemble):
     """
     This is an implementation of EnRML using Levenberg-Marquardt. The update scheme is selected by a MixIn with multiple
-    update_methods. This class must therefore facititate many different update schemes.
+    update_methods_ns. This class must therefore facititate many different update schemes.
     """
 
     def __init__(self, keys_da,keys_fwd,sim):
@@ -71,7 +82,7 @@ class lmenrmlMixIn(Ensemble):
             self._ext_obs()
             # Get state scaling and svd of scaled prior
             self._ext_state()
-            self.current_state = deepcopy(self.state)
+            self.current_state = cp.deepcopy(self.state)
 
 
     def calc_analysis(self):
@@ -327,7 +338,7 @@ class lmenrml_subspace(lmenrmlMixIn,subspace_update):
 class gnenrmlMixIn(Ensemble):
     """
     This is an implementation of EnRML using the Gauss-Newton approach. The update scheme is selected by a MixIn with multiple
-    update_methods. This class must therefore facititate many different update schemes.
+    update_methods_ns. This class must therefore facititate many different update schemes.
     """
 
     def __init__(self, keys_da,keys_fwd,sim):
@@ -375,7 +386,7 @@ class gnenrmlMixIn(Ensemble):
             self._ext_obs()
             # Get state scaling and svd of scaled prior
             self._ext_state()
-            self.current_state = deepcopy(self.state)
+            self.current_state = cp.deepcopy(self.state)
             self.lam = 0 # ensure that the updates does not invoke the LM inflation of the Hessian.
 
     def _ext_obs(self):
