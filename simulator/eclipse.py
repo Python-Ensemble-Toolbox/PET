@@ -248,6 +248,11 @@ class eclipse:
         ---------------------------------------------------------------------------------------------------------------
         """
 
+        # store original input
+        if self.multilevel[0] is not False:
+            if level is not False: # if we do not perform a ML scheme level is False
+                for elem in orig_state.keys():
+                    state[elem] = orig_state[elem][level,:]
         os.mkdir('En_' + str(member_i))
         folder = 'En_' + str(member_i) + os.sep
 
@@ -277,7 +282,6 @@ class eclipse:
                 if self.saveinfo is not None:  # Try to save information
                     store_ensemble_sim_information(self.saveinfo, member_i)
                 self.remove_folder(member_i)
-            return self.pred_data
         else:
             if self.redundant_sim is not None:
                 success = self.redundant_sim.call_sim(folder, True)
