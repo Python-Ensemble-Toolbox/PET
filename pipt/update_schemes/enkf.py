@@ -3,18 +3,15 @@ EnKF type schemes
 """
 # External imports
 import numpy as np
-from scipy.linalg import solve, cholesky
+from scipy.linalg import solve
 from copy import deepcopy
 
-import pipt.update_schemes.update_methods
 # Internal imports
 from pipt.loop.ensemble import Ensemble
 from pipt.geostat.decomp import Cholesky                     # Making realizations
 from pipt.misc_tools import analysis_tools as at             # Misc. tools used in analysis schemes
 
-from pipt.update_schemes.update_methods import approx_update
-from pipt.update_schemes.update_methods import full_update
-from pipt.update_schemes.update_methods import subspace_update
+from pipt.update_schemes.update_methods_ns import *
 
 class enkfMixIn(Ensemble):
     """
