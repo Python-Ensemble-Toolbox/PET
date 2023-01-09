@@ -483,8 +483,7 @@ class Ensemble:
         """
 
         if hasattr(self, 'multilevel'):
-            success = self.calc_ml_prediction()
-
+            success = self.calc_ml_prediction(input_state)
         else:
         # Number of parallel runs
             no_tot_run = int(self.sim.input_dict['parallel'])
@@ -498,7 +497,7 @@ class Ensemble:
 
             # Ensure that we put all the states in a list
             list_state = [deepcopy({}) for _ in range(self.ne)]
-            for i in self.ne:
+            for i in range(self.ne):
                 if input_state is None:
                     for key in self.state.keys():
                         if self.state[key].ndim == 1:
@@ -519,7 +518,7 @@ class Ensemble:
                     list_state[i]['aux_input'] = self.aux_input[i]
 
             # Index list of ensemble members
-            list_member_index = list(self.ne)
+            list_member_index = list(range(self.ne))
 
             # Run prediction in parallel using p_map
             en_pred = p_map(self.sim.run_fwd_sim, list_state, list_member_index, num_cpus=no_tot_run)
