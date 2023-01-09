@@ -247,7 +247,10 @@ class eclipse:
             - Del folder:    Boolean to determine if ensemble folder should be deleted
         ---------------------------------------------------------------------------------------------------------------
         """
-        state['level'] = self.level
+        if hasattr(self,'level'):
+            state['level'] = self.level
+        else:
+            state['level'] = 0 # default value
         os.mkdir('En_' + str(member_i))
         folder = 'En_' + str(member_i) + os.sep
 
