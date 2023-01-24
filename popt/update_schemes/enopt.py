@@ -50,6 +50,7 @@ class EnOpt(PETEnsemble):
         # Calculate objective function of startpoint
         self.ne = self.num_models
         self.calc_prediction()
+        self.num_func_eval += self.ne
         self.obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
         self.save_analysis_debug(0)
 
@@ -83,7 +84,7 @@ class EnOpt(PETEnsemble):
             aug_state = ot.aug_optim_state(current_state, list_states)
 
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
-            new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, 2) + beta * self.step
+            new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, np.inf) + beta * self.step
 
             # Calculate updated state
             aug_state_upd = aug_state + np.squeeze(new_step)
@@ -97,6 +98,7 @@ class EnOpt(PETEnsemble):
             self.ne = self.num_models
             self._invert_scale_state()
             run_success = self.calc_prediction()
+            self.num_func_eval += self.ne
             new_func_values = 0
             if run_success:
                 new_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
@@ -275,6 +277,7 @@ class EnOpt(PETEnsemble):
         self.state = self._gen_state_ensemble()
         self._invert_scale_state()
         self.calc_prediction()
+        self.num_func_eval += self.ne
         obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
         obj_func_values = np.array(obj_func_values)
 
