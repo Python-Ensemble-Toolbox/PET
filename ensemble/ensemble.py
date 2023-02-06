@@ -607,7 +607,7 @@ class Ensemble:
         no_tot_run = int(self.sim.input_dict['parallel'])
         ml_pred_data = []
 
-        for level in tqdm(self.multilevel['levels'], desc='Fidelity level'): #
+        for level in tqdm(self.multilevel['levels'], desc='Fidelity level',position=1): #
             # Setup forward simulator and redundant simulator at the correct fidelity
             if self.redund_sim is not None:
                 self.redund_sim.setup_fwd_run(level=level)
