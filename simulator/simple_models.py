@@ -43,7 +43,8 @@ class lin_1d:
         self.m = m
         self.keys = {}
 
-    def setup_fwd_run(self, assimIndex=None, trueOrder=None,pred_data=None, redundant_sim=None):
+    def setup_fwd_run(self, **kwargs):
+        self.__dict__.update(kwargs) # parse kwargs input into class attributes
         assimIndex = [i for i in range(len(self.l_prim))]
         trueOrder = self.true_order
 
@@ -92,7 +93,8 @@ class nonlin_onedimmodel:
         self.all_data_types = self.input_dict['datatype']
         self.l_prim = [int(i) for i in range(len(self.true_prim[1]))]
 
-    def setup_fwd_run(self):
+    def setup_fwd_run(self, **kwargs):
+        self.__dict__.update(kwargs) # parse kwargs input into class attributes
         assimIndex = [i for i in range(len(self.l_prim))]
         trueOrder = self.true_order
 

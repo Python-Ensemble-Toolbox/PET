@@ -2,21 +2,14 @@
 ES-MDA type schemes
 """
 # External imports
-import numpy as np  # Misc. numerical tools
 import scipy.linalg as scilinalg
-import copy as cp
-from copy import deepcopy
 
 # Internal imports
 from pipt.loop.ensemble import Ensemble
-from pipt.misc_tools import analysis_tools as at
 from pipt.geostat.decomp import Cholesky
 
 # import update schemes
-from pipt.update_schemes.update_methods import *
-# from pipt.update_schemes.update_methods import approx_update
-# from pipt.update_schemes.update_methods import full_update
-# from pipt.update_schemes.update_methods import subspace_update
+from pipt.update_schemes.update_methods_ns import *
 
 
 class esmdaMixIn(Ensemble):
