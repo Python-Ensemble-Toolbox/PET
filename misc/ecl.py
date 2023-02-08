@@ -394,7 +394,7 @@ class EclipseGrid (object):
             actnum = egrid.get('ACTNUM')
 
             # make it a true flag, so we can use it for binary indexing
-            actnum = actnum.astype(numpy.bool)
+            actnum = actnum.astype(bool)
 
             # now we keep the actnum array in its proper shape,
             # corresponding to the grid cube
