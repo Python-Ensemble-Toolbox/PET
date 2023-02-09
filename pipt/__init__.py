@@ -3,7 +3,7 @@
 .. include:: ./README.md
 """
 
-__pdoc__ = {'margIS_update':False}
+__pdoc__ = {}
 
 # import replacement module and override submodule in pipt
 # import sys
