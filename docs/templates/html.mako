@@ -303,9 +303,9 @@
     % endif
 
     <h1>Index</h1>
-    <!-- CHANGE: Link to main page -->
+    <!-- CHANGE: Link to main page. Fix this such that it always works. -->
     <ul>
-    <li><a href="./PET.html">Python-Ensemble-Toolbox (PET)</a></li>
+    <li><a href="https://python-ensemble-toolbox.github.io/PET/PET.html">Python-Ensemble-Toolbox (PET)</a></li>
     </ul>
     ${extract_toc(module.docstring) if extract_module_toc_into_sidebar else ''}
     <ul id="index">
