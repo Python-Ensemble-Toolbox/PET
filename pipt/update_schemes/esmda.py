@@ -9,7 +9,9 @@ from pipt.loop.ensemble import Ensemble
 from pipt.geostat.decomp import Cholesky
 
 # import update schemes
-from pipt.update_schemes.update_methods_ns import *
+from pipt.update_schemes.update_methods_ns.approx_update import approx_update
+from pipt.update_schemes.update_methods_ns.full_update import full_update
+from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
 
 
 class esmdaMixIn(Ensemble):
