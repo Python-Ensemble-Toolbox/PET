@@ -303,6 +303,10 @@
     % endif
 
     <h1>Index</h1>
+    <!-- CHANGE: Link to main page -->
+    <ul>
+    <li><a href="./PET.html">Python-Ensemble-Toolbox (PET)</a></li>
+    </ul>
     ${extract_toc(module.docstring) if extract_module_toc_into_sidebar else ''}
     <ul id="index">
     % if supermodule:
