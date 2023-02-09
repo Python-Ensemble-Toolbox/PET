@@ -25,6 +25,9 @@ from pipt.update_schemes.update_methods_ns.subspace_update import subspace_updat
 # Check and import (if present) from other namespace packages
 if 'margIS_update' in [el[0] for el in tot_ns_pkg]: # only compare package name
     from pipt.update_schemes.update_methods_ns.margIS_update import margIS_update
+else:
+    class margIS_update:
+        pass
 
 # Internal imports
 from pipt.loop.ensemble import Ensemble
