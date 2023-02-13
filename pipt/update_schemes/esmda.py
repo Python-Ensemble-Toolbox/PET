@@ -3,10 +3,13 @@ ES-MDA type schemes
 """
 # External imports
 import scipy.linalg as scilinalg
+from copy import deepcopy
+import numpy as np
 
 # Internal imports
 from pipt.loop.ensemble import Ensemble
 from pipt.geostat.decomp import Cholesky
+import pipt.misc_tools.analysis_tools as at
 
 # import update schemes
 from pipt.update_schemes.update_methods_ns.approx_update import approx_update
@@ -117,7 +120,7 @@ class esmdaMixIn(Ensemble):
             self.data_misfit = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
 
-            self.logger.info(f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}. Lambda for initial analysis: {self.lam}')
+            self.logger.info(f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
             
             self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
                                                                    self.alpha[self.iteration-1]*self.cov_data, self.ne,
@@ -189,9 +192,9 @@ class esmdaMixIn(Ensemble):
             self.logger.info(
                 f'MDA iteration number {self.iteration}! Objective function increased from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
         # Return conv = False, why_stop var.
-        self.current_state = cp.deepcopy(self.state)
+        self.current_state = deepcopy(self.state)
         if hasattr(self,'W'):
-            self.current_W = cp.deepcopy(self.W)
+            self.current_W = deepcopy(self.W)
 
 
         return False, True, why_stop
