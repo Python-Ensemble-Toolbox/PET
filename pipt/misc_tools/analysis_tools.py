@@ -1182,10 +1182,17 @@ def calc_scaling(state, list_state, prior_info):
         scaling
     """
 
-    scaling = np.concatenate(tuple(np.sqrt(prior_info[elem]['variance'])*
-                                                  np.ones(state[elem].shape[0]) for elem in list_state))
+    scaling = []
+    for elem in list_state:
+        if len(prior_info['permx']['variance'])>1: # more than single value. This is for multiple layers. Assume all values are active
+            scaling.append(np.concatenate(tuple(np.sqrt(prior_info[elem]['variance'][z])*
+                                                np.ones(prior_info[elem]['ny']*prior_info[elem]['nx'])
+                                                for z in range(prior_info[elem]['nz']))))
+        else:
+            scaling.append(tuple(np.sqrt(prior_info[elem]['variance'])*
+                                                  np.ones(state[elem].shape[0])))
 
-    return scaling
+    return np.concatenate(scaling)
 
 
 def update_state(aug_state, state, list_state):
