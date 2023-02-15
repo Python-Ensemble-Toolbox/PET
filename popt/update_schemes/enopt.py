@@ -49,6 +49,8 @@ class EnOpt(PETEnsemble):
 
         # Calculate objective function of startpoint
         self.ne = self.num_models
+        for key in self.state.keys():
+            self.state[key] = np.array(self.state[key])  # make sure state is a numpy array
         self.calc_prediction()
         self.num_func_eval += self.ne
         self.obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
@@ -84,7 +86,8 @@ class EnOpt(PETEnsemble):
             aug_state = ot.aug_optim_state(current_state, list_states)
 
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
-            new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, np.inf) + beta * self.step
+            normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-6)
+            new_step = alpha * self.sens_matrix / normalize + beta * self.step
 
             # Calculate updated state
             aug_state_upd = aug_state + np.squeeze(new_step)
@@ -116,7 +119,7 @@ class EnOpt(PETEnsemble):
                 # Update covariance (currently we don't apply backtracking for alpha_cov)
                 self.cov_step = self.alpha_cov * self.cov_sens_matrix / la.norm(self.cov_sens_matrix, 2) + \
                     beta * self.cov_step
-                self.cov = np.squeeze(self.cov + self.cov_step)
+                self.cov = self.cov + self.cov_step
                 self.cov = self.get_sym_pos_semidef(self.cov)
 
                 # Write logging info
@@ -124,6 +127,10 @@ class EnOpt(PETEnsemble):
                     info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
                         format(iteration, self.alpha_iter, np.mean(self.obj_func_values), alpha, self.cov[0, 0])
                     logger.info(info_str_iter)
+
+                # Update self.alpha in the one-dimensional case
+                if len(aug_state) == 1:
+                    self.alpha /= 2
 
             else:
 
@@ -148,9 +155,12 @@ class EnOpt(PETEnsemble):
     def get_sym_pos_semidef(a):
 
         rtol = 1e-05
-        S, U = np.linalg.eigh(a)
-        S = np.clip(S, 0, None) + rtol
-        a = (U*S)@U.T
+        if a.ndim > 1:
+            S, U = np.linalg.eigh(a)
+            S = np.clip(S, 0, None) + rtol
+            a = (U*S)@U.T
+        else:
+            a = np.maximum(a, rtol)
         return a
 
     def _ext_enopt_param(self):
@@ -235,7 +245,7 @@ class EnOpt(PETEnsemble):
             if ind_num_models is None:  # num_models does not exist
                 self.num_models = default_num_models
             else:  # num_models present; assign value
-                self.num_models = enopt[ind_num_models[0]][ind_num_models[1] + 1]
+                self.num_models = int(enopt[ind_num_models[0]][ind_num_models[1] + 1])
             if self.num_models > 1:
                 self.aux_input = list(np.arange(self.num_models))
 

@@ -9,6 +9,8 @@ def npv(pred_data, keys_opt, report):
         - pred_data_en : ensemble of predicted data
         - keys_opt : keys with economic data
         - report : report dates
+    Output:
+        - objective function values (NPV) for all ensemble members
     """
 
     values = []

@@ -343,4 +343,4 @@ def check_mand_keywords_opt(keys_opt):
     """Check for mandatory keywords in `OPTIM` part, and output error if they are not present"""
 
     # Mandatory keywords in OPTIM
-    assert 'ne' in keys_opt, 'NE not in DATAASSIM!'
+    assert 'ne' in keys_opt, 'NE not in OPTIM!'
