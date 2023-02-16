@@ -493,7 +493,7 @@ class Ensemble:
             # Setup forward simulator and redundant simulator at the correct fidelity
             if self.redund_sim is not None:
                 self.redund_sim.setup_fwd_run()
-            self.sim.setup_fwd_run()
+            self.sim.setup_fwd_run(redund_sim=self.redund_sim)
 
             # Ensure that we put all the states in a list
             list_state = [deepcopy({}) for _ in range(self.ne)]
