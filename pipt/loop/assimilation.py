@@ -183,8 +183,9 @@ class Assimilate:
                         f'Iterations (Obj. func. val:{self.ensemble.data_misfit:.1f}'
                         f' Reduced: {100 * (1 - (self.ensemble.data_misfit / self.ensemble.prev_data_misfit)):.0f} %)')
                     # self.pbar_out.refresh()
-                if 'restartsave' in self.ensemble.keys_da and self.ensemble.keys_da['restartsave'] == 'yes':
-                    self.ensemble.save()
+
+            if 'restartsave' in self.ensemble.keys_da and self.ensemble.keys_da['restartsave'] == 'yes':
+                self.ensemble.save()
 
         # If none of the convergence criteria were met, max. iteration was the reason iterations stopped.
         if conv is False:
