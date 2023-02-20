@@ -364,6 +364,8 @@ class Assimilate:
         for save_typ in analysisdebug:
             if hasattr(self, save_typ):
                 save_dict[save_typ] = eval('self.{}'.format(save_typ))
+            elif hasattr(self.ensemble, save_typ):
+                save_dict[save_typ] = eval('self.ensemble.{}'.format(save_typ))
             # Save with key equal variable name and the actual variable
             else:
                 print(f'Cannot save {save_typ}, because it is a local variable!\n\n')
