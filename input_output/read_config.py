@@ -318,7 +318,6 @@ def check_mand_keywords_fwd(keys_fwd):
     """Check for mandatory keywords in `FWDSIM` part, and output error if they are not present"""
 
     # Mandatory keywords in FWDSIM
-    assert 'simulator' in keys_fwd, 'SIMULATOR not in FWDSIM!'
     assert 'parallel' in keys_fwd, 'PARALLEL not in FWDSIM!'
     assert 'datatype' in keys_fwd, 'DATATYPE not in FWDSIM!'
 
