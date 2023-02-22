@@ -57,9 +57,6 @@ class lmenrmlMixIn(Ensemble):
             # Save prior state in separate variable
             self.prior_state = cp.deepcopy(self.state)
 
-            # extract and save state scaling
-
-
             # Extract parameters like conv. tol. and damping param. from ITERATION keyword in DATAASSIM
             self._ext_iter_param()
 
@@ -92,7 +89,6 @@ class lmenrmlMixIn(Ensemble):
         """
         Calculate the update step in LM-EnRML, which is just the Levenberg-Marquardt update algorithm with
         the sensitivity matrix approximated by the ensemble.
-
         """
 
         # reformat predicted data
@@ -112,16 +108,20 @@ class lmenrmlMixIn(Ensemble):
 
             self.logger.info(f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}. Lambda for initial analysis: {self.lam}')
 
-        # Mean pred_data and perturbation matrix with scaling
-        if len(self.scale_data.shape) == 1:
-            self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                   np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+        if 'local_analysis' in self.keys_da:
+            # loop over the states that we want to update. Assume that the state and data combinations have been
+            # determined by the initialization.
+
         else:
-            self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+            # Mean pred_data and perturbation matrix with scaling
+            if len(self.scale_data.shape) == 1:
+                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+            else:
+                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
-        aug_state = at.aug_state(self.current_state, self.list_states)
-
-        self.update() # run analysis
+            aug_state = at.aug_state(self.current_state, self.list_states)
+            self.update() # run ordinary analysis
         if hasattr(self,'step'):
             aug_state_upd = aug_state + self.step
         if hasattr(self,'w_step'):
@@ -326,8 +326,6 @@ class lmenrmlMixIn(Ensemble):
                 break
         u_d, s_d, v_d = u_d[:, :trunc_index + 1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
         self.Am = np.dot(u_d,np.eye(trunc_index+1)*((s_d**(-1))[:,None])) # notation from paper
-
-
 
 class lmenrml_approx(lmenrmlMixIn,approx_update):
     pass
