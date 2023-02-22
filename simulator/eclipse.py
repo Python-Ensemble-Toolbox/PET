@@ -280,8 +280,8 @@ class eclipse:
                 self.remove_folder(member_i)
             return self.pred_data
         else:
-            if self.redund_sim is not None:
-                success = self.redund_sim.call_sim(folder, True)
+            if self.ensemble.redund_sim is not None:
+                success = self.ensemble.redund_sim.call_sim(folder, True)
                 if success:
                     self.extract_data(member_i)
                     if del_folder:
