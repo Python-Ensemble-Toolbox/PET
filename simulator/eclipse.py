@@ -10,7 +10,7 @@ import datetime as dt
 from scipy import interpolate
 from subprocess import call, DEVNULL
 from misc import ecl, grdecl
-from shutil import rmtree  # rmtree for removing folders
+from shutil import rmtree,copytree  # rmtree for removing folders
 import time
 #import rips
 
@@ -280,8 +280,8 @@ class eclipse:
                 self.remove_folder(member_i)
             return self.pred_data
         else:
-            if self.ensemble.redund_sim is not None:
-                success = self.ensemble.redund_sim.call_sim(folder, True)
+            if self.redund_sim is not None:
+                success = self.redund_sim.call_sim(folder, True)
                 if success:
                     self.extract_data(member_i)
                     if del_folder:
@@ -948,9 +948,22 @@ class ecl_100(eclipse):
             filename = self.file
 
         # Run the simulator:
-        with EclipseRunEnvironment(filename):
-            call(['eclrun', '--nocleanup', 'eclipse', filename + '.DATA'], stdout=DEVNULL)
+        success = True
+        try:
+            with EclipseRunEnvironment(filename):
+                com =['eclrun', '--nocleanup', 'eclipse', filename + '.DATA']
+                if 'sim_limit' in self.options:
+                    call(com, stdout=DEVNULL, timeout=self.options['sim_limit'])
+                else:
+                    call(com, stdout=DEVNULL)
+                raise ValueError
+        except:
+            print('\nError in the eclipse run.') # add rerun?
+            if not os.path.exists('Crashdump'):
+                copytree(path, 'Crashdump')
+            success = False
 
+        return success
 
 class ecl_300(eclipse):
     '''
