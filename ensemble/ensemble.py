@@ -46,7 +46,7 @@ class Ensemble:
         # Internalize PET dictionary
         self.keys_en = keys_en
         self.sim = sim
-        self.redund_sim = redund_sim
+        self.sim.redund_sim = redund_sim
         self.pred_data = None
 
         # Auxilliary input to the simulator - can be used e.g.,
@@ -491,9 +491,9 @@ class Ensemble:
 
             #for level in self.multilevel['level']: #
             # Setup forward simulator and redundant simulator at the correct fidelity
-            if self.redund_sim is not None:
-                self.redund_sim.setup_fwd_run()
-            self.sim.setup_fwd_run(redund_sim=self.redund_sim)
+            if self.sim.redund_sim is not None:
+                self.sim.redund_sim.setup_fwd_run()
+            self.sim.setup_fwd_run(redund_sim=self.sim.redund_sim)
 
             # Ensure that we put all the states in a list
             list_state = [deepcopy({}) for _ in range(self.ne)]
