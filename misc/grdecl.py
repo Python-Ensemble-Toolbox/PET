@@ -358,7 +358,7 @@ class _Lexer (object):
         count, value = self.expect_count(flag)
         # if we don't convert to int first and then to bool, the conversion
         # will always yield a value of True!
-        return (count, numpy.bool(conv_atoi(value)))
+        return (count, bool)
 
     def at_eof(self):
         """Check if the lexer has progressed to the end of the stream"""
@@ -488,6 +488,7 @@ class _Parser (object):
         self.prod['ACTNUM'] = self._actnum
         self.prod['ECHO'] = self._ignore
         self.prod['INCLUDE'] = self._include
+        self.prod['DIMENS'] = self._dimens
 
         # this list contains the keywords that are all readable in the same way
         self.cell_sections = [x for x in _SECTIONS.keys()
@@ -627,6 +628,16 @@ class _Parser (object):
         # end-of-record sentinel in case any tokens are defaulted
         self.lex.expect(endrec)
 
+    def _dimens(self):
+        """Production for the DIMENS keyword"""
+        ni = self.lex.expect_cardinal()
+        nj = self.lex.expect_cardinal()
+        nk = self.lex.expect_cardinal()
+        self.section['DIMENS'] = numpy.array([ni, nj, nk],
+                                             dtype=numpy.int32)
+
+        self.lex.expect(endrec)
+
     def _coordsys(self):
         """Production for the COORDSYS keyword"""
         # we are reading only one grid, so we don't really have any notion
@@ -715,7 +726,7 @@ class _Parser (object):
 
         # allocate memory
         num_cells = self.nk * self.nj * self.ni
-        actnum = numpy.empty((num_cells, ), dtype=numpy.bool)
+        actnum = numpy.empty((num_cells, ), dtype=bool)
 
         # read numbers from file; each read may potentially fill a different
         # length of the array
