@@ -609,8 +609,8 @@ class Ensemble:
 
         for level in tqdm(self.multilevel['levels'], desc='Fidelity level',position=1): #
             # Setup forward simulator and redundant simulator at the correct fidelity
-            if self.redund_sim is not None:
-                self.redund_sim.setup_fwd_run(level=level)
+            if self.sim.redund_sim is not None:
+                self.sim.redund_sim.setup_fwd_run(level=level)
             self.sim.setup_fwd_run(level=level)
             ml_ne = self.multilevel['ne'][level]
             # Ensure that we put all the states in a list
