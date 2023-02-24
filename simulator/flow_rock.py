@@ -250,8 +250,8 @@ class flow_rock(flow):
             self.pem = None
 
 
-    def setup_fwd_run(self):
-        super().setup_fwd_run()
+    def setup_fwd_run(self, redund_sim):
+        super().setup_fwd_run(redund_sim=redund_sim)
 
     def run_fwd_sim(self, state, member_i, del_folder=True):
         # The inherited simulator also has a run_fwd_sim. Call this.
@@ -385,4 +385,4 @@ class flow_rock(flow):
                 if key in ['bulkimp']:
                     if self.true_prim[1][prim_ind] in self.pem_input['vintage']:
                         v = self.pem_input['vintage'].index(self.true_prim[1][prim_ind])
-                        self.pred_data[prim_ind][key] = self.pem_result[v].flatten()
+                        self.pred_data[prim_ind][key] = self.pem_result[v].data.flatten()

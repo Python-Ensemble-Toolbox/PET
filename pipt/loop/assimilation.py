@@ -205,7 +205,10 @@ class Assimilate:
         # pbar.close()
         pbar_out.close()
         if self.ensemble.prev_data_misfit is not None:
-            out_str = f'Convergence was met. Obj. function reduced from {self.ensemble.prior_data_misfit:0.1f} to {self.ensemble.data_misfit:0.1f}'
+            out_str = 'Convergence was met.'
+            if self.ensemble.prior_data_misfit > self.ensemble.data_misfit:
+                out_str += f' Obj. function reduced from {self.ensemble.prior_data_misfit:0.1f} ' \
+                           f'to {self.ensemble.data_misfit:0.1f}'
             tqdm.write(out_str)
             self.ensemble.logger.info(out_str)
 
@@ -233,15 +236,15 @@ class Assimilate:
         hm_mean = np.mean(hm)
         outliers = np.argwhere(np.abs(hm - hm_mean) > 4 * hm_std)
         print('Outliers: ' + str(np.squeeze(outliers)))
-        members = np.arange(self.ne)
+        members = np.arange(self.ensemble.ne)
         members = np.delete(members, outliers)
         for index in outliers.flatten():
 
             new_index = np.random.choice(members)
 
             # replace state
-            for el in self.state.keys():
-                self.state[el][:, index] = deepcopy(self.state[el][:, new_index])
+            for el in self.ensemble.state.keys():
+                self.ensemble.state[el][:, index] = deepcopy(self.ensemble.state[el][:, new_index])
 
             # replace the failed forecast
             for i, data_ind in enumerate(self.ensemble.pred_data):
@@ -532,13 +535,14 @@ class Assimilate:
                     for k in pred_data_tmp[i]:  # DATATYPE
                         if vintage < len(self.ensemble.sparse_info['actnum']) and \
                                 len(pred_data_tmp[i][k]) == int(np.sum(self.ensemble.sparse_info['actnum'][vintage])):
+                            self.ensemble.pred_data[i][k] = np.zeros((len(self.ensemble.obs_data[i][k]), self.ensemble.ne))
                             for m in range(pred_data_tmp[i][k].shape[1]):
-                                data_array = self.ensemble.sim.compress(pred_data_tmp[i][k][:, m], vintage, 
+                                data_array = self.ensemble.compress(pred_data_tmp[i][k][:, m], vintage,
                                     self.ensemble.sparse_info['use_ensemble'])
                                 self.ensemble.pred_data[i][k][:, m] = data_array
                             vintage = vintage + 1
             if self.ensemble.sparse_info['use_ensemble']:
-                self.ensemble.sim.compress()
+                self.ensemble.compress()
                 self.ensemble.sparse_info['use_ensemble'] = None
 
         # Extra option debug
@@ -546,9 +550,6 @@ class Assimilate:
             # Save the reconstructed signal for later analysis
             if self.ensemble.sparse_data:  
                     with open('rec_results.p','wb') as f:
-                        pickle.dump(np.asarray(self.ensemble.data_rec).transpose(), f)
-            
-            # Scaling used in sim2seis (dumped as one long array)
-            if hasattr(self.ensemble.sim,'scale') and self.ensemble.sim.scale.size:  
-                with open('scale_results.p','wb') as f:
-                    pickle.dump(self.ensemble.sim.scale, f)
+                        pickle.dump(np.asarray(self.ensemble.data_rec, dtype=object).transpose(), f)
+
+

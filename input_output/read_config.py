@@ -8,12 +8,15 @@ import numpy as np
 
 
 def convert_pipt_to_yaml(init_file):
-    # Read .pipt file
-    da, fwd = read_txt(init_file)
+    # Read .pipt or .popt file
+    pr, fwd = read_txt(init_file)
 
     # Write dictionaries to yaml file with same base file name
     with open(init_file.rstrip('pipt') + 'yaml', 'w') as f:
-        yaml.dump({'dataassim': da, 'fwdsim': fwd}, f)
+        if 'daalg' in pr:
+            yaml.dump({'dataassim': pr, 'fwdsim': fwd}, f)
+        else:
+            yaml.dump({'optim': pr, 'fwdsim': fwd}, f)
 
 
 def read_yaml(init_file):
@@ -45,29 +48,36 @@ def read_yaml(init_file):
         y = yaml.load(fid, Loader=FullLoader)
 
     # Check for dataassim and fwdsim
-    if 'dataassim' not in y.keys() or 'fwdsim' not in y.keys():
+    if 'optim' in y.keys():
+        keys_pr = y['optim']
+        check_mand_keywords_opt(keys_pr)
+    elif 'dataassim' in y.keys():
+        keys_pr = y['datasssim']
+        check_mand_keywords_da(keys_pr)
+    else:
         raise KeyError
-    
-    # Split to two dictionaries
-    keys_da, keys_fwd = y['dataassim'], y['fwdsim']
-
-    # Check for mandatory keywords
-    check_mand_keywords_da_fwdsim(keys_da, keys_fwd)
+    if 'fwdsim' in y.keys():
+        keys_fwd = y['fwdsim']
+    else:
+        raise KeyError
 
     # Organize keywords
-    org = Organize_input(keys_da,keys_fwd)
+    org = Organize_input(keys_pr,keys_fwd)
     org.organize()
 
-    return org.get_keys_da(), org.get_keys_fwd()
+    return org.get_keys_pr(), org.get_keys_fwd()
 
 
 def convert_pipt_to_toml(init_file):
-    # Read .pipt file
-    da, fwd = read_txt(init_file)
+    # Read .pipt or .popt file
+    pr, fwd = read_txt(init_file)
 
     # Write dictionaries to toml file with same base file name
     with open(init_file.rstrip('pipt') + 'toml', 'wb') as f:
-        tomli_w.dump({'dataassim': da, 'fwdsim': fwd}, f)
+        if 'daalg' in pr:
+            tomli_w.dump({'dataassim': pr, 'fwdsim': fwd}, f)
+        else:
+            tomli_w.dump({'optim': pr, 'fwdsim': fwd}, f)
 
 
 def read_toml(init_file):
@@ -84,20 +94,24 @@ def read_toml(init_file):
         t = tomli.load(fid)
 
     # Check for dataassim and fwdsim
-    if 'dataassim' not in t.keys() or 'fwdsim' not in t.keys():
+    if 'optim' in t.keys():
+        keys_pr = t['optim']
+        check_mand_keywords_opt(keys_pr)
+    elif 'dataassim' in t.keys():
+        keys_pr = t['dataassim']
+        check_mand_keywords_da(keys_pr)
+    else:
         raise KeyError
-    
-    # Split to two dictionaries
-    keys_da, keys_fwd = t['dataassim'], t['fwdsim']
-
-    # Check for mandatory keywords
-    check_mand_keywords_da_fwdsim(keys_da, keys_fwd)
+    if 'fwdsim' in t.keys():
+        keys_fwd = t['fwdsim']
+    else:
+        raise KeyError
 
     # Organize keywords
-    org = Organize_input(keys_da,keys_fwd)
+    org = Organize_input(keys_pr, keys_fwd)
     org.organize()
 
-    return org.get_keys_da(), org.get_keys_fwd()
+    return org.get_keys_pr(), org.get_keys_fwd()
 
 
 def read_txt(init_file):
@@ -165,7 +179,7 @@ def read_txt(init_file):
     org = Organize_input(keys_pr, keys_fwd)
     org.organize()
 
-    return org.get_keys_da(), org.get_keys_fwd()
+    return org.get_keys_pr(), org.get_keys_fwd()
 
 
 def read_clean_file(init_file):

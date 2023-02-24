@@ -4,10 +4,10 @@ import datetime as dt
 
 
 class Organize_input():
-    def __init__(self,keys_da,keys_fwd):
-        self.keys_da = keys_da
+    def __init__(self,keys_pr, keys_fwd):
+        self.keys_pr = keys_pr
         self.keys_fwd = keys_fwd
-        # self.keys_en = keys_en
+        self.keys_en = None
 
     def organize(self):
         # Organize the data types given by DATATYPE keyword
@@ -15,8 +15,8 @@ class Organize_input():
         # Organize the observed data given by TRUEDATA keyword and initialize predicted data variable
         self._org_report()
 
-    def get_keys_da(self):
-        return deepcopy(self.keys_da)
+    def get_keys_pr(self):
+        return deepcopy(self.keys_pr)
 
     def get_keys_fwd(self):
         return deepcopy(self.keys_fwd)
@@ -39,7 +39,7 @@ class Organize_input():
 
         if not isinstance(self.keys_fwd['datatype'], list):
             self.keys_fwd['datatype'] = [self.keys_fwd['datatype']]
-        self.keys_da['datatype'] = self.keys_fwd['datatype']  # make copy for problem keywords
+        self.keys_pr['datatype'] = self.keys_fwd['datatype']  # make copy for problem keywords
 
     def _org_report(self):
         """
@@ -66,16 +66,16 @@ class Organize_input():
         """
 
         # Extract primary indices from "TRUEDATAINDEX"
-        if 'truedataindex' in self.keys_da:
+        if 'truedataindex' in self.keys_pr:
 
-            if isinstance(self.keys_da['truedataindex'], list):  # List of prim. ind
-                true_prim = self.keys_da['truedataindex']
+            if isinstance(self.keys_pr['truedataindex'], list):  # List of prim. ind
+                true_prim = self.keys_pr['truedataindex']
             else:  # Float
-                true_prim = [self.keys_da['truedataindex']]
+                true_prim = [self.keys_pr['truedataindex']]
 
             # Check if a csv file has been included as "TRUEDATAINDEX". If so, we read it and make a list,
-            if isinstance(self.keys_da['truedataindex'], str) and self.keys_da['truedataindex'].endswith('.csv'):
-                with open(self.keys_da['truedataindex']) as csvfile:
+            if isinstance(self.keys_pr['truedataindex'], str) and self.keys_pr['truedataindex'].endswith('.csv'):
+                with open(self.keys_pr['truedataindex']) as csvfile:
                     reader = csv.reader(csvfile)  # get a reader object
                     true_prim = []  # Initialize the list of csv data
                     for rows in reader:  # Rows is a list of values in the csv file
@@ -83,7 +83,7 @@ class Organize_input():
                         for ind, col in enumerate(rows):
                             csv_data[ind] = int(col)
                         true_prim.extend(csv_data)
-            self.keys_da['truedataindex'] = true_prim
+            self.keys_pr['truedataindex'] = true_prim
 
         # Check if a csv file has been included as "REPORTPOINT". If so, we read it and make a list,
         if 'reportpoint' in self.keys_fwd:
@@ -103,9 +103,9 @@ class Organize_input():
                 self.keys_fwd['reportpoint'] = pred_prim
 
         # Check if assimindex is given as a csv file. If so, we read and make a potential 2D list (if sequential).
-        if 'assimindex' in self.keys_da:
-            if isinstance(self.keys_da['assimindex'], str) and self.keys_da['assimindex'].endswith('.csv'):
-                with open(self.keys_da['assimindex']) as csvfile:
+        if 'assimindex' in self.keys_pr:
+            if isinstance(self.keys_pr['assimindex'], str) and self.keys_pr['assimindex'].endswith('.csv'):
+                with open(self.keys_pr['assimindex']) as csvfile:
                     reader = csv.reader(csvfile)  # get a reader object
                     assimindx = []  # Initialize the 2D list of csv data
                     for rows in reader:  # Rows is a list of values in the csv file
@@ -113,12 +113,12 @@ class Organize_input():
                         for col in range(len(rows)):
                             csv_data[col] = int(rows[col])
                         assimindx.append(csv_data)
-                self.keys_da['assimindex'] = assimindx
+                self.keys_pr['assimindex'] = assimindx
 
             # check that they are lists
-            if not isinstance(self.keys_da['truedataindex'], list):
-                self.keys_da['truedataindex'] = [self.keys_da['truedataindex']]
+            if not isinstance(self.keys_pr['truedataindex'], list):
+                self.keys_pr['truedataindex'] = [self.keys_pr['truedataindex']]
             if not isinstance(self.keys_fwd['reportpoint'], list):
                 self.keys_fwd['reportpoint'] = [self.keys_fwd['reportpoint']]
-            if not isinstance(self.keys_da['assimindex'], list):
-                self.keys_da['assimindex'] = [self.keys_da['assimindex']]
+            if not isinstance(self.keys_pr['assimindex'], list):
+                self.keys_pr['assimindex'] = [self.keys_pr['assimindex']]
