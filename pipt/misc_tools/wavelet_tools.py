@@ -6,6 +6,7 @@ import warnings
 
 
 # Define the class for sparse representation of seismic data using wavelet compression.
+# Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
 class SparseRepresentation:
 
     # Initialize
@@ -16,8 +17,10 @@ class SparseRepresentation:
         self.options = options
         self.num_grid = np.prod(self.options['dim'])
 
-        self.threshold = np.array([])
         self.est_noise = np.array([])
+        self.est_noise_level = []  # this is a scalar for each subband
+        self.mask = []
+        self.threshold = []
         self.num_total_coeff = None
         self.cd_leading_index = None
         self.cd_leading_coeff = None
@@ -27,12 +30,16 @@ class SparseRepresentation:
     # Function to doing image compression. If the function is called without threshold, then the leading indices must
     # be defined in the class. Typically this is done by running the compression on true data with a given threshold.
     def compress(self, data, th_mult=None):
-        if self.options['inactive_value'] is None:
+        if ('inactive_value' not in self.options) or (self.options['inactive_value'] is None):
             self.options['inactive_value'] = np.mean(data)
         signal = np.zeros(self.num_grid)
         signal[~self.options['actnum']] = self.options['inactive_value']
         signal[self.options['actnum']] = data
-        signal = signal.reshape(self.options['dim'])
+        if 'order' not in self.options:
+            self.options['order'] = 'C'
+        if 'min_noise' not in self.options:
+          self.options['min_noise'] = 1.0e-9
+        signal = signal.reshape(self.options['dim'], order=self.options['order'])
         signal = signal.transpose((2, 1, 0))  # get the signal back into its original shape (nx,ny,nz)
         # pywt throws a warning in case of single-dimentional entries in the shape of the signal.
         with warnings.catch_warnings():
@@ -40,25 +47,47 @@ class SparseRepresentation:
             wdec = pywt.wavedecn(signal, self.options['wname'], 'symmetric', int(self.options['level']))
         wdec_rec = deepcopy(wdec)
         
-        # Perform thresholding if the value is given as input.
+        # Perform thresholding if the threshold is given as input.
         do_thresholding = False
-        current_threshold = None
         est_noise_level = None
+        true_data = False
         if th_mult is not None and th_mult >= 0:
             do_thresholding = True
+            if not self.est_noise.size:  # assume that the true data is input
+                true_data = True
+            else:
+                self.est_noise = np.array([])  # this will be rebuilt
+
+        # Initialize
+        # Note: the keys below are organized the same way as in Matlab.
+        keys = ['daa', 'ada', 'dda', 'aad', 'dad', 'add', 'ddd']
+        if true_data:
+            for level in range(0, int(self.options['level'])+1):
+                num_subband = 1 if level == 0 else len(keys)
+                for subband in range(0, num_subband):
+                    if level == 0:
+                        self.mask.append(False)
+                        self.est_noise_level.append(0)
+                        self.threshold.append(0)
+                    else:
+                        if subband == 0:
+                            self.mask.append({})
+                            self.est_noise_level.append({})
+                            self.threshold.append({})
+                        self.mask[level][keys[subband]] = False
+                        self.est_noise_level[level][keys[subband]] = 0
+                        self.threshold[level][keys[subband]] = 0
 
         # In the white noise case estimated std is based on the high (hhh) subband only
-        if do_thresholding and not self.options['colored_noise']:
+        if true_data and not self.options['colored_noise']:
             subband_hhh = wdec[-1]['ddd'].flatten()
             est_noise_level = np.median(np.abs(subband_hhh - np.median(subband_hhh))) / 0.6745  # estimated noise std
-            est_noise_level = np.maximum(est_noise_level, 1e-9)
+            est_noise_level = np.maximum(est_noise_level, self.options['min_noise'])
             # Threshold based on universal rule
             current_threshold = th_mult * np.sqrt(2 * np.log(np.size(data))) * est_noise_level
-            self.threshold = np.append(self.threshold, current_threshold)
+            self.threshold[0] = current_threshold
 
         # Loop over all levels and subbands (including the lll subband)
-        # Note: the keys below are organized the same way as in Matlab.
-        keys = ['daa', 'ada', 'dda', 'aad', 'dad', 'add', 'ddd']  
         ca_in_vec = np.array([])
         cd_in_vec = np.array([])
         for level in range(0, int(self.options['level'])+1):
@@ -68,9 +97,9 @@ class SparseRepresentation:
                 coeffs = coeffs.flatten()
 
                 # In the colored noise case estimated std is based on all subbands
-                if do_thresholding and self.options['colored_noise']:
+                if true_data and self.options['colored_noise']:
                     est_noise_level = np.median(np.abs(coeffs - np.median(coeffs))) / 0.6745
-                    est_noise_level = np.maximum(est_noise_level, 1e-9)
+                    est_noise_level = np.maximum(est_noise_level, self.options['min_noise'])
                     if self.options['threshold_rule'] == 'universal':  # threshold based on universal rule
                         current_threshold = np.sqrt(2 * np.log(np.size(coeffs))) * est_noise_level
                     elif self.options['threshold_rule'] == 'bayesian':  # threshold based on bayesian rule
@@ -78,13 +107,20 @@ class SparseRepresentation:
                         current_threshold = est_noise_level**2 / np.sqrt(np.abs(std_data**2 - est_noise_level**2))
                     else:
                         print('Thresholding rule not implemented')
-                        sys.exit()
+                        sys.exit(1)
                     current_threshold = th_mult * current_threshold
-                    self.threshold = np.append(self.threshold, current_threshold)
+                    if level == 0:
+                        self.threshold[level] = current_threshold
+                    else:
+                        self.threshold[level][keys[subband]] = current_threshold
+                    # self.threshold = np.append(self.threshold, current_threshold)
 
                 # Perform thresholding
                 if do_thresholding:
-                    zero_index = []
+                    if level == 0 or not self.options['colored_noise']:
+                        current_threshold = self.threshold[0]
+                    else:
+                        current_threshold = self.threshold[level][keys[subband]]
                     if level > 0 or (level == 0 and not self.options['keep_ca']):
                         if self.options['use_hard_th']:  # use hard thresholding
                             zero_index = np.abs(coeffs) < current_threshold
@@ -92,49 +128,72 @@ class SparseRepresentation:
                         else:  # use soft thresholding
                             coeffs = np.sign(coeffs) * np.maximum(np.abs(coeffs) - current_threshold, 0)
                             zero_index = coeffs == 0
-                    num_el = len(coeffs) - np.count_nonzero(zero_index)
-                    self.est_noise = np.append(self.est_noise, est_noise_level*np.ones(num_el))
+                    else:
+                        zero_index = np.zeros(coeffs.size).astype(bool)
+
+                    # Construct the mask for each subband and estimate the noise level
+                    if level == 0:
+                        self.mask[level] = np.invert(zero_index) + self.mask[level]
+                        if true_data:
+                            self.est_noise_level[level] = est_noise_level
+                    else:
+                        self.mask[level][keys[subband]] = np.invert(zero_index) + self.mask[level][keys[subband]]
+                        if true_data:
+                            self.est_noise_level[level][keys[subband]] = est_noise_level
+
+                    # Build the noise for the compressed signal
+                    if level == 0:
+                        num_el = np.sum(self.mask[level])
+                        current_noise_level = self.est_noise_level[level]
+                        self.est_noise = np.append(self.est_noise, current_noise_level * np.ones(num_el))
+                    else:
+                        num_el = np.sum(self.mask[level][keys[subband]])
+                        current_noise_level = self.est_noise_level[level][keys[subband]]
+                        self.est_noise = np.append(self.est_noise, current_noise_level * np.ones(num_el))
 
                 if level == 0:
                     ca_in_vec = coeffs
                 else:
                     cd_in_vec = np.append(cd_in_vec, coeffs)
 
+        # Compute the leading indices and compressed signal
         if do_thresholding:
             self.num_total_coeff = ca_in_vec.size + cd_in_vec.size
-            self.cd_leading_index = np.nonzero(cd_in_vec)[0]
+            if self.cd_leading_index is not None:
+                self.cd_leading_index = np.union1d(self.cd_leading_index, np.nonzero(cd_in_vec)[0])
+            else:
+                self.cd_leading_index = np.nonzero(cd_in_vec)[0]
             self.cd_leading_coeff = cd_in_vec[self.cd_leading_index]
             if self.options['keep_ca']:
-                self.ca_leading_index = np.arange(wdec[0].size)
+                if self.ca_leading_index is None:
+                    self.ca_leading_index = np.arange(wdec[0].size)
             else:
-                self.ca_leading_index = np.nonzero(ca_in_vec)[0]
+                if self.ca_leading_index is None:
+                    self.ca_leading_index = np.nonzero(ca_in_vec)[0]
+                else:
+                    self.ca_leading_index = np.union1d(self.ca_leading_index, np.nonzero(ca_in_vec)[0])
             self.ca_leading_coeff = ca_in_vec[self.ca_leading_index]
             compressed_data = np.append(self.ca_leading_coeff, self.cd_leading_coeff)
         else:
             if self.ca_leading_index is None or self.cd_leading_index is None:
                 print('Leading indices not defined')
-                sys.exit()
+                sys.exit(1)
             compressed_data = np.append(ca_in_vec[self.ca_leading_index], cd_in_vec[self.cd_leading_index])
-            ca_non_leading_index = np.arange(len(ca_in_vec))
-            ca_non_leading_index = np.delete(ca_non_leading_index, self.ca_leading_index)
-            ca_in_vec[ca_non_leading_index] = 0
-            cd_non_leading_index = np.arange(len(cd_in_vec))
-            cd_non_leading_index = np.delete(cd_non_leading_index, self.cd_leading_index)
-            cd_in_vec[cd_non_leading_index] = 0
 
-        # construct wdec_rec
-        ind = 0
+        # Construct wdec_rec
         for level in range(0, int(self.options['level']) + 1):
             if level == 0:
                 shape = wdec_rec[level].shape
-                wdec_rec[level] = ca_in_vec.reshape(shape)
+                coeff = wdec_rec[level].flatten()
+                coeff[~self.mask[level]] = 0
+                wdec_rec[level] = coeff.reshape(shape)
             else:
                 num_subband = len(keys)
                 for subband in range(0, num_subband):
                     shape = wdec_rec[level][keys[subband]].shape
-                    coeff = cd_in_vec[ind:ind+np.prod(shape)]
+                    coeff = wdec_rec[level][keys[subband]].flatten()
+                    coeff[~self.mask[level][keys[subband]]] = 0
                     wdec_rec[level][keys[subband]] = coeff.reshape(shape)
-                    ind += np.prod(shape)
 
         return compressed_data, wdec_rec
 
@@ -143,13 +202,13 @@ class SparseRepresentation:
 
         if wdec_rec is None:
             print('No signal to reconstruct')
-            sys.exit()
+            sys.exit(1)
 
         data_rec = pywt.waverecn(wdec_rec, self.options['wname'], 'symmetric')
         data_rec = data_rec.transpose((2, 1, 0))  # flip the axes
         dim = self.options['dim']
         data_rec = data_rec[0:dim[0], 0:dim[1], 0:dim[2]]  # severe issure here
-        data_rec = data_rec.flatten()
+        data_rec = data_rec.flatten(order=self.options['order'])
         data_rec = data_rec[self.options['actnum']]
 
         return data_rec

@@ -1,8 +1,11 @@
 # External import
 import logging
+import os.path
+
 import numpy as np
 import sys
-from copy import deepcopy
+from copy import deepcopy, copy
+import pickle
 
 # Internal import
 from ensemble.ensemble import Ensemble as PETEnsemble
@@ -35,15 +38,16 @@ class Ensemble(PETEnsemble):
             self.temp_state = None  # temporary state saving
             self.cov_prior = None  # Prior cov. matrix
             self.sparse_info = None  # Init in _org_sparse_representation
-            self.sparse_data = []  # List of the compression info (sendt to flow_rock.py)
-            self.data_rec = [0] * int(self.keys_da['ne'])  # List of reconstructed seismic data
-
-            self._org_obs_data()
-            self._org_data_var()
+            self.sparse_data = []  # List of the compression info
+            self.data_rec = []  # List of reconstructed data
+            self.scale_val = None  # Use to scale data
 
             # Prepare sparse representation
             if 'compress' in self.keys_da:
                 self._org_sparse_representation()
+
+            self._org_obs_data()
+            self._org_data_var()
 
             # define projection for centring and scaling
             self.proj = (np.eye(self.ne) - (1 / self.ne) * np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
@@ -203,6 +207,7 @@ class Ensemble(PETEnsemble):
         # NOTE2: If "TRUEDATA" contains a .npz file, this will be loaded. BUT the array loaded MUST be a 1D numpy
         # array! So resize BEFORE saving the .npz file!
         # NOTE3: If CSV file has been included in TRUEDATA, we read the data from this file
+        vintage = 0
         for i in range(len(self.obs_data)):  # TRUEDATAINDEX
             self.obs_data[i] = {}  # Init. dict. with datatypes (do inside loop to avoid copy of same entry)
             if 'unif_in' in self.keys_da and self.keys_da['unif_in'] == 'yes':  # Make unified inputs
@@ -210,14 +215,12 @@ class Ensemble(PETEnsemble):
                     load_data = np.load(truedata[i][0])  # Load the .npz file
                     data_array = load_data[load_data.files[0]]
 
-                    # Perform compression if required (we only compress signals with same size as number of active cells)
-                    if self.sparse_info is not None and len(data_array) == int(np.sum(self.sparse_info['actnum'])):
-                        x = wt.SparseRepresentation(self.sparse_info)
-                        data_array, wdec_rec = x.compress(data_array, self.sparse_info['th_mult'])
-                        self.sparse_data.append(x)  # store the information
-                        data_rec = x.reconstruct(wdec_rec)  # reconstruct the data
-                        s = truedata[i][j][:-4] + '_rec' + truedata[i][j][-4:]
-                        np.savez(s, data_rec)  # save reconstructed data
+                    # Perform compression if required (we only and always compress signals with same size as number of active cells)
+                    if self.sparse_info is not None and \
+                            vintage < len(self.sparse_info['actnum']) and \
+                            len(data_array) == int(np.sum(self.sparse_info['actnum'][vintage])):
+                        data_array = self.compress(data_array, vintage, False)
+                        vintage = vintage + 1
 
                     # Save array in obs_data. If it is an array with single value (not list), then we convert it to a
                     # list with one entry.
@@ -243,14 +246,12 @@ class Ensemble(PETEnsemble):
                         load_data = np.load(truedata[i][j])  # Load the .npz file
                         data_array = load_data[load_data.files[0]]
 
-                        # Perform compression if required
-                        if self.sparse_info is not None and len(data_array) == int(np.sum(self.sparse_info['actnum'])):
-                            x = wt.SparseRepresentation(self.sparse_info)
-                            data_array, wdec_rec = x.compress(data_array, self.sparse_info['th_mult'])
-                            self.sparse_data.append(x)
-                            data_rec = x.reconstruct(wdec_rec)  # reconstruct the data
-                            s = truedata[i][j][:-4] + '_rec' + truedata[i][j][-4:]
-                            np.savez(s, data_rec)  # save reconstructed data
+                        # Perform compression if required (we only and always compress signals with same size as number of active cells)
+                        if self.sparse_info is not None and \
+                                vintage < len(self.sparse_info['actnum']) and \
+                                len(data_array) == int(np.sum(self.sparse_info['actnum'][vintage])):
+                            data_array = self.compress(data_array, vintage, False)
+                            vintage = vintage + 1
 
                         # Save array in obs_data. If it is an array with single value (not list), then we convert it to a
                         # list with one entry
@@ -358,7 +359,7 @@ class Ensemble(PETEnsemble):
         # Loop over all entries in datavar and fill in values from "DATAVAR" (use obs_data values in the REL variance
         #  cases)
         # TODO: Implement loading of data variance from .npz file
-        sparse_index = 0
+        vintage = 0
         for i in range(len(self.obs_data)):  # TRUEDATAINDEX
             self.datavar[i] = {}  # Init. dict. with datatypes (do inside loop to avoid copy of same entry)
             for j in range(len(datatype)):  # DATATYPE
@@ -388,10 +389,6 @@ class Ensemble(PETEnsemble):
                         self.obs_data[i][datatype[j]] is not None:  # Load variance. (1d array)
                     load_data = np.load(datavar[i][2*j+1])  # load the numpy savez file
                     load_data = load_data[load_data.files[0]]
-                    if self.sparse_info is not None and len(load_data) == int(np.sum(self.sparse_info['actnum'])):  # compute var from sparse_data
-                        est_noise = self.sparse_data[sparse_index].est_noise
-                        load_data = np.power(est_noise, 2)  # from std to var
-                        sparse_index = sparse_index + 1
                     self.datavar[i][datatype[j]] = load_data  # store in datavar
 
                 # CD the full covariance matrix is given in its correct format. Hence, load once and set as CD
@@ -405,6 +402,15 @@ class Ensemble(PETEnsemble):
                 elif self.obs_data[i][datatype[j]] is None:  # No observed data
                     self.datavar[i][datatype[j]] = None  # Set None type here also
 
+                # Handle case when noise is estimated using wavelets
+                if self.sparse_info is not None and self.datavar[i][datatype[j]] is not None and \
+                        vintage < len(self.sparse_info['actnum']) and \
+                        len(self.datavar[i][datatype[j]]) == int(np.sum(self.sparse_info['actnum'][vintage])):
+                    # compute var from sparse_data
+                    est_noise = np.power(self.sparse_data[vintage].est_noise, 2)
+                    self.datavar[i][datatype[j]] = est_noise  # override the given value
+                    vintage = vintage + 1
+
     def _org_sparse_representation(self):
         """
         Function for reading input to wavelet sparse representation of data.
@@ -412,7 +418,13 @@ class Ensemble(PETEnsemble):
         self.sparse_info = {}
         parsed_info = self.keys_da['compress']
         self.sparse_info['dim'] = [int(elem) for elem in parsed_info[0][1]]
-        self.sparse_info['actnum'] = np.load(parsed_info[1][1])['actnum']
+        self.sparse_info['actnum'] = []
+        for vint in range(1, len(parsed_info[1])):
+            if not os.path.exists(parsed_info[1][vint]):
+                actnum = np.ones(np.product(self.sparse_info['dim']), dtype=bool)
+            else:
+                actnum = np.load(parsed_info[1][vint])['actnum']
+            self.sparse_info['actnum'].append(actnum)
         self.sparse_info['level'] = parsed_info[2][1]
         self.sparse_info['wname'] = parsed_info[3][1]
         self.sparse_info['colored_noise'] = True if parsed_info[4][1] == 'yes' else False
@@ -421,6 +433,9 @@ class Ensemble(PETEnsemble):
         self.sparse_info['use_hard_th'] = True if parsed_info[7][1] == 'yes' else False
         self.sparse_info['keep_ca'] = True if parsed_info[8][1] == 'yes' else False
         self.sparse_info['inactive_value'] = parsed_info[9][1]
+        self.sparse_info['use_ensemble'] = True if parsed_info[10][1] == 'yes' else None
+        self.sparse_info['order'] = parsed_info[11][1]
+        self.sparse_info['min_noise'] = parsed_info[12][1]
 
     def save_temp_state_assim(self, ind_save):
         """
@@ -497,3 +512,93 @@ class Ensemble(PETEnsemble):
         # Save state
         self.temp_state[ind_save] = deepcopy(self.state)
         np.savez('temp_state_ml', self.temp_state)
+
+    def compress(self, data=None, vintage=0, aug_coeff=None):
+        """
+        Compress the input data using wavelets.
+        Input:
+            - data: data to be compressed
+            - vintage: the time index for the data
+            - aug_coeff: this can be True, False, or None
+                > False: in this case the leading indices for wavelet coefficients are computed
+                > True: in this case the leading indices are augmented using information from the ensemble
+                > None: in this case simulated data is compressed
+
+        If data is None, all data (true and simulated) is re-compressed (used if leading indices are updated)
+        """
+
+        # If input data is None, we re-compress all data
+        data_array = None
+        if data is None:
+            vintage = 0
+            for i in range(len(self.obs_data)):  # TRUEDATAINDEX
+                for j in self.obs_data[i].keys():  # DATATYPE
+
+                    data_array = self.obs_data[i][j]
+
+                    # Perform compression if required
+                    if data_array is not None and \
+                            vintage < len(self.sparse_info['actnum']) and \
+                            len(data_array) == int(np.sum(self.sparse_info['actnum'][vintage])):
+                        data_array, wdec_rec = self.sparse_data[vintage].compress(data_array)  # compress
+                        self.obs_data[i][j] = data_array  # save array in obs_data
+                        rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the data
+                        s = 'truedata_vintage' + str(vintage) + '_rec.npz'
+                        np.savez(s, rec)
+                        est_noise = np.power(self.sparse_data[vintage].est_noise, 2)
+                        self.datavar[i][j] = est_noise
+
+                        # Update the ensemble
+                        data_sim = self.pred_data[i][j]
+                        self.pred_data[i][j] = np.zeros((len(data_array), self.ne))
+                        self.data_rec.append([])
+                        for m in range(self.pred_data[i][j].shape[1]):
+                            data_array = data_sim[:, m]
+                            data_array, wdec_rec = self.sparse_data[vintage].compress(data_array)  # compress
+                            self.pred_data[i][j][:, m] = data_array
+                            rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the data
+                            self.data_rec[vintage].append(rec)
+                        s = 'simdata_vintage' + str(vintage) + '_rec.npz'
+                        np.savez(s, np.asarray(self.data_rec[vintage]).transpose())
+
+                        # Go to next vintage
+                        vintage = vintage + 1
+
+            # Option to store the dictionaries containing observed data and data variance
+            if 'obsvarsave' in self.keys_da and self.keys_da['obsvarsave'] == 'yes':
+                np.savez('obs_var', obs=self.obs_data, var=self.datavar)
+
+            data_array = None
+
+        elif aug_coeff is None:
+
+            data_array, wdec_rec = self.sparse_data[vintage].compress(data)
+            rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the simulated data
+            self.data_rec.append(rec)
+
+        elif not aug_coeff:
+
+            options = copy(self.sparse_info)
+            options['actnum'] = options['actnum'][vintage]  # find the correct mask for the vintage
+            if type(options['min_noise']) == list:
+                if 0 <= vintage < len(options['min_noise']):
+                    options['min_noise'] = options['min_noise'][vintage]
+                else:
+                    print('Error: min_noise must either be scalar or list with one number for each vintage')
+                    sys.exit(1)
+            x = wt.SparseRepresentation(options)
+            data_array, wdec_rec = x.compress(data, self.sparse_info['th_mult'])
+            self.sparse_data.append(x)  # store the information
+            data_rec = x.reconstruct(wdec_rec)  # reconstruct the data
+            s = 'truedata_vintage' + str(vintage) + '_rec.npz'
+            np.savez(s, data_rec)  # save reconstructed data
+            if self.sparse_info['use_ensemble']:
+                data_array = data  # just return the same as input
+
+        elif aug_coeff:
+
+            _, _ = self.sparse_data[vintage].compress(data, self.sparse_info['th_mult'])
+            data_array = data  # just return the same as input
+
+        return data_array
+

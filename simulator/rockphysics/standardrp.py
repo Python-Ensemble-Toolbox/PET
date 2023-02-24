@@ -679,7 +679,7 @@ class elasticproperties:
         peff = poverb - pfluid
         if peff < 0:
             print("\nError in _hertzmindlin method")
-            print("Negative effective pressure. Setting effective pressure to 0.01")
+            print("Negative effective pressure (" + str(peff) + "). Setting effective pressure to 0.01")
             peff = 0.01
    #         sys.exit(1)
         common = (peff/pref)**kappa
