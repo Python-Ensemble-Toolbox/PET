@@ -32,6 +32,7 @@ class Ensemble(PETEnsemble):
 
         # Internalize PIPT dictionary
         self.keys_da = keys_da
+        self.keys_en = keys_en
 
         if self.restart is False:
             self.prediction = None  # Init in _init_prediction_output (used in run_prediction)
@@ -543,8 +544,8 @@ class Ensemble(PETEnsemble):
                         data_array, wdec_rec = self.sparse_data[vintage].compress(data_array)  # compress
                         self.obs_data[i][j] = data_array  # save array in obs_data
                         rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the data
-                        s = 'truedata_vintage' + str(vintage) + '_rec.npz'
-                        np.savez(s, rec)
+                        s = 'truedata_rec_' + str(vintage) + '.npz'
+                        np.savez(s, rec)  # save reconstructed data
                         est_noise = np.power(self.sparse_data[vintage].est_noise, 2)
                         self.datavar[i][j] = est_noise
 
@@ -558,8 +559,6 @@ class Ensemble(PETEnsemble):
                             self.pred_data[i][j][:, m] = data_array
                             rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the data
                             self.data_rec[vintage].append(rec)
-                        s = 'simdata_vintage' + str(vintage) + '_rec.npz'
-                        np.savez(s, np.asarray(self.data_rec[vintage]).transpose())
 
                         # Go to next vintage
                         vintage = vintage + 1
@@ -568,13 +567,19 @@ class Ensemble(PETEnsemble):
             if 'obsvarsave' in self.keys_da and self.keys_da['obsvarsave'] == 'yes':
                 np.savez('obs_var', obs=self.obs_data, var=self.datavar)
 
+            if 'saveforecast' in self.keys_en:
+                s = 'prior_forecast_rec.npz'
+                np.savez(s, self.data_rec)
+
             data_array = None
 
         elif aug_coeff is None:
 
             data_array, wdec_rec = self.sparse_data[vintage].compress(data)
             rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the simulated data
-            self.data_rec.append(rec)
+            if len(self.data_rec) == vintage:
+                self.data_rec.append([])
+            self.data_rec[vintage].append(rec)
 
         elif not aug_coeff:
 
@@ -590,7 +595,7 @@ class Ensemble(PETEnsemble):
             data_array, wdec_rec = x.compress(data, self.sparse_info['th_mult'])
             self.sparse_data.append(x)  # store the information
             data_rec = x.reconstruct(wdec_rec)  # reconstruct the data
-            s = 'truedata_vintage' + str(vintage) + '_rec.npz'
+            s = 'truedata_rec_' + str(vintage) + '.npz'
             np.savez(s, data_rec)  # save reconstructed data
             if self.sparse_info['use_ensemble']:
                 data_array = data  # just return the same as input
