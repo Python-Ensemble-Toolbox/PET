@@ -530,6 +530,7 @@ class Assimilate:
         # If wavelet compression is based on the simulated data, we need to recompute obs_data, datavar and pred_data.
         if self.ensemble.sparse_info:
             vintage = 0
+            self.ensemble.data_rec = []
             for i in range(len(pred_data_tmp)):  # INDEX
                 if pred_data_tmp[i] is not None:
                     for k in pred_data_tmp[i]:  # DATATYPE
@@ -548,8 +549,10 @@ class Assimilate:
         # Extra option debug
         if 'saveforecast' in self.ensemble.sim.input_dict:
             # Save the reconstructed signal for later analysis
-            if self.ensemble.sparse_data:  
-                    with open('rec_results.p','wb') as f:
-                        pickle.dump(np.asarray(self.ensemble.data_rec, dtype=object).transpose(), f)
+            if self.ensemble.sparse_data:
+                for vint in np.arange(len(self.ensemble.data_rec)):
+                    self.ensemble.data_rec[vint] = np.asarray(self.ensemble.data_rec[vint]).T
+                with open('rec_results.p', 'wb') as f:
+                    pickle.dump(self.ensemble.data_rec, f)
 
 
