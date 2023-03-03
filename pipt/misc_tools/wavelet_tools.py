@@ -28,13 +28,13 @@ class SparseRepresentation:
         self.ca_leading_coeff = None
 
     # Function to doing image compression. If the function is called without threshold, then the leading indices must
-    # be defined in the class. Typically this is done by running the compression on true data with a given threshold.
+    # be defined in the class. Typically, this is done by running the compression on true data with a given threshold.
     def compress(self, data, th_mult=None):
         if ('inactive_value' not in self.options) or (self.options['inactive_value'] is None):
             self.options['inactive_value'] = np.mean(data)
         signal = np.zeros(self.num_grid)
-        signal[~self.options['actnum']] = self.options['inactive_value']
-        signal[self.options['actnum']] = data
+        signal[~self.options['mask']] = self.options['inactive_value']
+        signal[self.options['mask']] = data
         if 'order' not in self.options:
             self.options['order'] = 'C'
         if 'min_noise' not in self.options:
@@ -209,6 +209,6 @@ class SparseRepresentation:
         dim = self.options['dim']
         data_rec = data_rec[0:dim[0], 0:dim[1], 0:dim[2]]  # severe issure here
         data_rec = data_rec.flatten(order=self.options['order'])
-        data_rec = data_rec[self.options['actnum']]
+        data_rec = data_rec[self.options['mask']]
 
         return data_rec

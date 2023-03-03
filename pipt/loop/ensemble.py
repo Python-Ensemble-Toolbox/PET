@@ -218,8 +218,8 @@ class Ensemble(PETEnsemble):
 
                     # Perform compression if required (we only and always compress signals with same size as number of active cells)
                     if self.sparse_info is not None and \
-                            vintage < len(self.sparse_info['actnum']) and \
-                            len(data_array) == int(np.sum(self.sparse_info['actnum'][vintage])):
+                            vintage < len(self.sparse_info['mask']) and \
+                            len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
                         data_array = self.compress(data_array, vintage, False)
                         vintage = vintage + 1
 
@@ -249,8 +249,8 @@ class Ensemble(PETEnsemble):
 
                         # Perform compression if required (we only and always compress signals with same size as number of active cells)
                         if self.sparse_info is not None and \
-                                vintage < len(self.sparse_info['actnum']) and \
-                                len(data_array) == int(np.sum(self.sparse_info['actnum'][vintage])):
+                                vintage < len(self.sparse_info['mask']) and \
+                                len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
                             data_array = self.compress(data_array, vintage, False)
                             vintage = vintage + 1
 
@@ -405,8 +405,8 @@ class Ensemble(PETEnsemble):
 
                 # Handle case when noise is estimated using wavelets
                 if self.sparse_info is not None and self.datavar[i][datatype[j]] is not None and \
-                        vintage < len(self.sparse_info['actnum']) and \
-                        len(self.datavar[i][datatype[j]]) == int(np.sum(self.sparse_info['actnum'][vintage])):
+                        vintage < len(self.sparse_info['mask']) and \
+                        len(self.datavar[i][datatype[j]]) == int(np.sum(self.sparse_info['mask'][vintage])):
                     # compute var from sparse_data
                     est_noise = np.power(self.sparse_data[vintage].est_noise, 2)
                     self.datavar[i][datatype[j]] = est_noise  # override the given value
@@ -418,14 +418,16 @@ class Ensemble(PETEnsemble):
         """
         self.sparse_info = {}
         parsed_info = self.keys_da['compress']
-        self.sparse_info['dim'] = [int(elem) for elem in parsed_info[0][1]]
-        self.sparse_info['actnum'] = []
+        dim = [int(elem) for elem in parsed_info[0][1]]
+        self.sparse_info['dim'] = [dim[2], dim[1], dim[0]]  # flip to align with flow / eclipse
+        self.sparse_info['mask'] = []
         for vint in range(1, len(parsed_info[1])):
             if not os.path.exists(parsed_info[1][vint]):
-                actnum = np.ones(np.product(self.sparse_info['dim']), dtype=bool)
+                mask = np.ones(self.sparse_info['dim'], dtype=bool)
+                np.savez(f'mask_{vint-1}.npz', mask=mask)
             else:
-                actnum = np.load(parsed_info[1][vint])['actnum']
-            self.sparse_info['actnum'].append(actnum)
+                mask = np.load(parsed_info[1][vint])['mask']
+            self.sparse_info['mask'].append(mask.flatten())
         self.sparse_info['level'] = parsed_info[2][1]
         self.sparse_info['wname'] = parsed_info[3][1]
         self.sparse_info['colored_noise'] = True if parsed_info[4][1] == 'yes' else False
@@ -539,8 +541,8 @@ class Ensemble(PETEnsemble):
 
                     # Perform compression if required
                     if data_array is not None and \
-                            vintage < len(self.sparse_info['actnum']) and \
-                            len(data_array) == int(np.sum(self.sparse_info['actnum'][vintage])):
+                            vintage < len(self.sparse_info['mask']) and \
+                            len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
                         data_array, wdec_rec = self.sparse_data[vintage].compress(data_array)  # compress
                         self.obs_data[i][j] = data_array  # save array in obs_data
                         rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the data
@@ -584,7 +586,7 @@ class Ensemble(PETEnsemble):
         elif not aug_coeff:
 
             options = copy(self.sparse_info)
-            options['actnum'] = options['actnum'][vintage]  # find the correct mask for the vintage
+            options['mask'] = options['mask'][vintage]  # find the correct mask for the vintage
             if type(options['min_noise']) == list:
                 if 0 <= vintage < len(options['min_noise']):
                     options['min_noise'] = options['min_noise'][vintage]

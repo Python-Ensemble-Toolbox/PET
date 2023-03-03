@@ -443,6 +443,9 @@ class Ensemble:
             # Store the covariance matrix
             self.cov_prior[name] = cov
 
+        # Save the ensemble for later inspection
+        np.savez('prior.npz', **self.state)
+
     def get_list_assim_steps(self):
         """
         Returns list of assimilation steps. Useful in a 'loop'-script.
