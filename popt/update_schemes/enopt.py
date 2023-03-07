@@ -51,6 +51,7 @@ class EnOpt(PETEnsemble):
         self.ne = self.num_models
         for key in self.state.keys():
             self.state[key] = np.array(self.state[key])  # make sure state is a numpy array
+        np.savez('ini_state.npz', **self.state)
         self.calc_prediction()
         self.num_func_eval += self.ne
         self.obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
@@ -307,7 +308,7 @@ class EnOpt(PETEnsemble):
         g_m = np.zeros(aug_state.shape[0])
         for i in np.arange(self.ne):
             g_m = g_m + pert_obj_func[i] * pert_state[:, i]
-            g_c = g_c + pert_obj_func[i] * (np.outer(pert_state[:, i], pert_state[:, i]))
+            g_c = g_c + pert_obj_func[i] * (np.outer(pert_state[:, i], pert_state[:, i]) - self.cov)
 
         self.cov_sens_matrix = g_c / (self.ne - 1)
         self.sens_matrix = g_m / (self.ne - 1)

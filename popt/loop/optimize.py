@@ -118,7 +118,7 @@ class Optimize:
             # Update iteration counter if iteration was successful
             if is_successful is True:
                 self.iteration += 1
-                np.savez('opt_state',self.method.state)  # save current state
+                np.savez('opt_state',**self.method.state)  # save current state
 
             # Save restart file (if requested)
             if 'restartsave' in self.method.keys_opt and self.method.keys_opt['restartsave'] == 'yes':
