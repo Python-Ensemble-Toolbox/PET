@@ -12,6 +12,7 @@ from ensemble.ensemble import Ensemble as PETEnsemble
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
 from pipt.misc_tools import cov_regularization
+from pipt.misc_tools.analysis_tools import init_local_analysis
 
 class Ensemble(PETEnsemble):
     """
@@ -73,6 +74,10 @@ class Ensemble(PETEnsemble):
                                                                     self.keys_da['datatype'],
                                                                     self.keys_da['staticvar'],
                                                                     self.ne)
+            # Initialize local analysis
+            if 'localanalysis' in self.keys_da:
+                self.local_analysis = init_local_analysis(init=self.keys_da['localanalysis'], state=self.state.keys(),
+                                                          data=self.obs_data)
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_en['datatype']}
                               for _ in self.obs_data]
