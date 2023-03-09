@@ -1390,3 +1390,73 @@ def subsample_state(index, aug_state, pert_state):
 
     return new_state
 
+def init_local_analysis(init, state, data):
+    """Initialize local analysis.
+
+    Initialize the local analysis by reading the input variables, defining the parameter classes and search ranges. Build
+    the map of data/parameter positions.
+
+    Args:
+        init: dictionary containing the parsed information form the input file.
+        state: list of states that will be updated
+        data: list of dictionaries. Each element being the time-instance
+
+    Returns:
+        local: dictionary of initialized values.
+    """
+
+    local = {}
+
+    for i, opt in enumerate(list(zip(*init['local_analysis']))[0]):
+        if opt.lower() == 'region_parameter':  # define scalar parameters valid in a region
+            local['region_parameter'] = [elem for elem in init['local_analysis'][i][1].split(' ') if elem in state]
+        if opt.lower() == 'cell_parameter':  # define cell specific vector parameters
+            local['cell_parameter'] = [elem for elem in init['local_analysis'][i][1].split(' ') if elem in state]
+        if opt.lower() == 'search_range':
+            local['search_range'] = int(init['local_analysis'][i][1])
+        if opt.lower() == 'column_update':
+            local['column_update'] = [elem for elem in init['local_analysis'][i][1].split(',')]
+        if opt.lower() == 'parameter_position_file': # assume pickled format
+            with open(init['parameter_position_file'][i][1],'rb') as file:
+                local['parameter_position'] = pickle.load(file)
+        if opt.lower() == 'data_position_file': # assume pickled format
+            with open(init['data_position_file'][i][1], 'rb') as file:
+                local['data_position'] = pickle.load(file)
+        if opt.lower() == 'update_mask_file':
+            with open(init['update_mask_file'][i][1], 'rb') as file:
+                local['update_mask'] = pickle.load(file)
+
+    assert 'parameter_position' in local, 'A pickle file containing the binary map of the parameters is MANDATORY'
+
+    if 'update_mask_file' in local:
+        return local
+    else:
+        assert 'data_position' in local, 'A pickle file containing the position of the data is MANDATORY'
+
+        data_name = [elem for elem in local['data_position_file'].keys()]
+        data_pos = [elem for data in data_name for elem in local['data_position'][data]]
+        data_ind = [data for data in data_name for _ in local['data_position'][data]]  # store the name for easy index
+        kde_search = cKDTree(data=data_pos)
+
+        local['update_mask'] = {}
+        for param in local['region_parameter']: # find data in a distance from the parameter
+            field_size = local['parameter_position'][param].shape()
+            local['update_mask'][param] = [[[[] for _ in range(field_size[2])] for _ in range(field_size[1])] for _
+                              in range(field_size[0])]
+            for k in range(field_size[0]):
+                for j in range(field_size[1]):
+                    new_iter = [elem for elem, val in enumerate(local['parameter_position'][param][k, j, :]) if val]
+                    if len(new_iter):
+                        for i in new_iter:
+                            local['update_mask'][k][j][i] = set(
+                                [data_ind[elem] for elem in kde_search.query_ball_point(x=(k, j, i),
+                                                                                    r=local['search_range'])])
+
+        for param in local['region_parameter']: # see if data is inside the region. Note parameter_position is boolean map
+            in_region = [local['parameter_position'][param][elem] for elem in data_pos]
+            local['update_mask'][param] = set([data_ind[count] for count, val in enumerate(in_region) if val])
+
+        return local
+
+
+
