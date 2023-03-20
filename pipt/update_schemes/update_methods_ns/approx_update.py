@@ -14,13 +14,13 @@ class approx_update():
     def update(self):
         # calc the svd of the scaled data pertubation matrix
         u_d, s_d, v_d = np.linalg.svd(self.pert_preddata, full_matrices=False)
+        aug_state = at.aug_state(self.current_state, self.list_states,self.cell_index)
 
         # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
         # zero. This part is a good place to include eventual additional truncation.
         if self.trunc_energy < 1:
             ti = (np.cumsum(s_d) / sum(s_d)) <= self.trunc_energy
             u_d, s_d, v_d = u_d[:, ti].copy(), s_d[ti].copy(), v_d[ti, :].copy()
-
         if 'localization' in self.keys_da:
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
                 if len(self.scale_data.shape) == 1:
@@ -43,13 +43,10 @@ class approx_update():
             # store the size of all data
             data_size = [[self.obs_data[int(time)][data].size if self.obs_data[int(time)][data] is not None else 0
                           for data in self.list_datatypes] for time in self.assim_index[1]]
-            list_states = self.list_states
-            f = self.keys_da['localization']
-            if f[1][0] == 'autoadaloc':
-                # Augment the joint state variables (originally a dictionary) and the prior state variable
-                aug_state = at.aug_state(self.current_state, self.list_states)
 
-                # aug_prior_state = at.aug_state(self.prior_state, self.list_states)
+            f = self.keys_da['localization']
+
+            if f[1][0] == 'autoadaloc':
 
                 # Mean state and perturbation matrix
                 mean_state = np.mean(aug_state, 1)
@@ -66,14 +63,13 @@ class approx_update():
                     scaled_delta_data = solve(self.scale_data, (self.real_obs_data - self.aug_pred_data))
 
                 self.step = self.localization.auto_ada_loc(self.state_scaling[:,None] * pert_state, np.dot(X, scaled_delta_data),
-                                                           list_states,
+                                                           self.list_states,
                                                            **{'prior_info': self.prior_info})
             elif sum(['dist_loc' in el for el in f]) >= 1:
 
                 local_mask = self.localization.localize(self.list_datatypes, [self.keys_da['truedataindex'][int(elem)]
                                                                          for elem in self.assim_index[1]],
-                                                        list_states, self.ne, self.prior_info, data_size)
-                aug_state = at.aug_state(self.current_state, self.list_states)
+                                                        self.list_states, self.ne, self.prior_info, data_size)
                 mean_state = np.mean(aug_state, 1)
                 if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
                     pert_state = (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
@@ -124,16 +120,9 @@ class approx_update():
                                             scale_data=self.scale_data,
                                             num_states=len([el for el in self.list_states]),
                                             emp_d_cov=emp_cov)
-                aug_state = at.aug_state(self.current_state, self.list_states)
                 self.step = at.aug_state(self.step, self.list_states)
 
         else:
-
-            # Augment the joint state variables (originally a dictionary) and the prior state variable
-            aug_state = at.aug_state(self.current_state, self.list_states)
-            # aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-
-
             # Mean state and perturbation matrix
             mean_state = np.mean(aug_state, 1)
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
