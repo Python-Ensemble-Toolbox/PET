@@ -109,9 +109,68 @@ class lmenrmlMixIn(Ensemble):
             self.logger.info(f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}. Lambda for initial analysis: {self.lam}')
 
         if 'local_analysis' in self.keys_da:
+            orig_list_data = cp.deepcopy(self.list_datatypes)
+            orig_list_state = cp.deepcopy(self.list_states)
             # loop over the states that we want to update. Assume that the state and data combinations have been
             # determined by the initialization.
+            # TODO: augment parameters with identical mask.
+            for state in self.local_analysis['region_parameter']:
+                self.list_datatypes = [elem for elem in self.list_datatypes if
+                                       elem in self.local_analysis['update_mask'][state]]
+                self.list_states = cp.deepcopy(state)
+                # TODO: fix seed?
+                self._ext_obs() # get the data that's in the list of data.
+                _,self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                                   self.list_datatypes)
+                # Mean pred_data and perturbation matrix with scaling
+                if len(self.scale_data.shape) == 1:
+                    self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                                np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+                else:
+                    self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
+                aug_state = at.aug_state(self.current_state, self.list_states)
+                self.update()
+                if hasattr(self, 'step'):
+                    aug_state_upd = aug_state + self.step
+                self.state = at.update_state(aug_state_upd, self.state, self.list_states)
+
+            for state in self.local_analysis['cell_parameter']:
+                self.list_states = cp.deepcopy(state)
+                param_position = self.local_analysis['parameter_position'][state]
+                field_size = param_position.shape()
+                for k in range(field_size[0]):
+                    for j in range(field_size[1]):
+                        for i in range(field_size[2]):
+                            current_data_list = self.local_analysis['update_mask'][k][j][i]
+                            if len(current_data_list):
+                                self.list_datatypes = cp.deepcopy(current_data_list)
+                                self._ext_obs()
+                                _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data,
+                                                                             self.assim_index,
+                                                                             self.list_datatypes)
+                                # get parameter indexes
+                                full_cell_index = np.ravel_multi_index(np.array([[k],[j],[i]]),tuple(field_size))
+                                # count active values
+                                self.cell_index = [sum(param_position.flatten()[:full_cell_index])]
+
+                                # Mean pred_data and perturbation matrix with scaling
+                                if len(self.scale_data.shape) == 1:
+                                    self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                                                np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+                                else:
+                                    self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+
+                                aug_state = at.aug_state(self.current_state, self.list_states,self.cell_index)
+                                self.update()
+                                if hasattr(self, 'step'):
+                                    aug_state_upd = aug_state + self.step
+                                self.state = at.update_state(aug_state_upd, self.state, self.list_states,self.cell_index)
+
+
+
+            self.list_datatypes = cp.deepcopy(orig_list_data) #reset to original list
+            self.list_states = cp.deepcopy(orig_list_state)
         else:
             # Mean pred_data and perturbation matrix with scaling
             if len(self.scale_data.shape) == 1:
@@ -122,16 +181,16 @@ class lmenrmlMixIn(Ensemble):
 
             aug_state = at.aug_state(self.current_state, self.list_states)
             self.update() # run ordinary analysis
-        if hasattr(self,'step'):
-            aug_state_upd = aug_state + self.step
-        if hasattr(self,'w_step'):
-            self.W = self.current_W + self.w_step
-            aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-            aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+            if hasattr(self,'step'):
+                aug_state_upd = aug_state + self.step
+            if hasattr(self,'w_step'):
+                self.W = self.current_W + self.w_step
+                aug_prior_state = at.aug_state(self.prior_state, self.list_states)
+                aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
 
-        # Extract updated state variables from aug_update
-        self.state = at.update_state(aug_state_upd, self.state, self.list_states)
-        self.state = at.limits(self.state, self.prior_info)
+            # Extract updated state variables from aug_update
+            self.state = at.update_state(aug_state_upd, self.state, self.list_states)
+            self.state = at.limits(self.state, self.prior_info)
 
     def check_convergence(self):
         """
