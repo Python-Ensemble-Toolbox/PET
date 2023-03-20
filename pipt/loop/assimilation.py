@@ -47,8 +47,7 @@ class Assimilate:
         """
         # Internalize ensemble and simulator class instances
         self.ensemble = ensemble
-        # self.sim = simulator
-        # self.redund_sim = redundant_simulator
+        self.cell_index = None #default value for extracting states
 
         if self.ensemble.restart is False:
         # Default max. iter if not defined in the ensemble
