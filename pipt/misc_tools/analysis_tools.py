@@ -1129,7 +1129,7 @@ def compute_x(pert_preddata,cov_data,keys_da,alfa=None):
     return X
 
 
-def aug_state(state, list_state):
+def aug_state(state, list_state,cell_index=None):
     """
     Augment the state variables to an array.
 
@@ -1140,8 +1140,9 @@ def aug_state(state, list_state):
         assimilated.
     list_state: list
         Fixed list of keys in state dict.
+    cell_index: list of vector indexes to be extracted
 
-    Parameters
+    Return
     ----------
     aug: ndarray
         Ensemble matrix of augmented state variables
@@ -1150,14 +1151,25 @@ def aug_state(state, list_state):
     # Change code to only augment states to be updated at the specific assimilation step
     # TODO: Use something other that numpy vstack for this augmentation!
 
-    # Start with ensemble of first state variable
-    aug = state[list_state[0]]
+    if cell_index is not None:
+        # Start with ensemble of first state variable
+        aug = state[list_state[0]][cell_index]
 
-    # Loop over the next states (if exists)
-    for i in range(1, len(list_state)):
-        aug = np.vstack((aug, state[list_state[i]]))
+        # Loop over the next states (if exists)
+        for i in range(1, len(list_state)):
+            aug = np.vstack((aug, state[list_state[i]][cell_index]))
 
-    # Return the augmented array
+        # Return the augmented array
+
+    else:
+        # Start with ensemble of first state variable
+        aug = state[list_state[0]]
+
+        # Loop over the next states (if exists)
+        for i in range(1, len(list_state)):
+            aug = np.vstack((aug, state[list_state[i]]))
+
+        # Return the augmented array
     return aug
 
 
@@ -1195,7 +1207,7 @@ def calc_scaling(state, list_state, prior_info):
     return np.concatenate(scaling)
 
 
-def update_state(aug_state, state, list_state):
+def update_state(aug_state, state, list_state,cell_index=None):
     """
     Extract the separate state variables from an augmented state array. It is assumed that the augmented state
     array is made in `aug_state`, hence this is the reverse method of `aug_state`.
@@ -1208,27 +1220,40 @@ def update_state(aug_state, state, list_state):
         Dict. of state variables NOT updated.
     list_state: list
         List of state keys that have been updated
+    cell_index: list
+        List of indexes that gives the where the aug state should be placed
 
     Returns
     -------
     state: dict
         Dict. of UPDATED state variables
     """
-    # Loop over all entries in list_state and extract a matrix with same number of rows as the key in state
-    # determines from aug and replace the values in state[key].
-    # Init. a variable to keep track of which row in 'aug' we start from in each loop
-    aug_row = 0
-    for _, key in enumerate(list_state):
-        # Find no. rows in state[lkey] to determine how many rows from aug to extract
-        no_rows = state[key].shape[0]
+    if cell_index is None:
+        # Loop over all entries in list_state and extract a matrix with same number of rows as the key in state
+        # determines from aug and replace the values in state[key].
+        # Init. a variable to keep track of which row in 'aug' we start from in each loop
+        aug_row = 0
+        for _, key in enumerate(list_state):
+            # Find no. rows in state[lkey] to determine how many rows from aug to extract
+            no_rows = state[key].shape[0]
 
-        # Extract the rows from aug and update 'state[key]'
-        state[key] = aug_state[aug_row:aug_row + no_rows, :]
+            # Extract the rows from aug and update 'state[key]'
+            state[key] = aug_state[aug_row:aug_row + no_rows, :]
 
-        # Update tracking variable for row in 'aug'
-        aug_row += no_rows
+            # Update tracking variable for row in 'aug'
+            aug_row += no_rows
 
-    # Return
+    else:
+        aug_row = 0
+        for _, key in enumerate(list_state):
+            # Find no. rows in state[lkey] to determine how many rows from aug to extract
+            no_rows = len(cell_index)
+
+            # Extract the rows from aug and update 'state[key]'
+            state[key][cell_index,:] = aug_state[aug_row:aug_row + no_rows, :]
+
+            # Update tracking variable for row in 'aug'
+            aug_row += no_rows
     return state
 
 
@@ -1390,7 +1415,7 @@ def subsample_state(index, aug_state, pert_state):
 
     return new_state
 
-def init_local_analysis(init, state, data):
+def init_local_analysis(init, state):
     """Initialize local analysis.
 
     Initialize the local analysis by reading the input variables, defining the parameter classes and search ranges. Build
@@ -1399,8 +1424,6 @@ def init_local_analysis(init, state, data):
     Args:
         init: dictionary containing the parsed information form the input file.
         state: list of states that will be updated
-        data: list of dictionaries. Each element being the time-instance
-
     Returns:
         local: dictionary of initialized values.
     """
@@ -1439,7 +1462,7 @@ def init_local_analysis(init, state, data):
         kde_search = cKDTree(data=data_pos)
 
         local['update_mask'] = {}
-        for param in local['region_parameter']: # find data in a distance from the parameter
+        for param in local['cell_parameter']: # find data in a distance from the parameter
             field_size = local['parameter_position'][param].shape()
             local['update_mask'][param] = [[[[] for _ in range(field_size[2])] for _ in range(field_size[1])] for _
                               in range(field_size[0])]
