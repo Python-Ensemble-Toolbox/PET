@@ -118,8 +118,8 @@ class EnOpt(PETEnsemble):
                 self.step = new_step
 
                 # Update covariance (currently we don't apply backtracking for alpha_cov)
-                self.cov_step = self.alpha_cov * self.cov_sens_matrix / la.norm(self.cov_sens_matrix, 2) + \
-                    beta * self.cov_step
+                normalize = np.maximum(la.norm(self.cov_sens_matrix, np.inf), 1e-6)
+                self.cov_step = self.alpha_cov * self.cov_sens_matrix / normalize + beta * self.cov_step
                 self.cov = self.cov + self.cov_step
                 self.cov = self.get_sym_pos_semidef(self.cov)
 
@@ -279,10 +279,8 @@ class EnOpt(PETEnsemble):
         variable) with Gaussian random numbers from N(0, C_x) (giving U), running the generated state ensemble (U)
         through the simulator to give an ensemble of objective function values (J), and in the end calculate S. Note
         that S is an Ns x 1 vector, where Ns is length of the state vector (the objective function is just a scalar!)
-
-        ST 3/5-18: First implementation. Much of the code here is taken directly from fwd_sim.ensemble Ensemble class.
-        YC 2/10-19: Added calcuating gradient of covariance.
         """
+
         # Generate ensemble of states
         self.ne = self.num_samples
         self.state = self._gen_state_ensemble()
@@ -314,34 +312,15 @@ class EnOpt(PETEnsemble):
         self.sens_matrix = g_m / (self.ne - 1)
 
     def _gen_state_ensemble(self):
-        """
-        Generate an ensemble of states (control variables) to run in calc_ensemble_sensitivity. It is assumed that
-        the covariance function needed to generate realizations has been inputted via the SENSITIVITY keyword (with
-        METHOD option ENSEMBLE).
 
-        ST 4/5-18
-        """
-        # TODO: Gen. realizations for control variables at separate time steps (cov is a block diagonal matrix),
-        # and for more than one STATENAME
-
-        # # Initialize Cholesky class
-        # chol = decomp.Cholesky()
-        #
-        # # Augment state
-        # list_state = list(self.state.keys())
-        # aug_state = ot.aug_optim_state(self.state, list_state)
-
-        # Generate ensemble with the current state (control variable) as the mean and using the imported covariance
-        # matrix
+        # Generate ensemble with the current state (control variable) as the mean and using the covariance matrix
         state_en = {}
+        cov_blocks = ot.corr2BlockDiagonal(self.state, self.cov)
         for i, statename in enumerate(self.state.keys()):
             # state_en[statename] = chol.gen_real(self.state[statename], self.cov[i, i], self.ne)
             mean = self.state[statename]
             len_state = len(self.state[statename])
-            cov = self.cov[len_state * i:len_state * (i + 1), len_state * i:len_state * (i + 1)]
-            if len(cov) != len(mean):  # make sure cov is diagonal matrix
-                print('\033[1;31mERROR: Covariance must be diagonal matrix!\033[1;31m')
-            #     cov = cov*np.identity(len(mean))
+            cov = cov_blocks[i]
             if ['nesterov'] in self.keys_opt['enopt']:
                 if not isinstance(self.step, int):
                     mean += self.beta * self.step[len_state * i:len_state * (i + 1)]
@@ -359,10 +338,7 @@ class EnOpt(PETEnsemble):
         if self.upper_bound and self.lower_bound:
             for i, key in enumerate(self.state):
                 self.state[key] = (self.state[key] - self.lower_bound[i]) / (self.upper_bound[i] - self.lower_bound[i])
-                if np.min(self.state[key]) < 0:
-                    self.state[key] = 0
-                elif np.max(self.state[key]) > 1:
-                    self.state[key] = 1
+                np.clip(self.state[key], 0, 1, out=self.state[key])
 
     def _invert_scale_state(self):
         if self.upper_bound and self.lower_bound:
