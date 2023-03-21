@@ -61,3 +61,26 @@ def update_optim_state(aug_state, state, list_state):
 
     # Return
     return state
+
+
+def corr2BlockDiagonal(state, corr):
+    """
+    Makes the correlation matrix block diagonal.
+    The blocks are the state varible types.
+
+    Parameters
+    ---------------------------------------------
+        corr : 2D-array_like, of shape (d, d)
+
+    Returns
+    ---------------------------------------------
+        corr_blocks : list of block matrices, one for each variable type
+    """
+
+    statenames = list(state.keys())
+    corr_blocks = []
+    for name in statenames:
+        dim = state[name].size
+        corr_blocks.append(corr[:dim, :dim])
+        corr = corr[dim:, dim:]
+    return corr_blocks
