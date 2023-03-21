@@ -1,0 +1,23 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Python Ensemble Toolbox (PET)
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Data assimilation and optimization group
+    family-names: NORCE Energy
+    email: info@data-assimilation.no
+repository-code: 'https://github.com/Python-Ensemble-Toolbox/PET'
+abstract: >-
+  PET is a toolbox for ensemble based Data-Assimilation
+  developed and maintained by the data-assimilation and
+  optimization group at NORCE Norwegian Research Centre AS.
+keywords:
+  - Data assimlation
+  - Optimization
+  - Ensemble methods
+license: GPL-3.0
