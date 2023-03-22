@@ -385,8 +385,14 @@ class EnOpt(PETEnsemble):
                 else:
                     print(f'Cannot save {save_typ}!\n\n')
 
+             # Save the variables
+            if 'debug_save_folder' in self.keys_opt:
+                folder = self.keys_opt['debug_save_folder']
+            else:
+                folder = './'
+
             # Save the variables
-            np.savez('debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
+            np.savez(folder + 'debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
 
 
 #Some extra functions for GenOpt
