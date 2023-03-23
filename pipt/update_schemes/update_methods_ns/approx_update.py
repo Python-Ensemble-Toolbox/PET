@@ -158,4 +158,4 @@ class approx_update():
                     x_1 = np.dot(u_d.T, solve(self.scale_data, (self.real_obs_data - self.aug_pred_data)))
                 x_2 = solve(((self.lam + 1) * np.eye(len(s_d)) + np.diag(s_d ** 2)), x_1)
                 x_3 = np.dot(np.dot(v_d.T, np.diag(s_d)), x_2)
-                self.step = np.dot(self.state_scaling[:,None] * pert_state, x_3)  # For ANALYSISDEBUG
+                self.step = np.dot(self.state_scaling[:,None] * pert_state, x_3)
