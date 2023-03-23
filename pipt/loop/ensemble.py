@@ -76,11 +76,12 @@ class Ensemble(PETEnsemble):
                                                                     self.ne)
             # Initialize local analysis
             if 'localanalysis' in self.keys_da:
-                self.local_analysis = init_local_analysis(init=self.keys_da['localanalysis'], state=self.state.keys(),
-                                                          data=self.obs_data)
+                self.local_analysis = init_local_analysis(init=self.keys_da['localanalysis'], state=self.state.keys())
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_en['datatype']}
                               for _ in self.obs_data]
+
+            self.cell_index = None  # default value for extracting states
     def check_assimindex_sequential(self):
         """
         Check if assim. indices is given as a 2D list as is needed in sequential updating. If not, make it a 2D list
