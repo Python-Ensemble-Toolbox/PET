@@ -79,6 +79,7 @@ class lmenrmlMixIn(Ensemble):
             # define the list of datatypes
             self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
             # Get the perturbed observations and observation scaling
+            self.data_random_state = cp.deepcopy(np.random.get_state())
             self._ext_obs()
             # Get state scaling and svd of scaled prior
             self._ext_state()
@@ -108,9 +109,11 @@ class lmenrmlMixIn(Ensemble):
 
             self.logger.info(f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}. Lambda for initial analysis: {self.lam}')
 
-        if 'local_analysis' in self.keys_da:
+        if 'localanalysis' in self.keys_da:
             orig_list_data = cp.deepcopy(self.list_datatypes)
             orig_list_state = cp.deepcopy(self.list_states)
+            orig_cd = cp.deepcopy(self.cov_data)
+            orig_real_obs_data = cp.deepcopy(self.real_obs_data)
             # loop over the states that we want to update. Assume that the state and data combinations have been
             # determined by the initialization.
             # TODO: augment parameters with identical mask.
@@ -118,7 +121,7 @@ class lmenrmlMixIn(Ensemble):
                 self.list_datatypes = [elem for elem in self.list_datatypes if
                                        elem in self.local_analysis['update_mask'][state]]
                 self.list_states = cp.deepcopy(state)
-                # TODO: fix seed?
+                np.random.set_state(self.data_random_state) # reset the random state for consistency
                 self._ext_obs() # get the data that's in the list of data.
                 _,self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
                                                                    self.list_datatypes)
@@ -136,15 +139,20 @@ class lmenrmlMixIn(Ensemble):
                 self.state = at.update_state(aug_state_upd, self.state, self.list_states)
 
             for state in self.local_analysis['cell_parameter']:
-                self.list_states = cp.deepcopy(state)
+                self.list_states = [cp.deepcopy(state)]
+                self._ext_state() # scaling for this state
+                orig_state_scaling = cp.deepcopy(self.state_scaling)
                 param_position = self.local_analysis['parameter_position'][state]
-                field_size = param_position.shape()
+                field_size = param_position.shape
                 for k in range(field_size[0]):
                     for j in range(field_size[1]):
                         for i in range(field_size[2]):
-                            current_data_list = self.local_analysis['update_mask'][k][j][i]
+                            current_data_list = list(self.local_analysis['update_mask'][state][k][j][i])
+                            current_data_list.sort() # ensure consistent ordering of data
                             if len(current_data_list):
                                 self.list_datatypes = cp.deepcopy(current_data_list)
+                                del self.cov_data
+                                np.random.set_state(self.data_random_state)  # reset the random state for consistency
                                 self._ext_obs()
                                 _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data,
                                                                              self.assim_index,
@@ -152,7 +160,11 @@ class lmenrmlMixIn(Ensemble):
                                 # get parameter indexes
                                 full_cell_index = np.ravel_multi_index(np.array([[k],[j],[i]]),tuple(field_size))
                                 # count active values
-                                self.cell_index = [sum(param_position.flatten()[:full_cell_index])]
+                                self.cell_index = [sum(param_position.flatten()[:el]) for el in full_cell_index]
+                                if 'localization' in self.keys_da:
+                                    self.localization.loc_info['field'] = (len(self.cell_index),)
+                                # Set relevant state scaling
+                                self.state_scaling = orig_state_scaling[self.cell_index]
 
                                 # Mean pred_data and perturbation matrix with scaling
                                 if len(self.scale_data.shape) == 1:
@@ -171,6 +183,8 @@ class lmenrmlMixIn(Ensemble):
 
             self.list_datatypes = cp.deepcopy(orig_list_data) #reset to original list
             self.list_states = cp.deepcopy(orig_list_state)
+            self.cov_data = cp.deepcopy(orig_cd)
+            self.real_obs_data = cp.deepcopy(orig_real_obs_data)
         else:
             # Mean pred_data and perturbation matrix with scaling
             if len(self.scale_data.shape) == 1:
