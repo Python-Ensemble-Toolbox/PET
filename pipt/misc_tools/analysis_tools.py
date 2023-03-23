@@ -1196,7 +1196,7 @@ def calc_scaling(state, list_state, prior_info):
 
     scaling = []
     for elem in list_state:
-        if len(prior_info['permx']['variance'])>1: # more than single value. This is for multiple layers. Assume all values are active
+        if len(prior_info[elem]['variance'])>1: # more than single value. This is for multiple layers. Assume all values are active
             scaling.append(np.concatenate(tuple(np.sqrt(prior_info[elem]['variance'][z])*
                                                 np.ones(prior_info[elem]['ny']*prior_info[elem]['nx'])
                                                 for z in range(prior_info[elem]['nz']))))
@@ -1429,21 +1429,23 @@ def init_local_analysis(init, state):
     """
 
     local = {}
+    local['cell_parameter'] = []
+    local['region_parameter'] = []
 
-    for i, opt in enumerate(list(zip(*init['local_analysis']))[0]):
+    for i, opt in enumerate(list(zip(*init))[0]):
         if opt.lower() == 'region_parameter':  # define scalar parameters valid in a region
-            local['region_parameter'] = [elem for elem in init['local_analysis'][i][1].split(' ') if elem in state]
+            local['region_parameter'] = [elem for elem in init[i][1].split(' ') if elem in state]
         if opt.lower() == 'cell_parameter':  # define cell specific vector parameters
-            local['cell_parameter'] = [elem for elem in init['local_analysis'][i][1].split(' ') if elem in state]
+            local['cell_parameter'] = [elem for elem in init[i][1].split(' ') if elem in state]
         if opt.lower() == 'search_range':
-            local['search_range'] = int(init['local_analysis'][i][1])
+            local['search_range'] = int(init[i][1])
         if opt.lower() == 'column_update':
-            local['column_update'] = [elem for elem in init['local_analysis'][i][1].split(',')]
+            local['column_update'] = [elem for elem in init[i][1].split(',')]
         if opt.lower() == 'parameter_position_file': # assume pickled format
-            with open(init['parameter_position_file'][i][1],'rb') as file:
+            with open(init[i][1],'rb') as file:
                 local['parameter_position'] = pickle.load(file)
         if opt.lower() == 'data_position_file': # assume pickled format
-            with open(init['data_position_file'][i][1], 'rb') as file:
+            with open(init[i][1], 'rb') as file:
                 local['data_position'] = pickle.load(file)
         if opt.lower() == 'update_mask_file':
             with open(init['update_mask_file'][i][1], 'rb') as file:
@@ -1456,14 +1458,14 @@ def init_local_analysis(init, state):
     else:
         assert 'data_position' in local, 'A pickle file containing the position of the data is MANDATORY'
 
-        data_name = [elem for elem in local['data_position_file'].keys()]
+        data_name = [elem for elem in local['data_position'].keys()]
         data_pos = [elem for data in data_name for elem in local['data_position'][data]]
         data_ind = [data for data in data_name for _ in local['data_position'][data]]  # store the name for easy index
         kde_search = cKDTree(data=data_pos)
 
         local['update_mask'] = {}
         for param in local['cell_parameter']: # find data in a distance from the parameter
-            field_size = local['parameter_position'][param].shape()
+            field_size = local['parameter_position'][param].shape
             local['update_mask'][param] = [[[[] for _ in range(field_size[2])] for _ in range(field_size[1])] for _
                               in range(field_size[0])]
             for k in range(field_size[0]):
@@ -1471,7 +1473,7 @@ def init_local_analysis(init, state):
                     new_iter = [elem for elem, val in enumerate(local['parameter_position'][param][k, j, :]) if val]
                     if len(new_iter):
                         for i in new_iter:
-                            local['update_mask'][k][j][i] = set(
+                            local['update_mask'][param][k][j][i] = set(
                                 [data_ind[elem] for elem in kde_search.query_ball_point(x=(k, j, i),
                                                                                     r=local['search_range'])])
 
@@ -1480,6 +1482,3 @@ def init_local_analysis(init, state):
             local['update_mask'][param] = set([data_ind[count] for count, val in enumerate(in_region) if val])
 
         return local
-
-
-
