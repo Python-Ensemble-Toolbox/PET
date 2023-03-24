@@ -751,4 +751,5 @@ class Ensemble(PETEnsemble):
         self.list_states = deepcopy(orig_list_state)
         self.cov_data = deepcopy(orig_cd)
         self.real_obs_data = deepcopy(orig_real_obs_data)
+        self.cell_index = None
 
