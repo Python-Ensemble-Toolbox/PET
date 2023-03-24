@@ -90,42 +90,45 @@ class enkfMixIn(Ensemble):
                 f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
 
         # Get assimilation order as a list
-        assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][self.iteration-1]] # must subtract one to be inline
+        self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][self.iteration-1]] # must subtract one to be inline
 
         # Get list of data types to be assimilated and of the free states. Do this once, because listing keys from a
         # Python dictionary just when needed (in different places) may not yield the same list!
-        self.list_datatypes, list_active_dataypes = at.get_list_data_types(self.obs_data, assim_index)
+        self.list_datatypes, list_active_dataypes = at.get_list_data_types(self.obs_data, self.assim_index)
 
         # Augment observed and predicted data
-        self.obs_data_vector, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, assim_index,
+        self.obs_data_vector, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
                                                                         self.list_datatypes)
-        self.cov_data = at.gen_covdata(self.datavar, assim_index, self.list_datatypes)
+        self.cov_data = at.gen_covdata(self.datavar, self.assim_index, self.list_datatypes)
 
         init_en = Cholesky()  # Initialize GeoStat class for generating realizations
+        self.data_random_state = deepcopy(np.random.get_state())
         self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
                                                                return_chol=True)
 
         self.E = np.dot(self.real_obs_data,self.proj)
 
-        # Mean pred_data and perturbation matrix with scaling
-        if len(self.scale_data.shape) == 1:
-            self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                        np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+        if 'localanalysis' in self.keys_da:
+            self.local_analysis_update()
         else:
-            self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+            # Mean pred_data and perturbation matrix with scaling
+            if len(self.scale_data.shape) == 1:
+                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+            else:
+                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
-        aug_state = at.aug_state(self.current_state, self.list_states)
-        self.update()
-        if hasattr(self,'step'):
-            aug_state_upd = aug_state + self.step
-        if hasattr(self,'w_step'):
-            self.W = self.current_W + self.w_step
-            aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-            aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
-
-        # Extract updated state variables from aug_update
-        self.state = at.update_state(aug_state_upd, self.state, self.list_states)
-        self.state = at.limits(self.state, self.prior_info)
+            aug_state = at.aug_state(self.current_state, self.list_states)
+            self.update()
+            if hasattr(self,'step'):
+                aug_state_upd = aug_state + self.step
+            if hasattr(self,'w_step'):
+                self.W = self.current_W + self.w_step
+                aug_prior_state = at.aug_state(self.prior_state, self.list_states)
+                aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+            # Extract updated state variables from aug_update
+            self.state = at.update_state(aug_state_upd, self.state, self.list_states)
+            self.state = at.limits(self.state, self.prior_info)
 
     def check_convergence(self):
         """

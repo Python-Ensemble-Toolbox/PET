@@ -64,6 +64,7 @@ class esmdaMixIn(Ensemble):
                 self.trunc_energy = 0.98
             # Get the perturbed observations and observation scaling
             self._ext_obs()
+            self.real_obs_data_conv = deepcopy(self.real_obs_data)
             # Get state scaling and svd of scaled prior
             self._ext_state()
             self.current_state = deepcopy(self.state)
@@ -121,38 +122,44 @@ class esmdaMixIn(Ensemble):
             self.data_misfit_std = np.std(data_misfit)
 
             self.logger.info(f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
-            
+            self.data_random_state = deepcopy(np.random.get_state())
             self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
                                                                    self.alpha[self.iteration-1]*self.cov_data, self.ne,
                                                                    return_chol=True)
             self.E = np.dot(self.real_obs_data,self.proj)
         else:
+            self.data_random_state = deepcopy(np.random.get_state())
+            self.obs_data_vector,_ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                                   self.list_datatypes)
             self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
                                                                    self.alpha[self.iteration - 1] * self.cov_data,
                                                                    self.ne,
                                                                    return_chol=True)
             self.E = np.dot(self.real_obs_data, self.proj)
 
-        if len(self.scale_data.shape) == 1:
-            self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                   np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+        if 'localanalysis' in self.keys_da:
+            self.local_analysis_update()
         else:
-            self.pert_preddata = scilinalg.solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+            if len(self.scale_data.shape) == 1:
+                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                       np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+            else:
+                self.pert_preddata = scilinalg.solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
-        aug_state = at.aug_state(self.current_state, self.list_states)
+            aug_state = at.aug_state(self.current_state, self.list_states)
 
 
-        self.update()
-        if hasattr(self,'step'):
-            aug_state_upd = aug_state + self.step
-        if hasattr(self,'w_step'):
-            self.W = self.current_W + self.w_step
-            aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-            aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+            self.update()
+            if hasattr(self,'step'):
+                aug_state_upd = aug_state + self.step
+            if hasattr(self,'w_step'):
+                self.W = self.current_W + self.w_step
+                aug_prior_state = at.aug_state(self.prior_state, self.list_states)
+                aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
 
-        # Extract updated state variables from aug_update
-        self.state = at.update_state(aug_state_upd, self.state, self.list_states)
-        self.state = at.limits(self.state, self.prior_info)
+            # Extract updated state variables from aug_update
+            self.state = at.update_state(aug_state_upd, self.state, self.list_states)
+            self.state = at.limits(self.state, self.prior_info)
 
     def check_convergence(self):
         """
@@ -295,58 +302,6 @@ class esmdaMixIn(Ensemble):
         # Return list assim. steps
         return assim_steps
 
-    def _ext_obs(self):
-
-        self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                                   self.list_datatypes)
-
-        # Generate the data auto-covariance matrix
-        if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
-            if hasattr(self, 'cov_data'):  # cd matrix has been imported
-                tmp_E = np.dot(scilinalg.cholesky(self.cov_data).T,
-                    np.random.randn(self.cov_data.shape[0], self.ne))
-            else:
-                tmp_E = at.extract_tot_empirical_cov(self.datavar, self.assim_index, self.list_datatypes, self.ne)
-            # self.E = (tmp_E - tmp_E.mean(1)[:,np.newaxis])/np.sqrt(self.ne - 1)/
-            if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                tmp_E = at.screen_data(tmp_E, self.aug_pred_data, self.obs_data_vector, self.iteration)
-            self.E = tmp_E
-            self.cov_data = np.var(self.E, ddof=1,
-                                   axis=1)  # calculate the variance, to be used for e.g. data misfit calc
-            # self.cov_data = ((self.E * self.E)/(self.ne-1)).sum(axis=1) # calculate the variance, to be used for e.g. data misfit calc
-            self.scale_data = np.sqrt(self.cov_data)
-        else:
-            if not hasattr(self, 'cov_data'):  # if cd is not loaded
-                self.cov_data = at.gen_covdata(self.datavar, self.assim_index, self.list_datatypes)
-            # data screening
-            if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                self.cov_data = at.screen_data(self.cov_data, self.aug_pred_data, self.obs_data_vector, self.iteration)
-
-        init_en = Cholesky()
-        self.real_obs_data_conv, _= init_en.gen_real(self.obs_data_vector,
-                                                               self.cov_data, self.ne,
-                                                               return_chol=True)
-
-    def _ext_state(self):
-        # get vector of scaling
-        self.state_scaling = at.calc_scaling(self.prior_state, self.list_states, self.prior_info)
-
-        delta_scaled_prior = self.state_scaling[:,None] * \
-                             np.dot(at.aug_state(self.prior_state, self.list_states),self.proj)
-
-        u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
-
-        # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
-        # zero. This part is a good place to include eventual additional truncation.
-        energy = 0
-        trunc_index = len(s_d) - 1  # inititallize
-        for c, elem in enumerate(s_d):
-            energy += elem
-            if energy / sum(s_d) >= self.trunc_energy:
-                trunc_index = c  # take the index where all energy is preserved
-                break
-        u_d, s_d, v_d = u_d[:, :trunc_index + 1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
-        self.Am = np.dot(u_d,np.eye(trunc_index+1)*((s_d**(-1))[:,None])) # notation from paper
 class esmda_approx(esmdaMixIn,approx_update):
     pass
 
