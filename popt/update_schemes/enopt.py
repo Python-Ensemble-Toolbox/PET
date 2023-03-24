@@ -1,6 +1,7 @@
 # External imports
 import numpy as np
 import scipy as scipy
+import os
 
 from numpy import linalg as la
 from copy import deepcopy
@@ -641,7 +642,7 @@ class GenOpt(PETEnsemble):
 
         # init PETEnsemble
         super(GenOpt, self).__init__(keys_en, sim)
-
+        
         # set logger
         self.logger = logging.getLogger('PET.POPT')
 
@@ -964,30 +965,6 @@ class GenOpt(PETEnsemble):
         np.fill_diagonal(gradCorr, 0)
         self.corr_sens_matrix = gradCorr/(ne-1)
 
-    def _corr2BlockDiagonal(self, corr):
-        '''
-        Makes the correlation matrix block diagonal. 
-        The blocks are the state varible types.
-
-        Parameters
-        ---------------------------------------------
-            corr : 2D-array_like, of shape (d, d)
-        
-        Returns
-        ---------------------------------------------
-            corr (block diagonal) : 2d-array_like, of shape (d, d)
-        '''
-        statenames  = list(self.state.keys())
-        corr_blocks = []
-
-        for name in statenames:
-            dim  = self.state[name].size
-            corr_blocks.append(corr[:dim, :dim])
-            corr = corr[dim:, dim:]
-        
-        return scipy.linalg.block_diag(*corr_blocks)
-
-
     def _gen_state_ensemble(self):
         """
         Generate an ensemble of states (control variables) to run in calc_ensemble_sensitivity.
@@ -1007,8 +984,7 @@ class GenOpt(PETEnsemble):
         eps = self.epsilon
         
         #Xe is the ensemble and self.Ze is the Gaussian ensemble
-        self.corr = self._corr2BlockDiagonal(self.corr)
-        print(self.corr)
+        self.corr = scipy.linalg.block_diag(*ot.corr2BlockDiagonal(self.corr))
         Xe, self.Ze = sample_GaussianCopula(self.ne, self.corr, self.marginals, return_Gaussian=True)
         
         d = 0
@@ -1070,6 +1046,8 @@ class GenOpt(PETEnsemble):
             # Save the variables
             if 'debug_save_folder' in self.keys_opt:
                 folder = self.keys_opt['debug_save_folder']
+                if not os.path.exists(folder):
+                    os.mkdir(folder)
             else:
                 folder = './'
 
