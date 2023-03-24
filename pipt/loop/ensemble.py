@@ -5,14 +5,15 @@ import os.path
 import numpy as np
 import sys
 from copy import deepcopy, copy
-import pickle
+from scipy.linalg import solve, cholesky
 
 # Internal import
 from ensemble.ensemble import Ensemble as PETEnsemble
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
 from pipt.misc_tools import cov_regularization
-from pipt.misc_tools.analysis_tools import init_local_analysis
+from pipt.geostat.decomp import Cholesky
+import pipt.misc_tools.analysis_tools as at
 
 class Ensemble(PETEnsemble):
     """
@@ -76,7 +77,7 @@ class Ensemble(PETEnsemble):
                                                                     self.ne)
             # Initialize local analysis
             if 'localanalysis' in self.keys_da:
-                self.local_analysis = init_local_analysis(init=self.keys_da['localanalysis'], state=self.state.keys())
+                self.local_analysis = at.init_local_analysis(init=self.keys_da['localanalysis'], state=self.state.keys())
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_en['datatype']}
                               for _ in self.obs_data]
@@ -446,6 +447,57 @@ class Ensemble(PETEnsemble):
         self.sparse_info['order'] = parsed_info[11][1]
         self.sparse_info['min_noise'] = parsed_info[12][1]
 
+    def _ext_obs(self):
+        self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                                   self.list_datatypes)
+        # Generate the data auto-covariance matrix
+        if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+            if hasattr(self, 'cov_data'):  # cd matrix has been imported
+                tmp_E = np.dot(cholesky(self.cov_data).T,
+                    np.random.randn(self.cov_data.shape[0], self.ne))
+            else:
+                tmp_E = at.extract_tot_empirical_cov(self.datavar, self.assim_index, self.list_datatypes, self.ne)
+            # self.E = (tmp_E - tmp_E.mean(1)[:,np.newaxis])/np.sqrt(self.ne - 1)/
+            if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
+                tmp_E = at.screen_data(tmp_E, self.aug_pred_data, self.obs_data_vector, self.iteration)
+            self.E = tmp_E
+            self.real_obs_data = self.obs_data_vector[:, np.newaxis] - tmp_E
+
+            self.cov_data = np.var(self.E, ddof=1,
+                                   axis=1)  # calculate the variance, to be used for e.g. data misfit calc
+            # self.cov_data = ((self.E * self.E)/(self.ne-1)).sum(axis=1) # calculate the variance, to be used for e.g. data misfit calc
+            self.scale_data = np.sqrt(self.cov_data)
+        else:
+            if not hasattr(self, 'cov_data'):  # if cd is not loaded
+                self.cov_data = at.gen_covdata(self.datavar, self.assim_index, self.list_datatypes)
+            # data screening
+            if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
+                self.cov_data = at.screen_data(self.cov_data, self.aug_pred_data, self.obs_data_vector, self.iteration)
+
+            init_en = Cholesky()  # Initialize GeoStat class for generating realizations
+            self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
+                                                                   return_chol=True)
+
+    def _ext_state(self):
+        # get vector of scaling
+        self.state_scaling = at.calc_scaling(self.prior_state, self.list_states, self.prior_info)
+
+        delta_scaled_prior = self.state_scaling[:,None] * \
+                             np.dot(at.aug_state(self.prior_state, self.list_states),self.proj)
+
+        u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
+
+        # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
+        # zero. This part is a good place to include eventual additional truncation.
+        energy = 0
+        trunc_index = len(s_d) - 1  # inititallize
+        for c, elem in enumerate(s_d):
+            energy += elem
+            if energy / sum(s_d) >= self.trunc_energy:
+                trunc_index = c  # take the index where all energy is preserved
+                break
+        u_d, s_d, v_d = u_d[:, :trunc_index + 1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
+        self.Am = np.dot(u_d,np.eye(trunc_index+1)*((s_d**(-1))[:,None])) # notation from paper
     def save_temp_state_assim(self, ind_save):
         """
         Method to save the state variable during the assimilation. It is stored in a list with length = tot. no.
@@ -614,4 +666,89 @@ class Ensemble(PETEnsemble):
             data_array = data  # just return the same as input
 
         return data_array
+
+
+    def local_analysis_update(self):
+        '''
+        Function for updates that can be used by all algorithms. Do this once to avoid duplicate code for local
+        analysis.
+        '''
+        orig_list_data = deepcopy(self.list_datatypes)
+        orig_list_state = deepcopy(self.list_states)
+        orig_cd = deepcopy(self.cov_data)
+        orig_real_obs_data = deepcopy(self.real_obs_data)
+        # loop over the states that we want to update. Assume that the state and data combinations have been
+        # determined by the initialization.
+        # TODO: augment parameters with identical mask.
+        for state in self.local_analysis['region_parameter']:
+            self.list_datatypes = [elem for elem in self.list_datatypes if
+                                   elem in self.local_analysis['update_mask'][state]]
+            self.list_states = [deepcopy(state)]
+            self._ext_state()  # scaling for this state
+            if 'localization' in self.keys_da:
+                self.localization.loc_info['field'] = self.state_scaling.shape
+            del self.cov_data
+            np.random.set_state(self.data_random_state)  # reset the random state for consistency
+            self._ext_obs()  # get the data that's in the list of data.
+            _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                         self.list_datatypes)
+            # Mean pred_data and perturbation matrix with scaling
+            if len(self.scale_data.shape) == 1:
+                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+            else:
+                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+
+            aug_state = at.aug_state(self.current_state, self.list_states)
+            self.update()
+            if hasattr(self, 'step'):
+                aug_state_upd = aug_state + self.step
+            self.state = at.update_state(aug_state_upd, self.state, self.list_states)
+
+        for state in self.local_analysis['cell_parameter']:
+            self.list_states = [deepcopy(state)]
+            self._ext_state()  # scaling for this state
+            orig_state_scaling = deepcopy(self.state_scaling)
+            param_position = self.local_analysis['parameter_position'][state]
+            field_size = param_position.shape
+            for k in range(field_size[0]):
+                for j in range(field_size[1]):
+                    for i in range(field_size[2]):
+                        current_data_list = list(self.local_analysis['update_mask'][state][k][j][i])
+                        current_data_list.sort()  # ensure consistent ordering of data
+                        if len(current_data_list):
+                            self.list_datatypes = deepcopy(current_data_list)
+                            del self.cov_data
+                            np.random.set_state(self.data_random_state)  # reset the random state for consistency
+                            self._ext_obs()
+                            _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data,
+                                                                         self.assim_index,
+                                                                         self.list_datatypes)
+                            # get parameter indexes
+                            full_cell_index = np.ravel_multi_index(np.array([[k], [j], [i]]), tuple(field_size))
+                            # count active values
+                            self.cell_index = [sum(param_position.flatten()[:el]) for el in full_cell_index]
+                            if 'localization' in self.keys_da:
+                                self.localization.loc_info['field'] = (len(self.cell_index),)
+                            # Set relevant state scaling
+                            self.state_scaling = orig_state_scaling[self.cell_index]
+
+                            # Mean pred_data and perturbation matrix with scaling
+                            if len(self.scale_data.shape) == 1:
+                                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data,
+                                                                                            self.proj)
+                            else:
+                                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+
+                            aug_state = at.aug_state(self.current_state, self.list_states, self.cell_index)
+                            self.update()
+                            if hasattr(self, 'step'):
+                                aug_state_upd = aug_state + self.step
+                            self.state = at.update_state(aug_state_upd, self.state, self.list_states, self.cell_index)
+
+        self.list_datatypes = deepcopy(orig_list_data)  # reset to original list
+        self.list_states = deepcopy(orig_list_state)
+        self.cov_data = deepcopy(orig_cd)
+        self.real_obs_data = deepcopy(orig_real_obs_data)
 
