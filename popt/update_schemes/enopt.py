@@ -9,8 +9,6 @@ import logging
 
 from scipy.special import polygamma, digamma
 from scipy import stats
-from statsmodels.stats.moment_helpers import cov2corr
-from statsmodels.stats.correlation_tools import cov_nearest, corr_nearest
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot, basic_tools as bt
@@ -562,7 +560,7 @@ class CMA:
         index  = J.argsort()[::-1]
         Xs = (X[index[:self.n_mu]] - np.mean(X, axis=0)).T
         C_ = (Xs*self.weights)@Xs.T
-        if self.corr_update: C_ = cov2corr(C_)
+        if self.corr_update: C_ = ot.cov2corr(C_)
         
         return C_
 
@@ -573,7 +571,7 @@ class CMA:
         s = self.alpha_c
         self.evo_path = (1-s)*self.evo_path + np.sqrt(s*(2-s)*self.mu_eff)*step
         C_ = np.outer(self.evo_path, self.evo_path)
-        if self.corr_update: C_ = cov2corr(C_)
+        if self.corr_update: C_ = ot.cov2corr(C_)
 
         return C_
     
