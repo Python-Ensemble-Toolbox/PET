@@ -984,7 +984,7 @@ class GenOpt(PETEnsemble):
         eps = self.epsilon
         
         #Xe is the ensemble and self.Ze is the Gaussian ensemble
-        self.corr = scipy.linalg.block_diag(*ot.corr2BlockDiagonal(self.corr))
+        self.corr = scipy.linalg.block_diag(*ot.corr2BlockDiagonal(self.state, self.corr))
         Xe, self.Ze = sample_GaussianCopula(self.ne, self.corr, self.marginals, return_Gaussian=True)
         
         d = 0

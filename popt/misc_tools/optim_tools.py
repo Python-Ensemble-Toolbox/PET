@@ -4,6 +4,7 @@ be used by several optimization schemes. If some method is only applicable to th
 implementing, leave it in that class.
 """
 import numpy as np
+from scipy.linalg import block_diag
 
 
 def aug_optim_state(state, list_state):
@@ -94,11 +95,12 @@ def time_correlation(a, state, n_timesteps, dt=1.0):
         Corr(t_1, t_2) = a^{|t_1 - t_2|}
     
     Assumes that each varaible in state is time-order such that
-    x = [x1, x2,..., xi,..., xn], where i is the time index, 
-    and xi is d-dimensional.
+    `x = [x1, x2,..., xi,..., xn]`, where `i` is the time index, 
+    and `xi` is d-dimensional.
 
     Parameters:
     -------------------------------------------------------------
+        a : float, in range (0, 1)
             Correlation coef.
 
         state : dict
@@ -134,3 +136,41 @@ def time_correlation(a, state, n_timesteps, dt=1.0):
         blocks.append(corr_single_block)
 
     return block_diag(*blocks)
+
+
+def cov2corr(cov):
+    '''
+    Transfroms a covaraince matrix to a correlation matrix
+
+    Parameters:
+    -------------
+        cov : 2D-array_like, of shape (d,d)
+            The covaraince matrix.
+    Returns:
+    -------------
+        out : 2D-array_like, of shape (d,d)
+            The correlation matrix.
+    '''
+    std  = np.sqrt(np.diag(cov))
+    corr = np.divide(cov, np.outer(std, std))
+    return corr
+
+def corr2cov(corr, std):
+    '''
+    Transfroms a correlation matrix to a covaraince matrix
+
+    Parameters:
+    -------------
+        corr : 2D-array_like, of shape (d,d)
+            The correlation matrix.
+
+        std : 1D-array_like, of shape (d,)
+            Array of the standard deviations. 
+
+    Returns:
+    -------------
+        out : 2D-array_like, of shape (d,d)
+            The covaraince matrix
+    '''
+    cov = np.multiply(corr, np.outer(std, std))
+    return cov
