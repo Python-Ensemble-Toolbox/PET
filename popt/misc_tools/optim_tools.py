@@ -4,7 +4,7 @@ be used by several optimization schemes. If some method is only applicable to th
 implementing, leave it in that class.
 """
 import numpy as np
-
+from scipy.linalg import block_diag
 
 def aug_optim_state(state, list_state):
     """
