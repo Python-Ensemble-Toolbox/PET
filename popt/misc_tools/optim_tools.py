@@ -84,3 +84,87 @@ def corr2BlockDiagonal(state, corr):
         corr_blocks.append(corr[:dim, :dim])
         corr = corr[dim:, dim:]
     return corr_blocks
+
+
+def time_correlation(a, state, n_timesteps, dt=1.0):
+    '''
+    Constructs correlation matrix with time correlation
+    using an autoregressive model.
+    .. math::
+        Corr(t_1, t_2) = a^{|t_1 - t_2|}
+
+    Assumes that each varaible in state is time-order such that
+    `x = [x1, x2,..., xi,..., xn]`, where `i` is the time index,
+    and `xi` is d-dimensional.
+    Parameters:
+    -------------------------------------------------------------
+        a : float, in range (0, 1)
+            Correlation coef.
+        state : dict
+            Control state (represented in a dict).
+
+        n_timesteps : int
+            Number of time-steps to correlate for each component.
+
+        dt : float or int
+            Duration between each time-step. Default is 1.
+
+    Returns:
+    -------------------------------------------------------------
+        out : ndarray
+            Correlation matrix with time correlation
+    '''
+    dim_states = [int(state[name].size / n_timesteps) for name in list(state.keys())]
+    blocks = []
+
+    # Construct correlation matrix
+    # m: variable type index
+    # i: first time index
+    # j: second time index
+    # k: first dim index
+    # l: second dim index
+    for m in dim_states:
+        corr_single_block = np.zeros((m * n_timesteps, m * n_timesteps))
+        for i in range(n_timesteps):
+            for j in range(n_timesteps):
+                for k in range(m):
+                    for l in range(m):
+                        corr_single_block[i * m + k, j * m + l] = (k == l) * a ** abs(dt * (i - j))
+        blocks.append(corr_single_block)
+
+    return block_diag(*blocks)
+
+
+def cov2corr(cov):
+    '''
+    Transfroms a covaraince matrix to a correlation matrix
+    Parameters:
+    -------------
+        cov : 2D-array_like, of shape (d,d)
+            The covaraince matrix.
+    Returns:
+    -------------
+        out : 2D-array_like, of shape (d,d)
+            The correlation matrix.
+    '''
+    std = np.sqrt(np.diag(cov))
+    corr = np.divide(cov, np.outer(std, std))
+    return corr
+
+
+def corr2cov(corr, std):
+    '''
+    Transfroms a correlation matrix to a covaraince matrix
+    Parameters:
+    -------------
+        corr : 2D-array_like, of shape (d,d)
+            The correlation matrix.
+        std : 1D-array_like, of shape (d,)
+            Array of the standard deviations.
+    Returns:
+    -------------
+        out : 2D-array_like, of shape (d,d)
+            The covaraince matrix
+    '''
+    cov = np.multiply(corr, np.outer(std, std))
+    return cov
