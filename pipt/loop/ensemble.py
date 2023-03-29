@@ -717,6 +717,10 @@ class Ensemble(PETEnsemble):
                         current_data_list = list(self.local_analysis['update_mask'][state][k][j][i])
                         current_data_list.sort()  # ensure consistent ordering of data
                         if len(current_data_list):
+                            # if non-unique data for assimilation index, get the relevant data.
+                            if self.local_analysis['unique'] == False:
+                                orig_assim_index = deepcopy(self.assim_index)
+                                current_data_list,index = el.split('_') for el in current_data_list
                             self.list_datatypes = deepcopy(current_data_list)
                             del self.cov_data
                             np.random.set_state(self.data_random_state)  # reset the random state for consistency
