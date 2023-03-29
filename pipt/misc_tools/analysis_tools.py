@@ -1459,8 +1459,14 @@ def init_local_analysis(init, state):
         assert 'data_position' in local, 'A pickle file containing the position of the data is MANDATORY'
 
         data_name = [elem for elem in local['data_position'].keys()]
-        data_pos = [elem for data in data_name for elem in local['data_position'][data]]
-        data_ind = [data for data in data_name for _ in local['data_position'][data]]  # store the name for easy index
+        if type(local['data_position'][data_name[0]][0]) == list: #assim index has spesific position
+            local['unique'] = False
+            data_pos = [elem for data in data_name for assim_elem in local['data_position'][data] for elem in assim_elem]
+            data_ind = [f'{data}_{assim_indx}' for data in data_name for assim_indx,assim_elem in enumerate(local['data_position'][data])
+                        for _ in assim_elem]
+        else:
+            data_pos = [elem for data in data_name for elem in local['data_position'][data]]
+            data_ind = [data for data in data_name for _ in local['data_position'][data]]  # store the name for easy index
         kde_search = cKDTree(data=data_pos)
 
         local['update_mask'] = {}
