@@ -28,6 +28,10 @@ import os, pickle, csv
 import datetime as dt
 from shutil import rmtree
 from scipy import sparse
+from scipy.spatial import distance
+
+# internal import
+import pipt.misc_tools.analysis_tools as at
 
 class localization():
     #####
@@ -656,3 +660,36 @@ class localization():
         loc_mask = np.zeros(self.loc_info['field'])
         loc_mask[data_pos[2], :, :] = loc_2d_mask
         return loc_mask
+
+def _calc_distance(data_pos,index_unique,current_data_list,assim_index,obs_data,pred_data,param_pos):
+    """
+    Calculate the distance between data and parameters.
+
+    Input:
+        - data_pos: dictionary containing position of the data
+        - index_unique: boolean that determines if the position is unique
+        - current_data_list: list containing name of data thot should be evaluated
+        - assim_index: The index of data to be evaluated
+        - obs_data: list of dictionaries containing the data
+        - pred_data: list of dictionarios containing the predictions
+        - param_pos: list of tuples for the position of the parameters
+
+    Returns:
+        - dist: list of euclidean distance between the data/parameter pair.
+    """
+    # distance to data if distance based localization
+    if index_unique == False:
+        dist = []
+        for dat in current_data_list:
+            for indx in assim_index[1]:
+                indx_data_pos = data_pos[dat][indx]
+                if obs_data[indx] is not None and obs_data[indx][dat] is not None:
+                    dist.append(min(distance.cdist(indx_data_pos,param_pos).flatten()))  # add shortest distance
+    else:
+        dist = []
+        for data in current_data_list:
+            elem_data_pos = data_pos[data]
+            obs,_ = at.aug_obs_pred_data(obs_data,pred_data,assim_index,data)
+            dist.append(len(obs)*min(distance.cdist(elem_data_pos, param_pos).flatten()))
+
+    return dist
