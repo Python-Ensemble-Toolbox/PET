@@ -765,6 +765,8 @@ class Ensemble(PETEnsemble):
                             if self.local_analysis['unique'] == False:
                                 #reset assim index
                                 self.assim_index = deepcopy(orig_assim_index)
+                            if hasattr(self,'localization') and 'distance' in self.localization.loc_info: #reset
+                                del self.localization.loc_info['distance']
 
         self.list_datatypes = deepcopy(orig_list_data)  # reset to original list
         self.list_states = deepcopy(orig_list_state)
