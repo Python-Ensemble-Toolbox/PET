@@ -54,6 +54,14 @@ class localization():
                 init_local['nstd'] = parsed_info[1][1]
                 if parsed_info[2][0] == 'type':
                     init_local['type'] = parsed_info[2][1]
+            elif parsed_info[1][0].upper() == 'LOCALANALYSIS':
+                init_local = {}
+                init_local['localanalysis'] = True
+                for i, opt in enumerate(list(zip(*parsed_info))[0]):
+                    if opt.lower() == 'type':
+                        init_local['type'] = parsed_info[i][1]
+                    if opt.lower() == 'range':
+                        init_local['range'] = float(parsed_info[i][1])
             else:
                 init_local = pickle.load(open(parsed_info[1][0], 'rb'))
         except:
@@ -689,7 +697,38 @@ def _calc_distance(data_pos,index_unique,current_data_list,assim_index,obs_data,
         dist = []
         for data in current_data_list:
             elem_data_pos = data_pos[data]
-            obs,_ = at.aug_obs_pred_data(obs_data,pred_data,assim_index,data)
-            dist.append(len(obs)*min(distance.cdist(elem_data_pos, param_pos).flatten()))
+            obs,_ = at.aug_obs_pred_data(obs_data,pred_data,assim_index,[data])
+            dist.extend(len(obs)*[min(distance.cdist(elem_data_pos, param_pos).flatten())])
 
     return dist
+
+
+def _calc_loc(max_dist, distance, prior_info,loc_type,ne):
+        # given the parameter type (to get the prior info) and the range to the data points we can calculate the
+        # localization mask
+        variance = prior_info['variance'][0]
+        mask = np.zeros(len(distance))
+        if loc_type == 'fb':
+            # assume that FB localization is utilized. Here vi can add all different localization functions
+            for i in range(len(distance)):
+                if distance[i] < max_dist:
+                    tmp = variance - variance * (
+                                1.5 * np.abs(distance[i]) / max_dist - .5 * (distance[i] / max_dist) ** 3)
+                else:
+                    tmp = 0
+
+                mask[i] = (ne * tmp ** 2) / ((tmp ** 2) * (ne + 1) + variance ** 2)
+        elif loc_type == 'gc':
+            for count, i in enumerate(np.abs(distance)):
+                if (i <= max_dist):
+                    tmp = -(1. / 4.) * (i / max_dist) ** 5 + (1. / 2.) * (i / max_dist) ** 4 + (5. / 8.) * (
+                                i / max_dist) ** 3 - (5. / 3.) * (i / max_dist) ** 2 + 1
+                elif (i <= 2 * max_dist):
+                    tmp = (1. / 12.) * (i / max_dist) ** 5 - (1. / 2.) * (i / max_dist) ** 4 + (5. / 8.) * (
+                                i / max_dist) ** 3 + (5. / 3.) * (i / max_dist) ** 2 - 5. * (i / max_dist) + 4. - (
+                                      2. / 3.) * (max_dist / i)
+                else:
+                    tmp = 0.
+                mask[count] = tmp
+
+        return mask[np.newaxis,:]
