@@ -4,6 +4,7 @@ import copy as cp
 from scipy.linalg import solve, solve_banded, cholesky, lu_solve, lu_factor, inv
 import pickle
 import pipt.misc_tools.analysis_tools as at
+from pipt.misc_tools.cov_regularization import _calc_loc
 
 class approx_update():
     """
@@ -65,8 +66,32 @@ class approx_update():
                 self.step = self.localization.auto_ada_loc(self.state_scaling[:,None] * pert_state, np.dot(X, scaled_delta_data),
                                                            self.list_states,
                                                            **{'prior_info': self.prior_info})
-            elif sum(['dist_loc' in el for el in f]) >= 1:
+            elif 'localanalysis' in self.localization.loc_info and self.localization.loc_info['localanalysis']:
+                if 'distance' in self.localization.loc_info:
+                    weight = _calc_loc(self.localization.loc_info['range'],self.localization.loc_info['distance'],
+                                   self.prior_info[self.list_states[0]],self.localization.loc_info['type'],self.ne)
+                else:
+                    weight = np.ones((aug_state.shape[0],X.shape[1])) # if no distance, do full update
+                mean_state = np.mean(aug_state, 1)
+                if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+                    pert_state = (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
+                                                     np.ones((1, self.ne))))
+                else:
+                    pert_state = (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
+                                                     np.ones((1, self.ne)))) / (np.sqrt(self.ne - 1))
 
+                if len(self.scale_data.shape) == 1:
+                    scaled_delta_data = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                               np.ones((1, pert_state.shape[1]))) * (
+                                                self.real_obs_data - self.aug_pred_data)
+                else:
+                    scaled_delta_data = solve(self.scale_data, (self.real_obs_data - self.aug_pred_data))
+                try:
+                    self.step = weight.multiply(np.dot(pert_state, X)).dot(scaled_delta_data)
+                except:
+                    self.step = (weight*(np.dot(pert_state, X))).dot(scaled_delta_data)
+
+            elif sum(['dist_loc' in el for el in f]) >= 1:
                 local_mask = self.localization.localize(self.list_datatypes, [self.keys_da['truedataindex'][int(elem)]
                                                                          for elem in self.assim_index[1]],
                                                         self.list_states, self.ne, self.prior_info, data_size)
