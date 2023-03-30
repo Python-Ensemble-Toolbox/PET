@@ -6,6 +6,8 @@ import numpy as np
 import sys
 from copy import deepcopy, copy
 from scipy.linalg import solve, cholesky
+from scipy.spatial import distance
+import itertools
 
 # Internal import
 from ensemble.ensemble import Ensemble as PETEnsemble
@@ -677,6 +679,7 @@ class Ensemble(PETEnsemble):
         orig_list_state = deepcopy(self.list_states)
         orig_cd = deepcopy(self.cov_data)
         orig_real_obs_data = deepcopy(self.real_obs_data)
+        orig_data_vector = deepcopy(self.obs_data_vector)
         # loop over the states that we want to update. Assume that the state and data combinations have been
         # determined by the initialization.
         # TODO: augment parameters with identical mask.
@@ -720,7 +723,10 @@ class Ensemble(PETEnsemble):
                             # if non-unique data for assimilation index, get the relevant data.
                             if self.local_analysis['unique'] == False:
                                 orig_assim_index = deepcopy(self.assim_index)
-                                current_data_list,index = el.split('_') for el in current_data_list
+                                assim_index_data_list = set([el.split('_')[0] for el in current_data_list])
+                                current_assim_index = [int(el.split('_')[1]) for el in current_data_list]
+                                current_data_list = list(assim_index_data_list)
+                                self.assim_index[1] = current_assim_index
                             self.list_datatypes = deepcopy(current_data_list)
                             del self.cov_data
                             np.random.set_state(self.data_random_state)  # reset the random state for consistency
@@ -734,6 +740,11 @@ class Ensemble(PETEnsemble):
                             self.cell_index = [sum(param_position.flatten()[:el]) for el in full_cell_index]
                             if 'localization' in self.keys_da:
                                 self.localization.loc_info['field'] = (len(self.cell_index),)
+                                self.localization.loc_info['distance'] = cov_regularization._calc_distance(
+                                                                                self.local_analysis['data_position'],
+                                                                                self.local_analysis['unique'],
+                                                                                current_data_list,self.assim_index,
+                                                                                self.obs_data,self.pred_data,[(k,j,i)])
                             # Set relevant state scaling
                             self.state_scaling = orig_state_scaling[self.cell_index]
 
@@ -751,9 +762,14 @@ class Ensemble(PETEnsemble):
                                 aug_state_upd = aug_state + self.step
                             self.state = at.update_state(aug_state_upd, self.state, self.list_states, self.cell_index)
 
+                            if self.local_analysis['unique'] == False:
+                                #reset assim index
+                                self.assim_index = deepcopy(orig_assim_index)
+
         self.list_datatypes = deepcopy(orig_list_data)  # reset to original list
         self.list_states = deepcopy(orig_list_state)
         self.cov_data = deepcopy(orig_cd)
         self.real_obs_data = deepcopy(orig_real_obs_data)
+        self.obs_data_vector = deepcopy(orig_data_vector)
         self.cell_index = None
 
