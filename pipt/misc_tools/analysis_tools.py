@@ -1431,6 +1431,7 @@ def init_local_analysis(init, state):
     local = {}
     local['cell_parameter'] = []
     local['region_parameter'] = []
+    local['unique'] = True
 
     for i, opt in enumerate(list(zip(*init))[0]):
         if opt.lower() == 'region_parameter':  # define scalar parameters valid in a region
