@@ -557,7 +557,8 @@ class Ensemble:
                     self.logger.info(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by '
                         f'ensemble member {el}! ---\033[92m')
                     for key in self.state.keys():
-                        self.state[key][:, list_crash[indx]] = deepcopy(self.state[key][:, el])
+                        if self.state[key].ndim > 1:
+                            self.state[key][:, list_crash[indx]] = deepcopy(self.state[key][:, el])
                     en_pred[list_crash[indx]] = deepcopy(en_pred[el])
 
             # Convert ensemble specific result into pred_data, and filter for NONE data
