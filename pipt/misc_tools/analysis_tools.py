@@ -1481,7 +1481,7 @@ def init_local_analysis(init, state):
                         for i in new_iter:
                             local['update_mask'][param][k][j][i] = set(
                                 [data_ind[elem] for elem in kde_search.query_ball_point(x=(k, j, i),
-                                                                                    r=local['search_range'])])
+                                                                                r=local['search_range'],workers=-1)])
 
         for param in local['region_parameter']: # see if data is inside the region. Note parameter_position is boolean map
             in_region = [local['parameter_position'][param][elem] for elem in data_pos]
