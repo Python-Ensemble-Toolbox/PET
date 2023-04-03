@@ -119,8 +119,7 @@ class EnOpt(PETEnsemble):
                 self.step = new_step
                 
                 # Update covariance (currently we don't apply backtracking for alpha_cov)
-                self.cov_step = self.alpha_cov * self.cov_sens_matrix / la.norm(self.cov_sens_matrix, np.inf) + \
-                    beta * self.cov_step
+                self.cov_step = self.alpha_cov * self.cov_sens_matrix #/ la.norm(self.cov_sens_matrix, np.inf) + beta * self.cov_step
                 self.cov = np.squeeze(self.cov + self.cov_step)
                 self.cov = self.get_sym_pos_semidef(self.cov)
 
@@ -329,23 +328,25 @@ class EnOpt(PETEnsemble):
         # matrix
         state_en = {}
         for i, statename in enumerate(self.state.keys()):
-            # state_en[statename] = chol.gen_real(self.state[statename], self.cov[i, i], self.ne)
             mean = self.state[statename]
-            len_state = len(self.state[statename])
-            cov = self.cov[len_state * i:len_state * (i + 1), len_state * i:len_state * (i + 1)]
-            if len(cov) != len(mean):  # make sure cov is diagonal matrix
-                print('\033[1;31mERROR: Covariance must be diagonal matrix!\033[1;31m')
-            #     cov = cov*np.identity(len(mean))
-            if ['nesterov'] in self.keys_opt['enopt']:
-                if not isinstance(self.step, int):
-                    mean += self.beta * self.step[len_state * i:len_state * (i + 1)]
-                    cov += self.beta * self.cov_step[len_state * i:len_state * (i + 1), len_state * i:len_state * (i + 1)]
-                    cov = self.get_sym_pos_semidef(cov)
-            temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
-            if self.upper_bound and self.lower_bound:
-                np.clip(temp_state_en, 0, 1, out=temp_state_en)
+            cov_blocks = ot.corr2BlockDiagonal(self.state, self.cov)
+            start = 0
+            for i, statename in enumerate(self.state.keys()):
+                mean = self.state[statename]
+                cov = cov_blocks[i]
+                if ['nesterov'] in self.keys_opt['enopt']:
+                    if not isinstance(self.step, int):
+                        stop = start + len(self.state[statename])
+                        mean += self.beta * self.step[start:stop]
+                        cov += self.beta * self.cov_step[start:stop, start:stop]
+                        cov = self.get_sym_pos_semidef(cov)
+                        start = start + len(self.state[statename]) 
+                temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
+                if self.upper_bound and self.lower_bound:            
+                    np.clip(temp_state_en, 0, 1, out=temp_state_en)    
 
-            state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en,1)]).T
+                state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en,1)]).T
+            
 
         return state_en
 
@@ -752,8 +753,8 @@ class GenOpt(PETEnsemble):
                     self.calc_corr_sensitivity()
                     self.corr += self.alpha_corr*self.corr_sens_matrix/la.norm(self.corr_sens_matrix, np.inf)
         
-                print('Max corr: ', np.max(self.corr-np.identity(self.dim)))
-                print('Min corr: ', np.min(self.corr))
+                #print('Max corr: ', np.max(self.corr-np.identity(self.dim)))
+                #print('Min corr: ', np.min(self.corr))
                 
                 # Write logging info
                 if logger is not None:
