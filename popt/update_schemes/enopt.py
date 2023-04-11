@@ -119,7 +119,7 @@ class EnOpt(PETEnsemble):
                 self.step = new_step
                 
                 # Update covariance (currently we don't apply backtracking for alpha_cov)
-                self.cov_step = self.alpha_cov * self.cov_sens_matrix #/ la.norm(self.cov_sens_matrix, np.inf) + beta * self.cov_step
+                self.cov_step = self.alpha_cov * self.cov_sens_matrix / la.norm(self.cov_sens_matrix, np.inf) + beta * self.cov_step
                 self.cov = np.squeeze(self.cov + self.cov_step)
                 self.cov = self.get_sym_pos_semidef(self.cov)
 
