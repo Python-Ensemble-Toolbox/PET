@@ -935,8 +935,11 @@ class GenOpt(PETEnsemble):
         M = np.array([self.marginals[d].pdf(X[d]) for d in range(self.dim)])    #shape (d, Ne)
         N = np.apply_along_axis(stats.norm.pdf, axis=1, arr=Z)                  #shape (d, Ne)
 
+        #add smoothing
+        std = [m.std() for m in self.marginals]
+        cov = ot.corr2cov(self.corr, std)
         ensembleX = (alphas-1)/X - (betas-1)/(1-X) - (H@Z)*M/N                  #shape (d, Ne)
-        gradX     = np.squeeze(-ensembleX@JX)/((self.ne-1)*2*self.epsilon)      #shape (d,)
+        gradX     = np.squeeze(-cov@ensembleX@JX)/((self.ne-1)*2*self.epsilon)      #shape (d,)
         #-----------------------------------------------------------------------------------------
 
         #Gradeint of Theta------------------------------------------------------------------------
