@@ -939,7 +939,7 @@ class GenOpt(PETEnsemble):
         std = [m.std() for m in self.marginals]
         cov = ot.corr2cov(self.corr, std)
         ensembleX = (alphas-1)/X - (betas-1)/(1-X) - (H@Z)*M/N                  #shape (d, Ne)
-        gradX     = np.squeeze(-cov@ensembleX@JX)/((self.ne-1)*2*self.epsilon)      #shape (d,)
+        gradX     = 2*self.epsilon*np.squeeze(-cov@ensembleX@JX)/(self.ne-1)    #shape (d,)
         #-----------------------------------------------------------------------------------------
 
         #Gradeint of Theta------------------------------------------------------------------------
