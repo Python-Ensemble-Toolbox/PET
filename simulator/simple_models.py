@@ -4,16 +4,18 @@ import os  # Misc. system tools
 import sys
 import scipy.stats as sc  # Extended numerical tools
 from copy import copy, deepcopy
-from multiprocessing import Process,Pipe  # To be able to run Python methods in background
+from multiprocessing import Process, Pipe  # To be able to run Python methods in background
 import time  # To wait a bit before loading files
 
-import h5py     # To load matlab .mat files
+import h5py  # To load matlab .mat files
 from scipy import interpolate
+
 
 class lin_1d:
     """
     linear 1x150 model (or whatever), just make observations of the state at given positions.
     """
+
     def __init__(self, input_dict=None, m=None):
         """
         Two inputs here. A dictionary of keys, or parameter directly.
@@ -32,9 +34,9 @@ class lin_1d:
         assert 'reporttype' in self.input_dict, 'Reporttype is missing, please specify this'
         assert 'reportpoint' in self.input_dict, 'Reportpoint is missing, please specify this'
 
-        self.true_prim = [self.input_dict['reporttype'],self.input_dict['reportpoint']]
+        self.true_prim = [self.input_dict['reporttype'], self.input_dict['reportpoint']]
 
-        self.true_order = [self.input_dict['reporttype'],self.input_dict['reportpoint']]
+        self.true_order = [self.input_dict['reporttype'], self.input_dict['reportpoint']]
         self.all_data_types = self.input_dict['datatype']
         self.l_prim = [int(i) for i in range(len(self.true_prim[1]))]
 
@@ -44,14 +46,14 @@ class lin_1d:
         self.keys = {}
 
     def setup_fwd_run(self, **kwargs):
-        self.__dict__.update(kwargs) # parse kwargs input into class attributes
+        self.__dict__.update(kwargs)  # parse kwargs input into class attributes
         assimIndex = [i for i in range(len(self.l_prim))]
         trueOrder = self.true_order
 
         self.pred_data = [deepcopy({}) for _ in range(len(assimIndex))]
         for ind in self.l_prim:
             for key in self.all_data_types:
-                self.pred_data[ind][key] = np.zeros((1,1))
+                self.pred_data[ind][key] = np.zeros((1, 1))
 
         if isinstance(trueOrder[1], list):  # Check if true data prim. ind. is a list
             self.true_prim = [trueOrder[0], [x for x in trueOrder[1]]]
@@ -68,6 +70,7 @@ class lin_1d:
                 self.pred_data[prim_ind][dat] = np.array(tmp_val)
 
         return self.pred_data
+
 
 class nonlin_onedimmodel:
     """
@@ -94,14 +97,14 @@ class nonlin_onedimmodel:
         self.l_prim = [int(i) for i in range(len(self.true_prim[1]))]
 
     def setup_fwd_run(self, **kwargs):
-        self.__dict__.update(kwargs) # parse kwargs input into class attributes
+        self.__dict__.update(kwargs)  # parse kwargs input into class attributes
         assimIndex = [i for i in range(len(self.l_prim))]
         trueOrder = self.true_order
 
         self.pred_data = [deepcopy({}) for _ in range(len(assimIndex))]
         for ind in self.l_prim:
             for key in self.all_data_types:
-                self.pred_data[ind][key] = np.zeros((1,1))
+                self.pred_data[ind][key] = np.zeros((1, 1))
 
         if isinstance(trueOrder[1], list):  # Check if true data prim. ind. is a list
             self.true_prim = [trueOrder[0], [x for x in trueOrder[1]]]
@@ -109,13 +112,13 @@ class nonlin_onedimmodel:
             self.true_prim = [trueOrder[0], [trueOrder[1]]]
 
     def run_fwd_sim(self, state, member_i, del_folder=True):
-         # Fwd. model given by Chen & Oliver, Computat. Geosci., 17(4), p. 689-703, 2013.
+        # Fwd. model given by Chen & Oliver, Computat. Geosci., 17(4), p. 689-703, 2013.
         inv_param = state.keys()
         for prim_ind in self.l_prim:
             for dat in self.all_data_types:
                 tmp_val = []
                 for para in inv_param:
-                    tmp_val.append((7/12)*(state[para]**3) - (7/2)*(state[para]**2) + 8*state[para])
+                    tmp_val.append((7 / 12) * (state[para] ** 3) - (7 / 2) * (state[para] ** 2) + 8 * state[para])
                 self.pred_data[prim_ind][dat] = np.array(tmp_val)
 
         return self.pred_data
@@ -125,6 +128,7 @@ class sevenmountains:
     """
     The objective function is the elevations of the seven mountains around bergen, to test optimization algorithm
     """
+
     def __init__(self, input_dict=None, state=None):
         """
         Two inputs here. A dictionary of keys, or parameter directly.
@@ -193,7 +197,7 @@ class sevenmountains:
                 origbounds = np.array(self.input_dict['origbounds'])
             elif self.input_dict['origbounds'] == 'auto':
                 origbounds = np.array([[np.min(self.longitude), np.max(self.longitude)],
-                                   [np.min(self.latitude), np.max(self.latitude)]])
+                                       [np.min(self.latitude), np.max(self.latitude)]])
             else:
                 origbounds = np.array([self.input_dict['origbounds']])
             self.orig_lb = origbounds[:, 0]
@@ -388,3 +392,57 @@ class sevenmountains:
             member = current_run
 
         return member
+
+
+class rosen:
+
+    def __init__(self, input_dict):
+        # parse information from the input.
+        # Needs to get datatype, reporttype and reportpoint
+        self.input_dict = input_dict
+        self.true_order = None
+
+    def setup_fwd_run(self, **kwargs):
+        # do whatever initiallization you need.
+        # Useful to initiallize the self.pred_data variable.
+        # self.pred_data is a list of dictionaries. Where each list element represents
+        # a reportpoint and the dictionary should have the datatypes as keys.
+        # Entries in the dictionary are numpy arrays.
+        self.__dict__.update(kwargs)  # parse kwargs input into class attributes
+        self.pred_data = [deepcopy({})]
+
+    def run_fwd_sim(self, state, member):
+        # run simulator. Called from the main function using p_map from p_tqdm package.
+        # Return pred_data if run is successfull, False if run failed.
+        """ http://en.wikipedia.org/wiki/Rosenbrock_function """
+        x = state['vector']
+        x0 = x[:-1]
+        x1 = x[1:]
+        ans = sum((1 - x0) ** 2) + 100 * sum((x1 - x0 ** 2) ** 2)
+        func_value = [{}]
+        func_value[0]['value'] = np.array([ans])
+        return func_value
+
+
+class noSimulation:
+
+    def __init__(self, input_dict):
+        # parse information from the input.
+        # Needs to get datatype, reporttype and reportpoint
+        self.input_dict = input_dict
+        self.true_order = None
+
+    def setup_fwd_run(self, **kwargs):
+        # do whatever initiallization you need.
+        # Useful to initiallize the self.pred_data variable.
+        # self.pred_data is a list of dictionaries. Where each list element represents
+        # a reportpoint and the dictionary should have the datatypes as keys.
+        # Entries in the dictionary are numpy arrays.
+        self.__dict__.update(kwargs)  # parse kwargs input into class attributes
+        # self.pred_data = [deepcopy({})]
+
+    def run_fwd_sim(self, state, member):
+        # run simulator. Called from the main function using p_map from p_tqdm package.
+        # Return pred_data if run is successfull, False if run failed.
+        return [state]
+
