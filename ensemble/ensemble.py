@@ -160,7 +160,7 @@ class Ensemble:
         else:  # List
             state_names = self.keys_en['state']
 
-        # Check if PRIOR_<state names> exists for each entery in STATE
+        # Check if PRIOR_<state names> exists for each entry in STATE
         for name in state_names:
             assert 'prior_' + name in self.keys_en, \
                 'PRIOR_{0} is missing! This keyword is needed to make initial ensemble for {0} entered in ' \
@@ -261,7 +261,7 @@ class Ensemble:
 
                 # Check mean when values have been inputted directly (not when mean has been loaded)
                 if isinstance(mean, list) and len(mean) < nz:
-                    # Check if it is more than one entries and give error
+                    # Check if it is more than one entry and give error
                     assert len(mean) == 1, \
                         'Information from MEAN has been given for {0} layers, whereas {1} is needed!' \
                         .format(len(mean), nz)
@@ -275,7 +275,7 @@ class Ensemble:
 
                 # Check variogram model
                 if len(vario) < nz:
-                    # Check if it is more than one entries and give error
+                    # Check if it is more than one entry and give error
                     assert len(vario) == 1, \
                         'Information from VARIO has been given for {0} layers, whereas {1} is needed!' \
                         .format(len(vario), nz)
@@ -289,7 +289,7 @@ class Ensemble:
 
                 # Variance
                 if len(variance) < nz:
-                    # Check if it is more than one entries and give error
+                    # Check if it is more than one entry and give error
                     assert len(variance) == 1, \
                         'Information from VAR has been given for {0} layers, whereas {1} is needed!' \
                         .format(len(variance), nz)
@@ -303,7 +303,7 @@ class Ensemble:
 
                 # Aniso factor
                 if len(aniso) < nz:
-                    # Check if it is more than one entries and give error
+                    # Check if it is more than one entry and give error
                     assert len(aniso) == 1, \
                         'Information from ANISO has been given for {0} layers, whereas {1} is needed!' \
                         .format(len(aniso), nz)
@@ -317,7 +317,7 @@ class Ensemble:
 
                 # Aniso factor
                 if len(angle) < nz:
-                    # Check if it is more than one entries and give error
+                    # Check if it is more than one entry and give error
                     assert len(angle) == 1, \
                         'Information from ANGLE has been given for {0} layers, whereas {1} is needed!' \
                         .format(len(angle), nz)
@@ -331,7 +331,7 @@ class Ensemble:
 
                 # Corr. length
                 if len(corr_length) < nz:
-                    # Check if it is more than one entries and give error
+                    # Check if it is more than one entry and give error
                     assert len(corr_length) == 1, \
                         'Information from RANGE has been given for {0} layers, whereas {1} is needed!' \
                         .format(len(corr_length), nz)
@@ -347,7 +347,7 @@ class Ensemble:
                 if limits is not None:
                     if isinstance(limits[0], list) and len(limits) < nz or \
                                     not isinstance(limits[0], list) and len(limits) < 2 * nz:
-                        # Check if it is more than one entries and give error
+                        # Check if it is more than one entry and give error
                         assert (isinstance(limits[0], list) and len(limits) == 1), \
                             'Information from LIMITS has been given for {0} layers, whereas {1} is needed!' \
                             .format(len(limits), nz)
@@ -476,7 +476,7 @@ class Ensemble:
         and all data values provided to the simulator.
 
         Optional input:
-                - input_state:          Use a input state instead of internal state (stored in self) to run predictions
+                - input_state:          Use an input state instead of internal state (stored in self) to run predictions
                 - save_prediction       Save the predictions as a <save_prediction>.npz file (numpy compressed file)
 
         Output:
