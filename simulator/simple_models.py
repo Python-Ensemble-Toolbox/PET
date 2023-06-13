@@ -394,36 +394,6 @@ class sevenmountains:
         return member
 
 
-class rosen:
-
-    def __init__(self, input_dict):
-        # parse information from the input.
-        # Needs to get datatype, reporttype and reportpoint
-        self.input_dict = input_dict
-        self.true_order = None
-
-    def setup_fwd_run(self, **kwargs):
-        # do whatever initiallization you need.
-        # Useful to initiallize the self.pred_data variable.
-        # self.pred_data is a list of dictionaries. Where each list element represents
-        # a reportpoint and the dictionary should have the datatypes as keys.
-        # Entries in the dictionary are numpy arrays.
-        self.__dict__.update(kwargs)  # parse kwargs input into class attributes
-        self.pred_data = [deepcopy({})]
-
-    def run_fwd_sim(self, state, member):
-        # run simulator. Called from the main function using p_map from p_tqdm package.
-        # Return pred_data if run is successfull, False if run failed.
-        """ http://en.wikipedia.org/wiki/Rosenbrock_function """
-        x = state['vector']
-        x0 = x[:-1]
-        x1 = x[1:]
-        ans = sum((1 - x0) ** 2) + 100 * sum((x1 - x0 ** 2) ** 2)
-        func_value = [{}]
-        func_value[0]['value'] = np.array([ans])
-        return func_value
-
-
 class noSimulation:
 
     def __init__(self, input_dict):
@@ -433,13 +403,12 @@ class noSimulation:
         self.true_order = None
 
     def setup_fwd_run(self, **kwargs):
-        # do whatever initiallization you need.
-        # Useful to initiallize the self.pred_data variable.
+        # do whatever initialization you need.
+        # Useful to initialize the self.pred_data variable.
         # self.pred_data is a list of dictionaries. Where each list element represents
         # a reportpoint and the dictionary should have the datatypes as keys.
         # Entries in the dictionary are numpy arrays.
         self.__dict__.update(kwargs)  # parse kwargs input into class attributes
-        # self.pred_data = [deepcopy({})]
 
     def run_fwd_sim(self, state, member):
         # run simulator. Called from the main function using p_map from p_tqdm package.
