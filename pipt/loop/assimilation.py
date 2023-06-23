@@ -111,7 +111,7 @@ class Assimilate:
                     qaqc.set(self.ensemble.pred_data, self.ensemble.state, self.ensemble.lam)  # set updated prediction, state and lam
                     qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))  # Level 1,2 all data, and subspace
                     qaqc.calc_coverage()  # Compute data coverage
-                    qaqc.calc_kg()  # Compute kalman gain
+                    qaqc.calc_kg({'plot_all_kg':True,'only_log':False,'num_store':5})  # Compute kalman gain
 
                 success_iter = True
 
