@@ -31,7 +31,6 @@ jobs:
           pdoc
           -o docs-generated
           -t docs/templates
-          --no-show-source
           --math
           pipt
           popt
