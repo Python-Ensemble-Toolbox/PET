@@ -1,0 +1,11 @@
+{#
+    Add logo and tab title
+#}
+{% extends "default/module.html.jinja2" %}
+
+{% set logo = 'https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png?raw=true' %}
+{% set logo_link = '/' %}
+{% set favicon = 'https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png?raw=true' %}
+
+# HTML head (i.e. tab) title
+{% block title %}PET docs: {{ module.modulename }}{% endblock %}
