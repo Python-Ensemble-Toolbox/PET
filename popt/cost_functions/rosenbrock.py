@@ -1,3 +1,4 @@
+"""Rosenbrock objective function."""
 
 def rosenbrock(state, *args):
     """

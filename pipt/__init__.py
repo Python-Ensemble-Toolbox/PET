@@ -1,4 +1,4 @@
-"""Python Inverse Problem Toolbox (PIPT)
+"""Inversion (estimation, data assimilation)
 
 .. include:: ./README.md
 """

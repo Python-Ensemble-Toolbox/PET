@@ -1,3 +1,4 @@
+"""A collection of trivial toy models."""
 # Imports
 import numpy as np  # Misc. numerical tools
 import os  # Misc. system tools

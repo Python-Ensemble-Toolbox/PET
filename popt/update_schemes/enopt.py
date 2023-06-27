@@ -1,3 +1,4 @@
+"""Ensemble optimisation (steepest descent with ensemble gradient)."""
 # External imports
 import numpy as np
 from numpy import linalg as la

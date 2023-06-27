@@ -1,3 +1,4 @@
+"""Wrap Eclipse"""
 # External imports
 import numpy as np
 import sys

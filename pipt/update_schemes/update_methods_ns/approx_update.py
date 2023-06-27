@@ -1,3 +1,5 @@
+"""EnRML (IES) without the prior increment term."""
+
 import numpy as np
 from copy import deepcopy
 import copy as cp

@@ -1,3 +1,4 @@
+"""Fast Gaussian field generation."""
 import sys
 import numpy as np
 from scipy.linalg import toeplitz
