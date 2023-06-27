@@ -1,3 +1,8 @@
+"""
+Sparse representation of seismic data using wavelet compression.
+
+Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
+"""
 import pywt
 import numpy as np
 import sys
@@ -5,8 +10,6 @@ from copy import deepcopy
 import warnings
 
 
-# Define the class for sparse representation of seismic data using wavelet compression.
-# Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
 class SparseRepresentation:
 
     # Initialize

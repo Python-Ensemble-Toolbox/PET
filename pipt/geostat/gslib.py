@@ -1,3 +1,5 @@
+"""Descriptive description."""
+
 import glob
 import os
 import sys

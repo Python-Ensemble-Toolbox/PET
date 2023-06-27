@@ -1,3 +1,4 @@
+"""Quality Assurance of the forecast (QA) and analysis (QC) step."""
 import numpy as np
 import os
 #import matplotlib as mpl

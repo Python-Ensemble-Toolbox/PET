@@ -1,3 +1,4 @@
+"""Net present value."""
 import numpy as np
 
 

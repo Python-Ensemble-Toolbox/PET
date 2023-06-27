@@ -1,5 +1,3 @@
-__author__ = 'kfo005'
-
 """
 Scripts used for localization in the fwd_sim step of Bayes.
 
@@ -19,6 +17,8 @@ Main outline is:
    (taper_func pos(x) pos(y) pos(z) range range(z) anisotropi(ratio) anisotropi(angel) data well assim_time parameter)
 4) Generate functions that return the correct localization function.
 """
+
+__author__ = 'kfo005'
 
 
 import numpy as np
