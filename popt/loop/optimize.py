@@ -68,7 +68,9 @@ class Optimize:
         """
         Extract max. iter from ENOPT keyword in OPTIM part if inputted.
 
-        ST 4/5-18
+        Changelog
+        ---------
+        - ST 4/5-18
         """
         # Default value for max. iterations
         default_max_iter = 50
@@ -144,7 +146,9 @@ class Optimize:
         """
         We use pickle to dump all the information we have in 'self'. Can be used, e.g., if some error has occurred.
 
-        ST 28/2-17
+        Changelog
+        ---------
+        - ST 28/2-17
         """
         # Open save file and dump all info. in self
         with open(self.pickle_restart_file, 'wb') as f:
@@ -154,7 +158,9 @@ class Optimize:
         """
         Load a pickled file and save all info. in self.
 
-        ST 28/2-17
+        Changelog
+        ---------
+        - ST 28/2-17
         """
         # Open file and read with pickle
         with open(self.pickle_restart_file, 'rb') as f:

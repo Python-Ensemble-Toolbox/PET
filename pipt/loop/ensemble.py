@@ -21,8 +21,8 @@ import pipt.misc_tools.analysis_tools as at
 
 class Ensemble(PETEnsemble):
     """
-    Class for organizing/initializing misc. variables and simulator for an ensemble-based inversion run. Inherits the
-    PET ensemble structure
+    Class for organizing/initializing misc. variables and simulator for an
+    ensemble-based inversion run. Inherits the PET ensemble structure
     """
     def __init__(self,keys_da,keys_en,sim):
 
@@ -126,18 +126,17 @@ class Ensemble(PETEnsemble):
         and each entery in the list will be a dictionary with keys equal to the "DATATYPE".
         Also, the pred_data variable (predicted data or forward simulation) will be initialized here with the same
         structure as the obs_data variable.
-        ----------------------------------------------------------------------------------------------------------------
-        OBS: An "N/A" entry in "TRUEDATA" is treated as a None-entry; that is, there is NOT an observed data at this
+
+        .. warning:: An "N/A" entry in "TRUEDATA" is treated as a None-entry; that is, there is NOT an observed data at this
         assimilation step.
 
-        OBS2: The array associated with the first string inputted in "TRUEDATAINDEX" is assumed to be the "main"
+        .. warning:: The array associated with the first string inputted in "TRUEDATAINDEX" is assumed to be the "main"
         index, that is, the length of this array will determine the length of the obs_data list! There arrays
         associated with the subsequent strings in "TRUEDATAINDEX" are then assumed to be a subset of the first
-        string.
-        An example: the first string is SOURCE (e.g., sources in CSEM), where the array will be a list of numbering
+        string.  An example: the first string is SOURCE (e.g., sources in CSEM), where the array will be a list of numbering
         for the sources; and the second string is FREQ, where the array associated will be a list of frequencies.
 
-        NB! It is assumed that the number of data associated with a subset is the same for each index in the subset.
+        .. note:: It is assumed that the number of data associated with a subset is the same for each index in the subset.
         For example: If two frequencies are inputted in FREQ, then the number of data for one SOURCE index and one
         frequency is 1/2 of the total no. of data for that SOURCE index. If three frequencies are inputted, the number
         of data for one SOURCE index and one frequencies is 1/3 of the total no of data for that SOURCE index,
@@ -300,8 +299,8 @@ class Ensemble(PETEnsemble):
         covariance matrix to generate data, the user must supply a Numpy save file with samples, which is loaded here.
         If we want to specify the whole covariance matrix, this can also be done. The user must supply a Numpy save file
         which is loaded here.
-        ----------------------------------------------------------------------------------------------------------------
-        OBS: When relative variance is given as input, we set the variance as (true_obs_data*rel_perc*0.01)**2
+
+        .. warning:: When relative variance is given as input, we set the variance as (true_obs_data*rel_perc*0.01)**2
         BECAUSE we often want this alternative in cases where we "add some percentage of Gaussian noise to the
         observed data". Hence, we actually want some percentage of the true observed data as STANDARD DEVIATION since
         it ultimately is the standard deviation (through square-root decompostion of Cd) that is used when adding
@@ -507,10 +506,10 @@ class Ensemble(PETEnsemble):
         Method to save the state variable during the assimilation. It is stored in a list with length = tot. no.
         assim. steps + 1 (for the init. ensemble). The list of temporary states are also stored as a .npz file.
 
-        Parameter:
-        ---------
+        Parameters
+        ----------
         ind_save : int
-                   Assim. step to save (0 = prior)
+            Assim. step to save (0 = prior)
         """
         # Init. temp. save
         if ind_save == 0:
@@ -524,11 +523,13 @@ class Ensemble(PETEnsemble):
         """
         Save a snapshot of state at current iteration. It is stored in a list with length equal to max. iteration
         length + 1 (due to prior state being 0). The list of temporary states are also stored as a .npz file.
-        OBS: Max. iterations must be defined before invoking this method.
 
-        Parameter:
+        .. warning:: Max. iterations must be defined before invoking this method.
+
+        Parameters
+        ----------
         ind_save : int
-                   Iteration step to save (0 = prior)
+            Iteration step to save (0 = prior)
         """
         # Initial save
         if ind_save == 0:
@@ -543,12 +544,13 @@ class Ensemble(PETEnsemble):
         Save a snapshot of the state during a MDA loop. The temporary state will be stored as a list with length
         equal to the tot. no. of assimilations + 1 (init. ensemble saved in 0 entry). The list of temporary states
         are also stored as a .npz file.
-        OBS: Tot. no. of assimilations must be defined before invoking this method.
+
+        .. warning:: Tot. no. of assimilations must be defined before invoking this method.
 
         Parameter
         ---------
         ind_save : int
-                   Assim. step to save (0 = prior)
+            Assim. step to save (0 = prior)
         """
         # Initial save
         if ind_save == 0:
@@ -563,12 +565,13 @@ class Ensemble(PETEnsemble):
         Save a snapshot of the state during a ML loop. The temporary state will be stored as a list with length
         equal to the tot. no. of assimilations + 1 (init. ensemble saved in 0 entry). The list of temporary states
         are also stored as a .npz file.
-        OBS: Tot. no. of assimilations must be defined before invoking this method.
 
-        Parameter
-        --------
+        .. warning:: Tot. no. of assimilations must be defined before invoking this method.
+
+        Parameters
+        ----------
         ind_save : int
-                   Assim. step to save (0 = prior)
+            Assim. step to save (0 = prior)
         """
         # Initial save
         if ind_save == 0:
@@ -581,15 +584,18 @@ class Ensemble(PETEnsemble):
     def compress(self, data=None, vintage=0, aug_coeff=None):
         """
         Compress the input data using wavelets.
-        Input:
-            - data: data to be compressed
-            - vintage: the time index for the data
-            - aug_coeff: this can be True, False, or None
-                > False: in this case the leading indices for wavelet coefficients are computed
-                > True: in this case the leading indices are augmented using information from the ensemble
-                > None: in this case simulated data is compressed
 
-        If data is None, all data (true and simulated) is re-compressed (used if leading indices are updated)
+        Parameters
+        ----------
+        data:
+            data to be compressed
+            If data is `None`, all data (true and simulated) is re-compressed (used if leading indices are updated)
+        vintage: int
+            the time index for the data
+        aug_coeff: bool
+            - False: in this case the leading indices for wavelet coefficients are computed
+            - True: in this case the leading indices are augmented using information from the ensemble
+            - None: in this case simulated data is compressed
         """
 
         # If input data is None, we re-compress all data

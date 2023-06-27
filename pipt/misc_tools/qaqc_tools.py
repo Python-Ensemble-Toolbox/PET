@@ -20,11 +20,12 @@ class QAQC:
     """
      Perform Quality Assurance of the forecast (QA) and analysis (QC) step.
      Available functions (developed in 4DSEIS project and not available yet):
-        1) calc_coverage: check forecast data coverage
-        2) calc_mahalanobis: evaluate "higher-order" data coverage
-        3) calc_kg: check/write individual gain for parameters;
-                    flag data which have conflicting updates
-        4) calc_da_stat: compute statistics for updated parameters
+
+        - `calc_coverage`: check forecast data coverage
+        - `calc_mahalanobis`: evaluate "higher-order" data coverage
+        - `calc_kg`: check/write individual gain for parameters;
+        -          flag data which have conflicting updates
+        - `calc_da_stat`: compute statistics for updated parameters
 
      Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
      """
@@ -112,11 +113,15 @@ class QAQC:
         Calculate the Data coverage for production and seismic data. For seismic data the plotting is based on the
         importance-scaled coverage developed by Espen O. Lie from GeoCore.
 
-        Input:
-            line: if not None, plot 1d coverage
+        Parameters
+        ----------
+        line : array-like, optional
+            If not None, plot 1D coverage.
 
-        Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        NOTE: Not available in current version of PIPT
+        Notes
+        -----
+        - Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
+        - NOTE: Not available in current version of PIPT
         """
 
 
@@ -129,18 +134,27 @@ class QAQC:
         to write this to the simulation grid. While for other applications, one might want other visualization. Hence,
         the method also depends on a simulator specific writer.
 
-        Input:
-        options: Settings for the kalman gain computations
-            - num_store: number of elements to store (default 10)
-            - unique_time: calculate for each time instance (default False)
-            - plot_all_kg: plot all the kalman gains for the field parameters, if not plot the num_store (default False)
-            - only_log: only write to logger; no plotting (default True)
-            - auto_ada_loc: use localization in computations (default True)
-            - write_to_resinsight: pipe results to ResInsight (default False)
-              (Note: this requires that ResInsight is open on the computer)
+        Parameters
+        ----------
+        options : dict
+            Settings for the Kalman gain computations.
+            - 'num_store' : int, optional
+                Number of elements to store. Default is 10.
+            - 'unique_time' : bool, optional
+                Calculate for each time instance. Default is False.
+            - 'plot_all_kg' : bool, optional
+                Plot all the Kalman gains for the field parameters. If False, plot the num_store. Default is False.
+            - 'only_log' : bool, optional
+                Only write to the logger; no plotting. Default is True.
+            - 'auto_ada_loc' : bool, optional
+                Use localization in computations. Default is True.
+            - 'write_to_resinsight' : bool, optional
+                Pipe results to ResInsight. Default is False. (Note: this requires that ResInsight is open on the computer.)
 
-        Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        NOTE: Not available in current version of PIPT
+        Notes
+        -----
+        - Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
+        - NOTE: Not available in current version of PIPT
         """
 
 
@@ -151,10 +165,14 @@ class QAQC:
         for model improvement. Journal of Petroleum Science and Engineering, 193(February).
         https://doi.org/10.1016/j.petrol.2020.107367"
 
-        Input:
-        combi_list: list of levels and possible combination of datatypes. The list must be given as a tuple with pairs:
-            level int: defines which level. default = 1
-            combi_typ: defines how data are combined: Default is no combine.
+        Parameters
+        ----------
+        combi_list : list
+            List of levels and possible combinations of datatypes. The list must be given as a tuple with pairs:
+            - level : int
+                Defines which level. Default is 1.
+            - combi_typ : str
+                Defines how data are combined. Default is no combine.
 
         Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
         NOTE: Not available in current version of PIPT
@@ -165,10 +183,15 @@ class QAQC:
         Calculate statistics for the updated parameters. The persentage of parameters that have updates larger than one,
         two and three standard deviations (calculated from the initial ensemble) are flagged.
 
-        Input:
-        options: Settings for statistics
-            - write_to_file: write results to .grdecl file (default False)
+        Parameters
+        ----------
+        options : dict
+            Settings for statistics.
+            write_to_file : bool, optional
+                Whether to write results to a .grdecl file. Defaults to False.
 
-        Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        NOTE: Not available in current version of PIPT
+        Notes
+        -----
+        - Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
+        - NOTE: Not available in current version of PIPT
         """

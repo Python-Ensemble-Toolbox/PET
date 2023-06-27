@@ -11,7 +11,7 @@ class Cholesky:
     """
     Class with various geo-statistical algorithms, s.a., generation of covariance, unconditional random variable, etc.
 
-    OBS: In danger of being deprecated due to lack of class structure. May become an assemblage of methods instead.
+    .. danger:: In danger of being deprecated due to lack of class structure. May become an assemblage of methods instead.
     """
     def __init__(self):
         pass
@@ -20,19 +20,29 @@ class Cholesky:
         """
         Function for generating unconditional random realizations of a variable using Cholesky decomposition.
 
-        Input:
-                - mean:             Mean vector or scalar
-                - var:              (Co)variance
-                - number:           No. of realizations
+        Parameters
+        ----------
+        mean : numpy.ndarray or float
+            Mean vector or scalar.
 
-        Optional input:
-                - limits:           Truncation limits
-                - return_chol:      Boolean that indicaties if the sqrt of the covariance should be returned
+        var : numpy.ndarray or float
+            (Co)variance.
 
-        ST 18/6-15: Wholesale copy of code written by Kristian Fossum. Some modification has been done
-        KF 15/6-16: Added option to return sqrt of matrix.
-        ST 24/1-18: Code clean-up.
-        KF 21/3-19: Option to store only diagonal of CD matrix
+        number : int
+            Number of realizations.
+
+        limits : tuple, optional
+            Truncation limits.
+
+        return_chol : bool, optional
+            Boolean indicating if the square root of the covariance should be returned.
+
+        Changelog
+        ---------
+        - ST 18/6-15: Wholesale copy of code written by Kristian Fossum. Some modification has been done
+        - KF 15/6-16: Added option to return sqrt of matrix.
+        - ST 24/1-18: Code clean-up.
+        - KF 21/3-19: Option to store only diagonal of CD matrix
         """
         parsize = len(mean)
         if parsize == 1 or len(var.shape) == 1:
@@ -71,20 +81,38 @@ class Cholesky:
         """
         Function for generating a stationary covariance matrix based on variogram models.
 
-        Input:
-                - x_size,y_size:        No. of grid cells in x and y direction
-                - variance:             Sill
-                - var_range:            Variogram range
-                - aspect:               Ratio between x-axis (major axis) and y-axis
-                - angle:                Rotation of the x-axis. Measured in degrees clockwise
-                - var_type:             Variogram model
+        Parameters
+        ----------
+        x_size : int
+            Number of grid cells in the x-direction.
 
-        Output:
-                - cov:                  Covariance matrix (size: x_size x y_size)
+        y_size : int
+            Number of grid cells in the y-direction.
 
-        ST 18/6-15: Wholesale copy of code written by Kristian Fossum. Some modifications have been made...
-        ------------------------------------------------------------------------------------------------
-        KF 04/11-15: Added two new variogram models: exponentioal and cubic. Also updated the
+        variance : float
+            Sill.
+
+        var_range : float
+            Variogram range.
+
+        aspect : float
+            Ratio between the x-axis (major axis) and y-axis.
+
+        angle : float
+            Rotation of the x-axis. Measured in degrees clockwise.
+
+        var_type : str
+            Variogram model.
+
+        Returns
+        -------
+        cov : numpy.ndarray
+            Covariance matrix (size: x_size x y_size).
+
+        Changelog
+        ---------
+        - ST 18/6-15: Wholesale copy of code written by Kristian Fossum. Some modifications have been made...
+        - KF 04/11-15: Added two new variogram models: exponentioal and cubic. Also updated the
                      coefficients in the spherical model.
         """
         # If var_range is 0, the covariance matrix is diagonal with variance. If var_range != 0, we proceed to make a
@@ -117,19 +145,31 @@ class Cholesky:
         """
         Various 1D analytical variogram models.
 
-        Input:
-            - d:                        Distance
-            - var_range:                Range
-            - variance:                 Variance (value at d=0)
-            - var_type:                 Variogram model
-                'sph:                       Spherical
-                'exp':                      Exponential
-                'cub':                      Cubic
+        Parameters
+        ----------
+        d : float
+            Distance.
 
-        Output:
-            - gamma:                    Covariance value
+        var_range : float
+            Range.
 
-        ST 24/1-18: Moved from gen_cov2d.
+        variance : float
+            Variance (value at d=0).
+
+        var_type : str
+            Variogram model.
+                'sph' : Spherical.
+                'exp' : Exponential.
+                'cub' : Cubic.
+
+        Returns
+        -------
+        gamma : float
+            Covariance value.
+
+        Changelog
+        ---------
+        - ST 24/1-18: Moved from gen_cov2d.
         """
         # Variogram models are for 1-d fields given by equations on pg. 641 in "Geostatistics Modeling spatial
         # uncertainty, J.P. Chiles and P. Delfiner, 2. ed, 2012
@@ -164,14 +204,27 @@ class Cholesky:
         """
         Function for calculating the Euclidean distance of, possibly, anisotropic (rotated and scaled) vectors
 
-        Input:
-                - v1,v2:        Vectors to calculate distance between
-                - r:            Range of variogram
-                - aspect:       Ratio between the x-axis (major axis) and y-axis
-                - rotate:       Rotation of the x-axis. Measured in degrees clockwise
+        Parameters
+        ----------
+        v1 : array_like
+            First vector to calculate distance between.
 
-        Output:
-                - dist:         Euclidean distance between the v1 and v2.
+        v2 : array_like
+            Second vector to calculate distance between.
+
+        r : float
+            Range of the variogram.
+
+        aspect : float
+            Ratio between the x-axis (major axis) and y-axis.
+
+        rotate : float
+            Rotation of the x-axis, measured in degrees clockwise.
+
+        Returns
+        -------
+        dist : float
+            Euclidean distance between v1 and v2.
 
         ST 18/6-15: Wholesale copy of code written by Kristian Fossum. Some modifications have been made...
         """
@@ -201,18 +254,40 @@ class Cholesky:
         """
         Function for generating a stationary covariance matrix based on variogram models.
 
-        Input:
-                - n*:                   No. of grid cells in x, y, and z direction
-                - Sill:                 Covariance at distance 0
-                - var_range:            Variogram range
-                - aspect:               Ratio between x-axis (major axis) and y-axis
-                - angle:                Rotation of the x-axis. Measured in degrees clockwise
-                - var_type:             Variogram model
+        Parameters
+        ----------
+        nx : int
+            Number of grid cells in the x-direction.
 
-        Output:
-                - cov:                  Covariance matrix (nx*ny*nz x nx*ny*nz)
+        ny : int
+            Number of grid cells in the y-direction.
 
-        ST 24/1-18: Expanded 2D cov. model (gen_cov2d) to 3D. This method may be merged with gen_cov2d in the future.
+        nz : int
+            Number of grid cells in the z-direction.
+
+        Sill : float
+            Covariance at distance 0.
+
+        var_range : float
+            Variogram range.
+
+        aspect : float
+            Ratio between the x-axis (major axis) and y-axis.
+
+        angle : float
+            Rotation of the x-axis, measured in degrees clockwise.
+
+        var_type : str
+            Variogram model.
+
+        Returns
+        -------
+        cov : ndarray
+            Covariance matrix (size: nx * ny * nz x nx * ny * nz).
+
+        Changelog
+        ---------
+        - ST 24/1-18: Expanded 2D cov. model (gen_cov2d) to 3D. This method may be merged with gen_cov2d in the future.
         Also, simplified the code a bit.
         """
         # If var_range is 0, the covariance matrix is diagonal with variance. If var_range != 0, we proceed to make a
@@ -243,15 +318,19 @@ class Cholesky:
         and stretching of the coordinate system.
 
         Input:
-                - pos:          Coordinate array (ncoord x 3 array)
-                - ang*:         Rotation angles (see below)
-                - ani*:         Ratio between axes (see below)
+
+        - pos:          Coordinate array (ncoord x 3 array)
+        - ang*:         Rotation angles (see below)
+        - ani*:         Ratio between axes (see below)
 
         Output:
-                - dist:         Euclidean distance(s) between coordinates in pos (size: ncoord x ncoord).
 
-        ST 24/1-18:
-        ----------------------------------------------------------------------------------------------------------------
+        - dist:         Euclidean distance(s) between coordinates in pos (size: ncoord x ncoord).
+
+
+        Notes, ST 24/1-18:
+        ------------------
+
         ROTATION:
         The rotation of the coordinate system follows the logic:
 

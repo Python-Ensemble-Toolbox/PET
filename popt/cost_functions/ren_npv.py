@@ -7,12 +7,21 @@ def ren_npv(pred_data, keys_opt, report):
     """
     Net present value cost function with injection from RENewable energy
 
-    Input:
-        - pred_data_en : ensemble of predicted data
-        - keys_opt : keys with economic data
-        - report : report dates
-    Output:
-        - objective function values (NPV) for all ensemble members
+    Parameters
+    ----------
+    pred_data_en : ndarray
+        Ensemble of predicted data.
+
+    keys_opt : list
+        Keys with economic data.
+
+    report : list
+        Report dates.
+
+    Returns
+    -------
+    objective_values : ndarray
+        Objective function values (NPV) for all ensemble members.
     """
 
     # Get economic values

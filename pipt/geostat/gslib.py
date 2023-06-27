@@ -15,35 +15,54 @@ class Sgsim:
                        corr_range=1, corr_aniso=[1, 1], corr_angl=[0, 0, 0], limits=[-1.0e21, 1.0e21], number=1):
         """
         This script writes the input file for gslib's sequential Gaussian simulation package.
-        Input:
-                        - x_size: Size of field in the x direction
-                        - y_size: Size of field in the y direction
+        Parameters
+        ----------
+        x_size : float
+            Size of the field in the x-direction.
 
-        Optional inputs
-                        - data: directory giving hard data constraints (must be in Geo-EAS format).
-                                Default value does not exist
-                        - var: variance value. (Sill)
-                                Default value gives variance = 1
-                        - mean: Stationary mean.
-                                Default values gives 0
-                        - var_type: Which variogram type should be selected. 1:Spherical, 2:exponential, 3:Gaussian
-                                Default values gives a spherical variogram model
-                        - outfile: Directory of the outfile where the field is written.
-                                Default value if 'foo.out'.
-                        - corr_range: Correlation range,
-                                Default value = 1
-                        - corr_aniso: Correlation anisotropy coefficient [0 1]
-                                Default value = 1 (isotropic)
-                        - corr_angl: Correlation angle (from y-axis)
-                                Default value = 0 (correlation along the y-axis)
-                        - limits: min and max truncation limits
-                                Default values, min: -1.0e21, max: 1.0e21
-                        - number: number of ensemble members
-                                Default value = 1
-        KF 06/11-2015
-        -----------------------------------------------------------------------------------------------------------
-        Note: The sgsim is capable of simulating 3-d fields, however, we have only given paramters for simulation of
-              a 2-D field. Upgrading this
+        y_size : float
+            Size of the field in the y-direction.
+
+        data : str, optional
+            Directory giving hard data constraints in Geo-EAS format. Default value does not exist.
+
+        var : float, optional
+            Variance value (sill). Default value gives variance = 1.
+
+        mean : float, optional
+            Stationary mean. Default value gives 0.
+
+        var_type : int, optional
+            Which variogram type should be selected. 1: Spherical, 2: Exponential, 3: Gaussian.
+            Default value gives a spherical variogram model.
+
+        outfile : str, optional
+            Directory of the output file where the field is written. Default value is 'foo.out'.
+
+        corr_range : float, optional
+            Correlation range. Default value is 1.
+
+        corr_aniso : float, optional
+            Correlation anisotropy coefficient [0, 1]. Default value is 1 (isotropic).
+
+        corr_angl : float, optional
+            Correlation angle (from the y-axis). Default value is 0 (correlation along the y-axis).
+
+        limits : tuple, optional
+            Min and max truncation limits. Default values: min = -1.0e21, max = 1.0e21.
+
+        number : int, optional
+            Number of ensemble members. Default value is 1.
+
+
+        Changelog
+        ---------
+        - KF 06/11-2015
+
+        Notes
+        -----
+        The sgsim is capable of simulating 3-d fields, however, we have only
+        given paramters for simulation of a 2-D field. Upgrading this
         """
 
         # Allocate for use when generating the realizations
@@ -154,24 +173,56 @@ class Sisim:
                        mean=None, facies_var=None):
         """
         This script writes the input file for gslib's sequential indicator simulation program.
-        Input:
-                - x_size: Size of field in x-direction
-                - y_size: Size of field in y-direction
-                - cat:    Number of categories
-                - thresh: Threshold values (must be cat values and iterable)
-                - cdf:    Global CDF or PDF values (must be cat values and iterable)
-                - var_type: list of variogramtyps, as long as cat
-                - var: Variance for the different categories, as long as cat
-        Optional input:
-                - Data:   File with data (if it does not exists => unconditional)
-                - cat_type: variable typw (1=continous, 0=categorical)
-                - M_B:    Markov-Bayes type simulation. 0=no, 1=yes
-                - limits: trimming limits
-                - outfile: string containing name of the file where data are stored
-                - number: number of simulations
-                - corr_range: correlation range in maximum horizontal direction
-                - corr_aniso: Anisotropi factor.
-                - corr_angl: Angle of primary correlation. Defined clockwise around the y-axis.
+
+        Parameters
+        ----------
+        x_size : float
+            Size of the field in the x-direction.
+
+        y_size : float
+            Size of the field in the y-direction.
+
+        cat : int
+            Number of categories.
+
+        thresh : iterable
+            Threshold values for the categories.
+
+        cdf : iterable
+            Global CDF or PDF values for the categories.
+
+        var_type : list
+            List of variogram types, as long as the number of categories.
+
+        var : iterable
+            Variance values for the different categories, as long as the number of categories.
+
+        Data : str, optional
+            File with data. If it does not exist, the simulation is unconditional.
+
+        cat_type : int, optional
+            Variable type. 1 for continuous, 0 for categorical.
+
+        M_B : int, optional
+            Markov-Bayes type simulation. 0 for no, 1 for yes.
+
+        limits : iterable, optional
+            Trimming limits.
+
+        outfile : str, optional
+            Name of the file where the data are stored.
+
+        number : int, optional
+            Number of simulations.
+
+        corr_range : float, optional
+            Correlation range in the maximum horizontal direction.
+
+        corr_aniso : float, optional
+            Anisotropy factor for correlation.
+
+        corr_angl : float, optional
+            Angle of primary correlation. Defined clockwise around the y-axis.
 
         """
         self.outfile = outfile

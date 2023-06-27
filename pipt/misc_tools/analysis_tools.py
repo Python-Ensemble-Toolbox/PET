@@ -508,13 +508,21 @@ def calc_objectivefun(pert_obs,pred_data,Cd):
     """
     Calculate the objective function.
 
-    Input:
-    - pert_obs: NdxNe array containing perturbed observations
-    - pred_data: NdxNe array containing ensemble of predictions
-    - Cd: NdxNd array containing data covariance, or Ndx1 array containing data variance.
+    Parameters
+    ----------
+    pert_obs : array-like
+        NdxNe array containing perturbed observations.
 
-    Return:
-        - data_misfit: Nex1 array containing objective function values
+    pred_data : array-like
+        NdxNe array containing ensemble of predictions.
+
+    Cd : array-like
+        NdxNd array containing data covariance, or Ndx1 array containing data variance.
+
+    Returns
+    -------
+    data_misfit : array-like
+        Nex1 array containing objective function values.
     """
     ne = pred_data.shape[1]
     r = (pred_data - pert_obs)
@@ -555,15 +563,24 @@ def update_datavar(cov_data, datavar, assim_index, list_data):
     Extract the separate variance from an augmented vector. It is assumed that the augmented variance
     is made gen_covdata, hence this is the reverse method of gen_covdata.
 
-    Input:
-            - cov_data :                Augmented vector of variance
-            - datavar:                  Dictionary of separate variances
-            - assim_index:              Assimilation order as a list
-            - list_data:                List of data keys
+    Parameters
+    ----------
+    cov_data : array-like
+        Augmented vector of variance.
 
-    Output:
-            - datavar:                  Dictionary of separate variances
-    """
+    datavar : dict
+        Dictionary of separate variances.
+
+    assim_index : list
+        Assimilation order as a list.
+
+    list_data : list
+        List of data keys.
+
+    Returns
+    -------
+    datavar : dict
+        Updated dictionary of separate variances."""
 
     # Loop over all entries in list_state and extract a vector with same number of elements as the key in datavar
     # determines from aug and replace the values in datavar[key].
@@ -963,23 +980,23 @@ def calc_kalmangain(cov_cross, cov_auto, cov_data, opt=None):
 
     Notes
     -----
-    In the following Kalman gain is \(K\), cross-covariance is \(C_{mg}\), predicted data auto-covariance is \(C_{g}\),
-    and data covariance is \(C_{d}\).
+    In the following Kalman gain is $K$, cross-covariance is $C_{mg}$, predicted data auto-covariance is $C_{g}$,
+    and data covariance is $C_{d}$.
 
     With `'lu'` option, we solve the transposed linear system:
-    \[
+    $$
         K^T = (C_{g} + C_{d})^{-T}C_{mg}^T
-    \]
+    $$
 
     With `'chol'` option we use Cholesky on auto-covariance matrix,
-    \[
+    $$
        L L^T = (C_{g} + C_{d})^T
-    \]
+    $$
     and solve linear system with the square-root matrix from Cholesky:
-    \[
+    $$
         L^T Y = C_{mg}^T\\
         LK = Y
-    \]
+    $$
     """
     if opt is None:
         calc_opt = 'lu'
@@ -1145,8 +1162,8 @@ def aug_state(state, list_state,cell_index=None):
         Fixed list of keys in state dict.
     cell_index: list of vector indexes to be extracted
 
-    Return
-    ----------
+    Returns
+    -------
     aug: ndarray
         Ensemble matrix of augmented state variables
     """

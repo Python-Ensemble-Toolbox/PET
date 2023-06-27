@@ -1,21 +1,26 @@
 """
 Scripts used for localization in the fwd_sim step of Bayes.
 
-28/6-16:
-Initialise major reconstruction of the covariance regularization script.
+Changelog
+---------
+- 28/6-16: Initialise major reconstruction of the covariance regularization script.
 
 Main outline is:
-1) make this a collection of support functions, not a class
-2) initialization will be performed at the initialization of the ensemble class, not at the analysis step. This will
-   return a dictionary of dictionaries, with a triple as key (data_type, assim_time, parameter). From this key the info
-   for a unique localization function can be found as a new dictionary with keys: taper_func, position, anisotropi,
-   range. This is, potentially, a substantial amount of data which should be imported as a npz file. For small cases, it
-   can be defined in the init file in csv form:
-   LOCALIZATION
-   FIELD    10 10
-   fb 2 2 1 5 1 0 WBHP PRO-1 10 PERMX,fb 7 7 1 5 1 0 WBHP PRO-2 10 PERMX,fb 5 5 1 5 1 0 WBHP INJ-1 10 PERMX
-   (taper_func pos(x) pos(y) pos(z) range range(z) anisotropi(ratio) anisotropi(angel) data well assim_time parameter)
-4) Generate functions that return the correct localization function.
+- make this a collection of support functions, not a class
+- initialization will be performed at the initialization of the ensemble class, not at the analysis step. This will
+  return a dictionary of dictionaries, with a triple as key (data_type, assim_time, parameter). From this key the info
+  for a unique localization function can be found as a new dictionary with keys:
+  `taper_func`, `position`, `anisotropi`, `range`.
+  This is, potentially, a substantial amount of data which should be imported
+  as a npz file. For small cases, it can be defined in the init file in csv
+  form:
+
+      LOCALIZATION
+      FIELD    10 10
+      fb 2 2 1 5 1 0 WBHP PRO-1 10 PERMX,fb 7 7 1 5 1 0 WBHP PRO-2 10 PERMX,fb 5 5 1 5 1 0 WBHP INJ-1 10 PERMX
+      (taper_func pos(x) pos(y) pos(z) range range(z) anisotropi(ratio) anisotropi(angel) data well assim_time parameter)
+
+- Generate functions that return the correct localization function.
 """
 
 __author__ = 'kfo005'
@@ -673,14 +678,28 @@ def _calc_distance(data_pos,index_unique,current_data_list,assim_index,obs_data,
     """
     Calculate the distance between data and parameters.
 
-    Input:
-        - data_pos: dictionary containing position of the data
-        - index_unique: boolean that determines if the position is unique
-        - current_data_list: list containing name of data thot should be evaluated
-        - assim_index: The index of data to be evaluated
-        - obs_data: list of dictionaries containing the data
-        - pred_data: list of dictionarios containing the predictions
-        - param_pos: list of tuples for the position of the parameters
+    Parameters
+    ----------
+    data_pos : dict
+        Dictionary containing the position of the data.
+
+    index_unique : bool
+        Boolean that determines if the position is unique.
+
+    current_data_list : list
+        List containing the names of the data that should be evaluated.
+
+    assim_index : int
+        The index of the data to be evaluated.
+
+    obs_data : list of dict
+        List of dictionaries containing the data.
+
+    pred_data : list of dict
+        List of dictionaries containing the predictions.
+
+    param_pos : list of tuple
+        List of tuples representing the position of the parameters.
 
     Returns:
         - dist: list of euclidean distance between the data/parameter pair.

@@ -21,14 +21,17 @@ class lin_1d:
         """
         Two inputs here. A dictionary of keys, or parameter directly.
 
-        Optional input 1:
-                - input_dict:       Dictionary containig all information the run the simulator (may come from,
-                                    e.g., an init file)
+        Parameters
+        ----------
+        input_dict : dict, optional
+            Dictionary containing all information required to run the simulator. It may come from, for example, an init file.
 
-        Optional input 2:
-                - m:                Parameter to make predicted data
+        m : int, optional
+            Parameter to make predicted data.
 
-        ST 7/9-15
+        Changelog
+        ---------
+        - ST 7/9-15
         """
         self.input_dict = input_dict
 
@@ -82,9 +85,10 @@ class nonlin_onedimmodel:
         """
         Two inputs here. A dictionary of keys, or parameter directly.
 
-        Optional input 1:
-                - input_dict:       Dictionary containig all information the run the simulator (may come from,
-                                    e.g., an init file)
+        Parameters
+        ----------
+        input_dict: dict, optional
+            contains all information the run the simulator (may come from, e.g., an init file)
         """
         self.input_dict = input_dict
 
@@ -134,14 +138,16 @@ class sevenmountains:
         """
         Two inputs here. A dictionary of keys, or parameter directly.
 
-        Optional input 1:
-                - input_dict:       Dictionary containing all information the run the simulator (may come from,
-                                    e.g., an init file)
+        Parameters
+        ----------
+        input_dict: dict, optional
+            contains all information the run the simulator (may come from, e.g., an init file)
+        state: any, optional
+            Parameter to make predicted data
 
-        Optional input 2:
-                - state:                Parameter to make predicted data
-
-        ST 9/5-18
+        Changelog
+        ---------
+        - ST 9/5-18
         """
 
         # Inputs
@@ -173,15 +179,20 @@ class sevenmountains:
         """
         Extract the manditory and optional information from the input_dict dictionary.
 
-        Input:
-            - input_dict:       Dictionary containing all information required to run the simulator. (Defined in self)
 
-        Output:
-            - filename:         Name of the .mako file utilized to generate the ecl input .DATA file.
+        Parameters
+        ----------
+        input_dict : dict
+            Dictionary containing all information required to run the simulator. (Defined in self)
 
+        Returns
+        -------
+        filename : str
+            Name of the .mako file utilized to generate the ecl input .DATA file.
 
-        KF 14/9-2015
-        ----------------------------------------------------------------------------------------------------------------
+        Changelog
+        ---------
+        - KF 14/9-2015
         """
         # In the ecl framework, all reference to the filename should be uppercase
         # self.file = self.input_dict['runfile'].upper()
@@ -223,14 +234,22 @@ class sevenmountains:
         Set input parameters from an fwd_sim in the simulation to get predicted data. Parameters can be an ensemble or
         a single array.
 
-        Input:
-                - state:        Dictionary of input parameter. Either single 'state' or an ensemble of 'state'
+        Parameters
+        ----------
+        state : dict
+            Dictionary of input parameter. It can be either a single 'state' or an ensemble of 'state'.
 
-        NOT used input:
-                - true_ind:    The list of the observed data assimilation indices
-                - assim_ind:   List with info. on assimilation order for ensemble-based methods
+        Other Parameters
+        ----------------
+        true_ind : list
+            The list of observed data assimilation indices.
 
-        ST 3/6-16
+        assim_ind : list
+            List with information on assimilation order for ensemble-based methods.
+
+        Changelog
+        ---------
+        - ST 3/6-16
         """
 
         # Extract parameter
@@ -241,11 +260,17 @@ class sevenmountains:
         Set up and run a forward simulation in an fwd_sim. The parameters for the forward simulation is set in
         setup_fwd_run. All the steps to set up and run a forward simulation is done in this object.
 
-        Optional input:
-                - en_member:                Index of ensemble member to be run
-                - folder:                   Folder where forward simulation is run
+        Parameters
+        ----------
+        en_member : int, optional
+            Index of the ensemble member to be run.
 
-        ST 3/6-16
+        folder : str, optional
+            Folder where the forward simulation is run.
+
+        Changelog
+        ---------
+        - ST 3/6-16
         """
         # Set free parameter to fixed
         if self.m_inv.ndim > 1:  # Ensemble matrix
@@ -268,16 +293,19 @@ class sevenmountains:
         """
         Run the simple 1D forward model
 
-        Optional input:
-                - path:             Alternative folder where the MARE2DEM input files are located
+        Parameters
+        ----------
+        path : str, optional
+            Alternative folder where the MARE2DEM input files are located.
 
-        Input NOT used:
-                - wait_for_proc:    Logical variable to wait for simulation to be finished
+        Returns
+        -------
+        d : object
+            Predicted data.
 
-        Output:
-            - d:                    Predicted data
-
-        ST 3/6-16
+        Changelog
+        ---------
+        - ST 3/6-16
         """
         # Save path
         if path is not None:
@@ -313,19 +341,22 @@ class sevenmountains:
         """
         Get forward simulation results. Simply load the numpy array...
 
-        Input:
-                - which_resp:           Which of the responses is to be outputted (just one data type in this case)
+        Parameters
+        ----------
+        which_resp : str
+            Specifies which of the responses is to be outputted (just one data type in this case).
 
-        Optional input:
-                - member:               Ensemble member that is finished
+        member : int, optional
+            Ensemble member that is finished.
 
-        Input NOT used
-                - ext_data_info.        At what place is the assimilation step
+        Returns
+        -------
+        y : numpy.ndarray
+            Array containing the predicted data (response).
 
-        Output:
-                - y:                    Array containing the predicted data (response).
-
-        ST 3/6-16
+        Changelog
+        ---------
+        - ST 3/6-16
         """
 
         # Ensemble runs
@@ -371,13 +402,19 @@ class sevenmountains:
         there can possibly be several folders with simulations, and each folder must be checked for finished runs. To
         check if simulation is done we search for .resp file which is the output in a successful  run.
 
-        Input:
-            - current_run:          List of ensemble members currently running simulation
+        Parameters
+        ----------
+        current_run : list
+            List of ensemble members currently running simulation.
 
-        Output:
-            - member:               Ensemble member that is finished
+        Returns
+        -------
+        member : int
+            Ensemble member that is finished.
 
-        ST 9/5-18
+        Changelog
+        ---------
+        - ST 9/5-18
         """
 
         # Initialize output

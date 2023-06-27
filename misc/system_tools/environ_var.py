@@ -12,32 +12,32 @@ class OpenBlasSingleThread:
     and outside the statement is run using whatever the environment variable was set before the 'with'-statement.
     The environment variable setting threading in OpenBLAS is OMP_NUM_THREADS.
 
-    Ex:
+    Example
+    -------
 
-    from system_tools.environ_var import OpenBlasSingleThread
-    import ctypes
-    import multiprocessing as mp
-
-    def justdoit():
-        # Load OpenBLAS library and print number of threads
-        openblas_lib = ctypes.cdll.LoadLibrary('/scratch/openblas/lib/libopenblas.so')
-        print(openblas_lib.openblas_get_num_threads())
-
-
-    if __name__ == "__main__":
-        # Load OpenBLAS library and print number of threads before the with-statement
-        openblas_lib = ctypes.cdll.LoadLibrary('/scratch/openblas/lib/libopenblas.so')
-        print(openblas_lib.openblas_get_num_threads())
-
-        # Run a Process inside the with-statement with the OpenBlasSingleThread class.
-        with OpenBlasSingleThread ():
-            p = mp.Process (target=justdoit)
-            p.start ()
-            p.join ()
-
-        # Load OpenBLAS library and print number of threads before the with-statement
-        openblas_lib = ctypes.cdll.LoadLibrary('/scratch/openblas/lib/libopenblas.so')
-        print(openblas_lib.openblas_get_num_threads())
+    >>> from system_tools.environ_var import OpenBlasSingleThread
+    ... import ctypes
+    ... import multiprocessing as mp
+    ...
+    ... def justdoit():
+    ...     # Load OpenBLAS library and print number of threads
+    ...     openblas_lib = ctypes.cdll.LoadLibrary('/scratch/openblas/lib/libopenblas.so')
+    ...     print(openblas_lib.openblas_get_num_threads())
+    ...
+    ... if __name__ == "__main__":
+    ...     # Load OpenBLAS library and print number of threads before the with-statement
+    ...     openblas_lib = ctypes.cdll.LoadLibrary('/scratch/openblas/lib/libopenblas.so')
+    ...     print(openblas_lib.openblas_get_num_threads())
+    ...
+    ...     # Run a Process inside the with-statement with the OpenBlasSingleThread class.
+    ...     with OpenBlasSingleThread ():
+    ...         p = mp.Process (target=justdoit)
+    ...         p.start ()
+    ...         p.join ()
+    ...
+    ... # Load OpenBLAS library and print number of threads before the with-statement
+    ... openblas_lib = ctypes.cdll.LoadLibrary('/scratch/openblas/lib/libopenblas.so')
+    ... print(openblas_lib.openblas_get_num_threads())
     """
 
     def __init__(self):
@@ -45,13 +45,18 @@ class OpenBlasSingleThread:
         Init. the class with no inputs. Use this to initialize internal variables for storing number of threads an
         the Process context manager before the change to single thread.
 
-        Within:
-            - num_threads:              String with number of OpenBLAS threads before change to single threaded (it
-                                        is the content of OMP_NUM_THREADS)
-            - ctx:                      The context variable from Process (default is 'fork' context, but we want to
-                                        use 'spawn')
+        Parameters
+        ----------
+        num_threads:
+            String with number of OpenBLAS threads before change to single
+            threaded (it is the content of OMP_NUM_THREADS)
+        ctx:
+            The context variable from Process (default is 'fork' context, but
+            we want to use 'spawn')
 
-        ST 31/10-17
+        Changelog
+        ---------
+        - ST 31/10-17
         """
         self.num_threads = ''
         self.ctx = None
@@ -60,7 +65,9 @@ class OpenBlasSingleThread:
         """
         Method that is run when class is initiated by a 'with'-statement
 
-        ST 31/10-17
+        Changelog
+        ---------
+        - ST 31/10-17
         """
         # Save OMP_NUM_THREADS environment variable to restore later
         if 'OMP_NUM_THREADS' in os.environ:
@@ -88,7 +95,9 @@ class OpenBlasSingleThread:
         Method that is run when 'with'-statement closes. Here, we reset OMP_NUM_THREADS and Process context to what
         is was set to before the 'with'-statement. Input here in this method are required to work in 'with'-statement.
 
-        ST 31/10-17
+        Changelog
+        ---------
+        - ST 31/10-17
         """
         # Check if there was any OMP_NUM_THREADS at all before the with-statement, and reset it thereafter.
         if len(self.num_threads):
@@ -113,16 +122,27 @@ class CmgRunEnvironment:
         We initialize the context manager by setting up correct paths and environment variable names that we set in
         __enter__.
 
-        Input (all strings!):
-            - root:             Root folder where CMG simulator(s) are installed
-            - simulator:        Simulator name
-            - version:          Version of the simulator
-            - license:          License server name
+        Parameters
+        ----------
+        root : str
+            Root folder where CMG simulator(s) are installed.
 
-        ST 25/10-18
-        ----------------------------------------------------------------------------------------------------------------
-        NOTE:
-            'version' is the release version of CMG, e.g., 2017.101.G.
+        simulator : str
+            Simulator name.
+
+        version : str
+            Version of the simulator.
+
+        license : str
+            License server name.
+
+        Changelog
+        ---------
+        - ST 25/10-18
+
+        Notes
+        -----
+        'version' is the release version of CMG, e.g., 2017.101.G.
         """
         # In
         self.root = root
@@ -155,7 +175,9 @@ class CmgRunEnvironment:
         """
         Method that is run when class is initiated by a 'with'-statement
 
-        ST 25/10-18
+        Changelog
+        ---------
+        - ST 25/10-18
         """
         # Append if environment variable already exist, or generate it if not.
         # We also save all environment variables that we intend to alter, so we can restore them when closing the
@@ -197,7 +219,9 @@ class CmgRunEnvironment:
         what is was set to before the 'with'-statement. Input here in this method are required to work in
         'with'-statement.
 
-        ST 25/10-18
+        Changelog
+        ---------
+        - ST 25/10-18
         """
         # Reset PATH and LD_LIBRARY_PATH to what they were before our intervention. If they were not set we delete
         # them from the environment variables
@@ -227,12 +251,14 @@ class OPMRunEnvironment:
 
     def __init__(self, filename, suffix, matchstring):
         """
-        input
-        filename: OPM run file, needed to check for errors (string)
-        suffix: What file to search for complete sign
-        matchstring: what is the complete sign
-        KF 30/10-19
-        ----------------------------------------------------------------------------------------------------------------
+
+        - filename: OPM run file, needed to check for errors (string)
+        - suffix: What file to search for complete sign
+        - matchstring: what is the complete sign
+
+        Changelog
+        ---------
+        - KF 30/10-19
         """
         self.filename = filename
         self.suffix = suffix
@@ -242,7 +268,9 @@ class OPMRunEnvironment:
         """
         Method that is run when class is initiated by a 'with'-statement
 
-        KF 30/10-19
+        Changelog
+        ---------
+        - KF 30/10-19
         """
         # Append if environment variable already exist, or generate it if not.
         # We also save all environment variables that we intend to alter, so we can restore them when closing the
@@ -266,7 +294,9 @@ class OPMRunEnvironment:
         what it was set to before the 'with'-statement. Input here in this method are required to work in
         'with'-statement.
 
-        ST 25/10-18
+        Changelog
+        ---------
+        - ST 25/10-18
         """
         # Reset PATH and LD_LIBRARY_PATH to what they were before our intervention. If they were not set we delete
         # them from the environment variables
@@ -293,10 +323,12 @@ class FlowRockRunEnvironment:
 
     def __init__(self, filename):
         """
-        input
-        filename: dummy run file
-        KF 30/10-19
-        ----------------------------------------------------------------------------------------------------------------
+
+        - filename: dummy run file
+
+        Changelog
+        ---------
+        - KF 30/10-19
         """
         self.filename = filename
 
@@ -304,7 +336,9 @@ class FlowRockRunEnvironment:
         """
         Method that is run when class is initiated by a 'with'-statement
 
-        KF 30/10-19
+        Changelog
+        ---------
+        - KF 30/10-19
         """
         # Append if environment variable already exist, or generate it if not.
         # We also save all environment variables that we intend to alter, so we can restore them when closing the
@@ -328,7 +362,9 @@ class FlowRockRunEnvironment:
         what is was set to before the 'with'-statement. Input here in this method are required to work in
         'with'-statement.
 
-        ST 25/10-18
+        Changelog
+        ---------
+        - ST 25/10-18
         """
         # Reset PATH and LD_LIBRARY_PATH to what they were before our intervention. If they were not set we delete
         # them from the environment variables
@@ -359,8 +395,9 @@ class EclipseRunEnvironment:
         input
         filename: eclipse run file, needed to check for errors (string)
 
-        KF 30/10-19
-        ----------------------------------------------------------------------------------------------------------------
+        Changelog
+        ---------
+        - KF 30/10-19
         """
         self.filename = filename
 
@@ -368,7 +405,9 @@ class EclipseRunEnvironment:
         """
         Method that is run when class is initiated by a 'with'-statement
 
-        KF 30/10-19
+        Changelog
+        ---------
+        - KF 30/10-19
         """
         # Append if environment variable already exist, or generate it if not.
         # We also save all environment variables that we intend to alter, so we can restore them when closing the
@@ -392,7 +431,9 @@ class EclipseRunEnvironment:
         what is was set to before the 'with'-statement. Input here in this method are required to work in
         'with'-statement.
 
-        ST 25/10-18
+        Changelog
+        ---------
+        - ST 25/10-18
         """
         # Reset PATH and LD_LIBRARY_PATH to what they were before our intervention. If they were not set we delete
         # them from the environment variables
