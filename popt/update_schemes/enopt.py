@@ -4,6 +4,7 @@ import numpy as np
 from numpy import linalg as la
 from copy import deepcopy
 import logging
+import sys
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot, basic_tools as bt
@@ -52,6 +53,8 @@ class EnOpt(PETEnsemble):
         self.ne = self.num_models
         for key in self.state.keys():
             self.state[key] = np.array(self.state[key])  # make sure state is a numpy array
+        if self.num_models > 1:
+            self.aux_input = list(np.arange(self.num_models))
         np.savez('ini_state.npz', **self.state)
         self.calc_prediction()
         self.num_func_eval += self.ne
@@ -89,7 +92,10 @@ class EnOpt(PETEnsemble):
 
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
             normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-6)
-            new_step = alpha * self.sens_matrix / normalize + beta * self.step
+            H = 1
+            if self.hessian:
+                H = 1 / np.diag(self.cov_sens_matrix)
+            new_step = alpha * H * self.sens_matrix / normalize + beta * self.step
 
             # Calculate updated state
             aug_state_upd = aug_state + np.squeeze(new_step)
@@ -102,6 +108,8 @@ class EnOpt(PETEnsemble):
             self.state = ot.update_optim_state(aug_state_upd, self.state, list_states)
             self.ne = self.num_models
             self._invert_scale_state()
+            if self.num_models > 1:
+                self.aux_input = list(np.arange(self.num_models))
             run_success = self.calc_prediction()
             self.num_func_eval += self.ne
             new_func_values = 0
@@ -251,6 +259,13 @@ class EnOpt(PETEnsemble):
             if self.num_models > 1:
                 self.aux_input = list(np.arange(self.num_models))
 
+            # Check if Hessian should be used
+            ind_hessian = bt.index2d(enopt, 'hessian')
+            if ind_hessian is None:  # num_models does not exist
+                self.hessian = None
+            else:  # use Hessian
+                self.hessian = True
+
             value_cov = np.array([])
             for name in self.prior_info.keys():
                 self.state[name] = self.prior_info[name]['mean']
@@ -284,6 +299,14 @@ class EnOpt(PETEnsemble):
 
         # Generate ensemble of states
         self.ne = self.num_samples
+        nr = 1
+        if self.num_models > 1:
+            if np.remainder(self.num_samples, self.num_models) == 0:
+                nr = self.num_samples / self.num_models
+                self.aux_input = list(np.repeat(np.arange(self.num_models), nr))
+            else:
+                print('num_samples must be a multiplum of num_models!')
+                sys.exit(0)
         self.state = self._gen_state_ensemble()
         self._invert_scale_state()
         self.calc_prediction()
@@ -297,7 +320,7 @@ class EnOpt(PETEnsemble):
         list_states = list(self.state.keys())
         aug_state = at.aug_state(self.state, list_states)
         pert_state = aug_state - np.dot(aug_state.mean(1)[:, None], np.ones((1, self.ne)))
-        pert_obj_func = obj_func_values - np.array(self.obj_func_values)
+        pert_obj_func = obj_func_values - np.array(np.repeat(self.obj_func_values, nr))
 
         # Calculate cross-covariance between state and obj. func. which is the ensemble sensitivity matrix
         # self.sens_matrix = at.calc_crosscov(aug_state, obj_func_values)
