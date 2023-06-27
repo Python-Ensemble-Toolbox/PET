@@ -11,15 +11,26 @@ def fast_gaussian(dimension, sdev, corr):
     """
     Generates random vector from distribution satisfying Gaussian variogram in dimension up to 3-d.
 
-    Input:
-    - dimension  Dimension of grid
-    - sdev       Standard deviation
-    - corr       Correlation length, in units of block length.
-                 Corr may be replaced with a vector of length 3 with correlation length in x-, y- and z-direction.
+    Parameters
+    ----------
+    dimension : int
+        Dimension of the grid.
 
-    Output:
-    - x          Random vector.
+    sdev : float
+        Standard deviation.
 
+    corr : float or array-like
+        Correlation length, in units of block length.
+        If a single float is provided, it represents the correlation length in all directions.
+        If an array-like object with length 3 is provided, it represents the correlation length in the x-, y-, and z-directions.
+
+    Returns
+    -------
+    x : array-like
+        The generated random vector.
+
+    Notes
+    -----
     The parametrization of the grid is assumed to have size dimension, if dimension is a vector,
     or [dimension,1] if dimension is scalar. The coefficients of the grid is assumed to be reordered
     columnwise into the parameter vector. The grid is assumed to have a local basis.
@@ -29,15 +40,15 @@ def fast_gaussian(dimension, sdev, corr):
     Want to generate a field on a 3-d grid with dimension m x n x p, with correlation length a along first coordinate
     axis, b along second coordinate axis, c alone third coordinate axis, and standard deviation sigma:
 
-      x=fast_gaussian(np.array([m, n, p]),np.array([sigma]),np.array([a b c]))
+    >>> x=fast_gaussian(np.array([m, n, p]),np.array([sigma]),np.array([a b c]))
 
     If the dimension is n x 1 one can write
 
-      x=fast_gaussian(np.array([n]),np.array([sigma]),np.array([a]))
+    >>> x=fast_gaussian(np.array([n]),np.array([sigma]),np.array([a]))
 
     If the correlation length is the same in all directions:
 
-      x=fast_gaussian(np.array([m n p]),np.array([sigma]),np.array([a]))
+    >>> x=fast_gaussian(np.array([m n p]),np.array([sigma]),np.array([a]))
 
     The properties on the Kronecker product behind this algorithm can be found in
     Horn & Johnson: Topics in Matrix Analysis, Cambridge UP, 1991.
