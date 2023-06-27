@@ -6,12 +6,21 @@ def npv(pred_data, keys_opt, report):
     """
     Net present value cost function
 
-    Input:
-        - pred_data_en : ensemble of predicted data
-        - keys_opt : keys with economic data
-        - report : report dates
-    Output:
-        - objective function values (NPV) for all ensemble members
+    Parameters
+    ----------
+    pred_data_en : array_like
+        Ensemble of predicted data.
+
+    keys_opt : list
+        Keys with economic data.
+
+    report : list
+        Report dates.
+
+    Returns
+    -------
+    objective_values : array_like
+        Objective function values (NPV) for all ensemble members.
     """
 
     values = []

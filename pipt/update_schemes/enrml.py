@@ -793,7 +793,9 @@ class gn_enrml(lmenrmlMixIn):
 
     def calc_analysis(self):
         """
-        KF 25/2-20
+        Changelog
+        ---------
+        - KF 25/2-20
         """
         # Get assimilation order as a list
         assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
@@ -947,21 +949,35 @@ class gn_enrml(lmenrmlMixIn):
         Check if GN-EnRML have converged based on evaluation of change sizes of objective function, state and damping
         parameter. Very similar to original function, but exit if there is no reduction in obj. function.
 
-        Input:
-                - prev_data_misfit:     Data misfit calc. from previous update
-                - step:                 Step size
-                - lam:                  LM damping parameter
+        Parameters
+        ----------
+        prev_data_misfit : float
+            Data misfit calculated from the previous update.
 
-        Output:
-                - conv:                 Logic variable telling if algorithm has converged
-                - status:               Did the objective function reduce
-                - why_stop:             Dict. with key corresponding to conv. criteria, with logical variable telling
-                                        which of them that has been met
+        step : float
+            Step size.
 
-        ST 3/6-16
-        ST 6/6-16: Added LM damping param. check
-        KF 16/11-20: Modified for GN-EnRML
-        KF 10/3-21: Output whether the method reduced the objective function
+        lam : float
+            LM damping parameter.
+
+        Returns
+        -------
+        conv : bool
+            Logic variable indicating if the algorithm has converged.
+
+        status : bool
+            Indicates whether the objective function has reduced.
+
+        why_stop : dict
+            Dictionary with keys corresponding to convergence criteria, with logical variables indicating
+            which of them has been met.
+
+        Changelog
+        ---------
+        - ST 3/6-16
+        - ST 6/6-16: Added LM damping param. check
+        - KF 16/11-20: Modified for GN-EnRML
+        - KF 10/3-21: Output whether the method reduced the objective function
         """
         # Prelude to calc. conv. check (everything done below is from calc_analysis)
         if hasattr(self, 'list_datatypes'):

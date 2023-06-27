@@ -31,6 +31,7 @@ jobs:
           pdoc
           -o docs-generated
           -t docs/templates
+          --docformat=numpy
           --math
           pipt
           popt

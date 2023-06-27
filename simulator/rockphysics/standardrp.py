@@ -17,17 +17,15 @@ class elasticproperties:
     Report 1 in Abul Fahimuddin's thesis at Universty of
     Bergen (2010) for other properties.
 
-
-    Example:
-
-    porosity = 0.2
-    pressure = 5
-    phases = ["Oil","Water"]
-    saturations = [0.3, 0.5]
-
-    satrock = Elasticproperties()
-    satrock.calc_props(phases, saturations, pressure,
-                       porosity)
+    Example
+    -------
+    >>> porosity = 0.2
+    ... pressure = 5
+    ... phases = ["Oil","Water"]
+    ... saturations = [0.3, 0.5]
+    ...
+    ... satrock = Elasticproperties()
+    ... satrock.calc_props(phases, saturations, pressure, porosity)
     """
 
     def __init__(self, input_dict):
@@ -70,11 +68,14 @@ class elasticproperties:
         Setup the input parameters to be used in the PEM simulator. Parameters can be a an ensemble or a single array.
         State is set as an attribute of the simulator, and the correct value is determined in self.pem.calc_props()
 
-        Input:
-            - state: Dictionary of input parameters (or states)
+        Parameters
+        ----------
+        state : dict
+            Dictionary of input parameters or states.
 
-        KF 11/12-2018
-        ---------------------------------------------------------------------------------------------------------------
+        Changelog
+        ---------
+        - KF 11/12-2018
         """
         #self.inv_state = {}
         #list_pem_param =[el for el in [foo for foo in self.pem['garn'].keys()] + [foo for foo in self.filter.keys()] +

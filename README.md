@@ -2,34 +2,52 @@
 <img src="https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png" width="300">
 </h1><br>
 
-PET is a toolbox for ensemble based Data-Assimilation developed and maintained by the data-assimilation and optimization group at NORCE Norwegian Research Centre AS.
+PET is a toolbox for ensemble based Data-Assimilation developed and maintained
+by the data assimilation and optimization group
+at NORCE Norwegian Research Centre AS.
+
+![CI status](https://github.com/Python-Ensemble-Toolbox/PET/actions/workflows/tests.yml/badge.svg)
 
 
 ## Installation
 
-Two tips before installation: use virtual environments and add your SSH key to Github! You can read more about virtual environments [here](https://docs.python.org/3/tutorial/venv.html) and adding SSH key [here](https://help.github.com/en/articles/adding-a-new-ssh-key-to-your-github-account).
+Two tips before installation: use virtual environments and add your SSH key to
+Github! You can read more about virtual environments
+[here](https://docs.python.org/3/tutorial/venv.html) and adding SSH key [here](https://help.github.com/en/articles/adding-a-new-ssh-key-to-your-github-account).
 
 To install PET, first clone the repo with (assuming you have added the SSH key)
 
-```
+```sh
 git clone git@github.com:Python-Ensemble-Toolbox/PET.git PET
 ```
 
-Make sure you have the latest version of pip and setuptools:
+Make sure you have the latest version of `pip` and `setuptools`:
 
-```
+```sh
 python3 -m pip install --upgrade pip setuptools
 ```
 
+Optionally (but recommended): Create and activate a virtual environment:
+
+```sh
+python3 -m venv venv-PET
+source venv-PET/bin/activate
+```
+
+If you do not install PET inside a virtual environment,
+you may have to include the `--user` option in the following
+(to install to your local Python site packages, usually located in `~/.local`).
+
 Inside the PET folder, run
 
-```
+```sh
 python3 -m pip install -e .
 ```
 
-Note that the ```-e``` option installs the package in a way you can make changes to the source code and have the changes take effect immediately (no re-installation required). Alternatively, you can install with ``` python3 -m pip install .``` where it installs it like a third-party package. Note also that if you do not install PET inside a virtual environment, you may have to add a ```--user``` option to install to your local Python site packages (usually located in ```~/.local```).
+- The dot is needed to point to the current directory.
+- The `-e` option installs PET such that changes to it take effect immediately
+  (without re-installation).
 
 ## Examples
 
 PET needs to be setup with a configuration file. See the example folder for inspiration.
-

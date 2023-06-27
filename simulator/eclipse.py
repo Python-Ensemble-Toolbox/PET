@@ -27,8 +27,9 @@ class eclipse:
 
     To run this class, eclipse must be installed and elcrun must be in the system path!
 
-    KF 11/9-2015
-    --------------------------------------------------------------------------------------------------------------------
+    Changelog
+    ---------
+    - KF 11/9-2015
     """
 
     def __init__(self, input_dict=None, filename=None, options=None):
@@ -37,21 +38,27 @@ class eclipse:
         input_dict can be utilized as a single input. Here all nescessary info is stored. Alternatively, if input_dict
         is not defined, all the other input variables must be defined.
 
-        Input option 1:
-            - input_dict:       Dictionary containing all information required to run the simulator.
+        Parameters
+        ----------
+        input_dict : dict, optional
+            Dictionary containing all information required to run the simulator.
 
-        Input option 2:
-            - filename:         Name of the .mako file utilized to generate the ecl input .DATA file. Must be upper case
-                                for the ecl simulator
-            - options:          Dict. with options for simulator
-                'sim_path':         Path to simulator
+        filename : str, optional
+            Name of the .mako file utilized to generate the ECL input .DATA file. Must be in uppercase for the ECL simulator.
 
-        Output:
-            A initial object from the class ecl_100
+        options : dict, optional
+            Dictionary with options for the simulator.
+            - 'sim_path' : str
+                Path to the simulator.
 
+        Returns
+        -------
+        initial_object : object
+            Initial object from the class ecl_100.
 
-        KF 11/9-2015
-        ----------------------------------------------------------------------------------------------------------------
+        Changelog
+        ---------
+        - KF 11/9-2015
         """
 
         # IN
@@ -72,12 +79,15 @@ class eclipse:
         """
         Extract the manditory and optional information from the input_dict dictionary.
 
-        Input:
-            - input_dict:       Dictionary containing all information required to run the simulator. (Defined in self)
+        Parameters
+        ----------
+        input_dict : dict
+            Dictionary containing all information required to run the simulator (defined in self).
 
-        Output:
-            - filename:         Name of the .mako file utilized to generate the ecl input .DATA file.
-        ----------------------------------------------------------------------------------------------------------------
+        Returns
+        -------
+        filename : str
+            Name of the .mako file utilized to generate the ECL input .DATA file.
         """
         # Chech for mandatory keys
         assert 'reporttype' in self.input_dict, 'Reporttype is missing, please specify this'
@@ -194,11 +204,13 @@ class eclipse:
         """
         Setup the simulator.
 
-        Optional input:
-            - assimIndex: Gives the index-type (e.g. step,time,etc.) and the index for the data to be
-                          assimilated
-            - trueOrder: Gives the index-type (e.g. step,time,etc.) and the index of the true data
-        ---------------------------------------------------------------------------------------------------------------
+        Parameters
+        ----------
+        assimIndex: int
+            Gives the index-type (e.g. step,time,etc.) and the index for the
+            data to be assimilated
+        trueOrder:
+            Gives the index-type (e.g. step,time,etc.) and the index of the true data
         """
         self.__dict__.update(kwargs)  # parse kwargs input into class attributes
 
@@ -242,11 +254,16 @@ class eclipse:
         This method is based on writing .DATA file for each ensemble member using the mako template, for more info
         regarding mako see http://www.makotemplates.org/
 
-        Input:
-            - state:   Dictonary containing the ensemble state
-            - member_i:    Index of ensemble member
-            - Del folder:    Boolean to determine if ensemble folder should be deleted
-        ---------------------------------------------------------------------------------------------------------------
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing the ensemble state.
+
+        member_i : int
+            Index of the ensemble member.
+
+        del_folder : bool, optional
+            Boolean to determine if the ensemble folder should be deleted. Default is False.
         """
         if hasattr(self,'level'):
             state['level'] = self.level
@@ -325,17 +342,18 @@ class eclipse:
         ensemble folder, and the eclipse calculates the upscaled permeabilities, porosities and transmissibilities
         based on the new grid and the original parameter values.
 
-        Input:
-            - Folder: Path to the ecl_100 run
+        Parameters
+        ----------
+        Folder : str, optional
+            Path to the ecl_100 run folder.
 
-        Alternative input:
-            - ensembleMember: Index of the ensemble member to run
+        ensembleMember : int, optional
+            Index of the ensemble member to run.
 
-        KF 17/9-2015
-        ---------------
-        Added uniform upscaling as an option
-        KF 6/01-17
-        ---------------------------------------------------------------------------------------------------------------
+        Changelog
+        ---------
+        - KF 17/9-2015 Added uniform upscaling as an option
+        - KF 6/01-17
         """
 
         # Get the parameter values for the current ensemble member. Note that we select only one parameter
@@ -365,13 +383,21 @@ class eclipse:
     def write_coarse(self, folder, whgt, image):
         """
         This function writes the include file coarsen to the ecl run. This file tels ECL to coarsen the grid.
-        Input:
-            - folder:   Path to the ecl_100 run
-            - whgt:     Weight of the transformed cells
-            - image:    original image
 
-        KF 17/9-2015
-        ---------------------------------------------------------------------------------------------------------------
+        Parameters
+        ----------
+        folder : str
+            Path to the ecl_100 run.
+
+        whgt : float
+            Weight of the transformed cells.
+
+        image : array-like
+            Original image.
+
+        Changelog
+        ---------
+        - KF 17/9-2015
         """
 
         well = self.upscale['wells']
@@ -462,14 +488,19 @@ class eclipse:
         """
         The 2D unconditional Haar transform.
 
-        Input:
-            - image:    The original image where the Haar-transform is performed. This could e.g. be the permeability
-                        or the porosity field.
-            - Orig weights: the orignal weights of the image. If some cells are in-active or dead their weight can be
-                            set to zero.
-        Output:
-            - tot_weights:  A vector/matrix of the same size as image, with the weights of the new cells. This is utilized
-                            for writing the coarsening file but is not sufficient to recreate the image.
+        Parameters
+        ----------
+        image : array-like
+            The original image where the Haar-transform is performed. This could be the permeability or the porosity field.
+
+        orig_weights : array-like
+            The original weights of the image. If some cells are inactive or dead, their weight can be set to zero.
+
+        Returns
+        -------
+        tot_weights : array-like
+            A vector/matrix of the same size as the image, with the weights of the new cells. This is utilized for writing
+            the coarsening file but is not sufficient to recreate the image.
         """
         # Todo: make an option which stores the transformed field.
 
@@ -593,18 +624,36 @@ class eclipse:
         coaffiecient to zero if the value of this coefficient is below max_diff, and the value of the smooth coefficient
         is below max_val.
 
-        Input:
-            - image: The transformed image
-            - weights: The weights of the transformed image
-            - max_val: Smooth values above this value is not allowed
-            - max_diff: Detail coefficients higher than this value is not truncated
-            - merge: matrix/vector of booleans defining whether a merge is allowed.
+        Parameters
+        ----------
+        image : array-like
+            The transformed image.
 
-        Output:
-            - image: Transformed image with truncated coefficients.
-            - weights: updated weights.
-            - allow_merge: booleans keeping track of allowed merges
-            - end_ctrl: Boolean to controll whether further upscaling is possible.
+        weights : array-like
+            The weights of the transformed image.
+
+        max_val : float
+            Smooth values above this value are not allowed.
+
+        max_diff : float
+            Detail coefficients higher than this value are not truncated.
+
+        merge : array-like
+            Matrix/vector of booleans defining whether a merge is allowed.
+
+        Returns
+        -------
+        image : array-like
+            Transformed image with truncated coefficients.
+
+        weights : array-like
+            Updated weights.
+
+        allow_merge : array-like
+            Booleans keeping track of allowed merges.
+
+        end_ctrl : bool
+            Boolean to control whether further upscaling is possible.
         """
         # the image will always contain even elements in x and y dir
         x_dir = int(image.shape[0] / 2)
@@ -663,13 +712,17 @@ class eclipse:
         """
         Read the mako template (.mako) file from ../folder, and render the correct data file (.DATA) in folder.
 
-        Input:
-            - Folder:       Folder for the ecl_100 run
-        Alternative input:
-            - ensembleMember: Index of the ensemble member to run
+        Parameters
+        ----------
+        Folder : str, optional
+            Folder for the ecl_100 run.
 
-        KF 14/9-2015
-        ----------------------------------------------------------------------------------------------------------------
+        ensembleMember : int, optional
+            Index of the ensemble member to run.
+
+        Changelog
+        ---------
+        - KF 14/9-2015
         """
 
         # Check and add report time
@@ -714,28 +767,36 @@ class eclipse:
         Read the output from simulator and store as an array. Optionally, if the DA method is based on an ensemble
         method, the output must be read inside a folder.
 
-        Input:
-                - file.rsm:         Summary file from ECL 100 (file is an attribute of self)
-                - file.*rst:        Restart file from ECL 100 (file is an attribute of self)
-                - whichResponse:    Which of the responses is to be outputted (e.g., WBHP PRO-1, WOPR, PRESS, OILSAT, etc)
+        Parameters
+        ----------
+        file_rsm : str
+            Summary file from ECL 100.
 
-        Optional input:
-                - member:           Ensemble member that is finished
-                - ext_data_info.    At what place is the assimilation step (e.g., which TIME)
-                and the index of this assimilation place
+        file_rst : str
+            Restart file from ECL 100.
 
-        Output:
-                - yFlow:              Array containing the response from ECL 100. Response type is chosen by the user
-                                    in options['data_type'].
+        whichResponse : str
+            Which of the responses is to be outputted (e.g., WBHP PRO-1, WOPR, PRESS, OILSAT, etc).
 
-        KF 15/9-2015
-        ----------------------------------------------------------------------------------------------------------------
-        Modified the ecl package to allow reading the summary data directly, hence, we get cell, summary, and field data
-         from the ecl package.
-         KF 29/10-2015
-         Modified the ecl package to read RFT files. To obtain, e.g,. RFT pressures form well 'PRO-1" whichResponse
-         must be rft_PRESSURE PRO-1
-        ----------------------------------------------------------------------------------------------------------------
+        member : int, optional
+            Ensemble member that is finished.
+
+        ext_data_info : tuple, optional
+            Tuple containing the assimilation step information, including the place of assimilation (e.g., which TIME) and the
+            index of this assimilation place.
+
+        Returns
+        -------
+        yFlow : array-like
+            Array containing the response from ECL 100. The response type is chosen by the user in options['data_type'].
+
+        Notes
+        -----
+        - Modified the ecl package to allow reading the summary data directly, hence, we get cell, summary, and field data
+        from the ecl package.
+        - KF 29/10-2015
+        - Modified the ecl package to read RFT files. To obtain, e.g,. RFT pressures form well 'PRO-1" whichResponse
+        must be rft_PRESSURE PRO-1
         """
         # Check that we have no trailing spaces
         whichResponse = whichResponse.strip()
@@ -929,17 +990,29 @@ class ecl_100(eclipse):
         """
         Method for calling the ecl_100 simulator.
 
-        Input:
-            - Path:             Alternative folder for the ecl_100.data file
-            - Wait_for_proc:    Logical variable to wait for the simulator to finish
+        Parameters
+        ----------
+        Path : str
+            Alternative folder for the ecl_100.data file.
 
-        Output:
-            - .RSM:          Run summary file, in the standard ecl format. (Well data are collected from this)
-            - .RST:          Restart fine, in the standard ecl format. (Pressure and saturation data are collected from
-                                                                        this file)
-            - .PRT           Info file, to be used for checking errors in the run
-        KF 14/9-2015
-        ----------------------------------------------------------------------------------------------------------------
+        Wait_for_proc : bool, optional
+            Logical variable to wait for the simulator to finish. Default is False.
+
+        Returns
+        -------
+        .RSM : str
+            Run summary file in the standard ECL format. Well data are collected from this file.
+
+        .RST : str
+            Restart file in the standard ECL format. Pressure and saturation data are collected from this file.
+
+        .PRT : str
+            Info file to be used for checking errors in the run.
+
+
+        Changelog
+        ---------
+        - KF 14/9-2015
         """
 
         # Filename
@@ -974,18 +1047,32 @@ class ecl_300(eclipse):
         """
         Method for calling the ecl_300 simulator.
 
-        Input:
-            - Path:             Alternative folder for the ecl_100.data file
-            - Wait_for_proc:    Logical variable to wait for the simulator to finish
+        Parameters
+        ----------
+        Path : str
+            Alternative folder for the ecl_100.data file.
 
-        Output:
-            - .RSM:          Run summary file, in the standard ecl format. (Well data are collected from this)
-            - .RST:          Restart fine, in the standard ecl format. (Pressure and saturation data are collected from
-                                                                        this file)
-            - .PRT           Info file, to be used for checking errors in the run
-        KF 8/10-2015
-        ----------------------------------------------------------------------------------------------------------------
+        Wait_for_proc : bool, optional
+            Logical variable to wait for the simulator to finish. Default is False.
+
         NOTE: For now, this option is only utilized in a single localization option.
+
+        Returns
+        -------
+        RSM : str
+            Run summary file in the standard ECL format. Well data are collected from this file.
+
+        RST : str
+            Restart file in the standard ECL format. Pressure and saturation data are collected from this file.
+
+        PRT : str
+            Info file to be used for checking errors in the run.
+
+        Changelog
+        ---------
+        - KF 8/10-2015
+
+
         """
         # Filename
         if path is not None:

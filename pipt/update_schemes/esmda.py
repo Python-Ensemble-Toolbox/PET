@@ -1,6 +1,7 @@
 """
 ES-MDA type schemes
 """
+
 # External imports
 import scipy.linalg as scilinalg
 from copy import deepcopy
@@ -20,19 +21,19 @@ from pipt.update_schemes.update_methods_ns.subspace_update import subspace_updat
 class esmdaMixIn(Ensemble):
     """
     This is the implementation of the ES-MDA algorithm given in [1]. This algorithm have been implemented mostly to
-    illustrate how a algorithm using the Mda loop can be implemented. 
+    illustrate how a algorithm using the Mda loop can be implemented.
     """
 
     def __init__(self, keys_da, keys_fwd,sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
-        `pipt.input_output.pipt_init.ReadInitFile`.
+        `input_output` ... `pipt_init.ReadInitFile`.
 
         Parameters
         ----------
         init_file: str
             PIPT init. file containing info. to run the inversion algorithm
-        
+
         References
         ----------
         [1] A. Emerick & A. Reynods, Computers & Geosciences, 55, p. 3-15, 2013
@@ -89,21 +90,21 @@ class esmdaMixIn(Ensemble):
         ES-MDA is an iterative ensemble smoother with a predefined number of iterations, where the updates is done with
         the EnKF update equations but where the data covariance matrix have been inflated:
 
-        \[
+        $$
             d_{obs} = d_{true} + \sqrt{\alpha}C_d^{1/2}Z \\
             m = m_{prior} + C_{md}(C_g + \alpha C_d)^{-1}(g(m) - d_{obs})
-        \]
+        $$
 
-        where \(d_{true}\) is the true observed data, \(\alpha\) is the inflation factor, \(C_d\) is the data covariance
-        matrix, \(Z\) is a standard normal random variable, \(C_{md}\) and \(C_{g}\) are sample covariance matrices,
-        \(m\) is the model parameter, and \(g(m)\) is the predicted data. Note that \(\alpha\) can have a different
+        where $d_{true}$ is the true observed data, $\alpha$ is the inflation factor, $C_d$ is the data covariance
+        matrix, $Z$ is a standard normal random variable, $C_{md}$ and $C_{g}$ are sample covariance matrices,
+        $m$ is the model parameter, and $g(\)$ is the predicted data. Note that $\alpha$ can have a different
         value in each assimilation step and must fulfill:
 
-        \[
-            \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1    
-        \]
+        $$
+            \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1
+        $$
 
-        where \(N_a\) being the total number of assimilation steps.
+        where $N_a$ being the total number of assimilation steps.
         """
         # Get assimilation order as a list
         # reformat predicted data
@@ -168,9 +169,9 @@ class esmdaMixIn(Ensemble):
 
         Returns
         -------
-        conv: bool
+        bool
             Logic variable telling if algorithm has converged
-        why_stop: dict
+        dict
             Dict. with keys corresponding to conv. criteria, with logical variable telling which of them that has been
             met
         """
@@ -211,12 +212,12 @@ class esmdaMixIn(Ensemble):
         Extract the data covariance inflation parameter from the MDA keyword in DATAASSIM part. Also, we check that
         the criterion:
 
-        \[
-            \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1    
-        \]
+        $$
+            \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1
+        $$
 
         is fulfilled for the inflation factor, alpha. If the keyword for inflation parameter -- INFLATION_PARAM -- is
-        not provided, we set the default \(\alpha_i = N_a), where \(N_a\) is the tot. no. of MDA assimilation steps (the
+        not provided, we set the default $\alpha_i = N_a$, where $N_a$ is the tot. no. of MDA assimilation steps (the
         criterion is fulfilled with this value).
 
         Returns
@@ -264,15 +265,22 @@ class esmdaMixIn(Ensemble):
         Extract list of assimilation steps to perform in MDA loop from the MDA keyword (mandatory for
         MDA class) in DATAASSIM part. (This method is similar to Iterative._ext_max_iter)
 
-        Input:
-                - keys_da:                  Dict. with all keywords from DATAASSIM part
-                    -'mda':                     Info. for MDA methods
+        Parameters
+        ----------
+        keys_da: dict
+            all keywords from DATAASSIM part
+        mda': info
+            for MDA methods
 
-        Output:
-                - tot_no_assim:             Total number of MDA assimilation steps
+        Returns
+        -------
+        int
+            Total number of MDA assimilation steps
 
-        ST 7/6-16
-        ST 1/3-17: Changed to output list of assim. steps instead of just tot. assim. steps
+        Changelog
+        ---------
+        - ST 7/6-16
+        - ST 1/3-17: Changed to output list of assim. steps instead of just tot. assim. steps
         """
         # Make sure MDA is a list
         if not isinstance(self.keys_da['mda'][0], list):

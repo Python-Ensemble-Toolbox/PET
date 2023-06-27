@@ -260,14 +260,21 @@ class Assimilate:
         """
         Extract max iterations from ITERATION keyword in DATAASSIM part (mandatory keyword for iteration loops).
 
-        Input:
-                - keys_da:                  Dict. with all keywords from DATAASSIM part
-                    -'iteration':               Info. for iterative methods
+        Parameters
+        ----------
+        keys_da : dict
+            A dictionary containing all keywords from DATAASSIM part.
+            - 'iteration' : object
+                Information for iterative methods.
 
-        Output:
-                - max_iter:                 Max. iterations allowed before abort
+        Returns
+        -------
+        max_iter : int
+            The maximum number of iterations allowed before abort.
 
-        ST 7/6-16
+        Changelog
+        ---------
+        - ST 7/6-16
         """
         if 'iteration' in self.ensemble.keys_da:
             # Make sure ITERATION is a list
@@ -305,8 +312,10 @@ class Assimilate:
         More general method for saving all relevant information from a analysis/forecast step. Note that this is
         only performed when there is a reduction in objective function.
 
-        Input:
-                List of values to be saved. Note, can also contain a seperate python file
+        Parameters
+        ----------
+        values : list
+            List of values to be saved. It can also contain a separate Python file.
 
         If one reads a python file, it is
         """
@@ -353,7 +362,9 @@ class Assimilate:
     def _save_analysis_debug(self):
         """
         Moved Old analysis debug here to retain consistency.
-        Note: only class variables can be stored now!!!!!"""
+
+        .. danger:: only class variables can be stored now.
+        """
         # Init dict. of variables to save
         save_dict = {}
 
@@ -383,10 +394,12 @@ class Assimilate:
         Run the forward simulator, generating predicted data for the analysis step. First input to the simulator
         instances is the ensemble of (joint) state to be run and how many to run in parallel. The forward runs are done
         in a while-loop consisting of the following steps:
-                i. Run the simulator for each ensemble member in the background.
-                ii. Check for errors during run (if error, correct and run again or abort).
-                iii. Check if simulation has ended; if yes, run simulation for the next ensemble members.
-                iv. Get results from successfully ended simulations.
+
+                1. Run the simulator for each ensemble member in the background.
+                2. Check for errors during run (if error, correct and run again or abort).
+                3. Check if simulation has ended; if yes, run simulation for the next ensemble members.
+                4. Get results from successfully ended simulations.
+
         The procedure here is general, hence a simulator used here must contain the initial step of setting up the
         parameters and steps i-iv, if not an error will be outputted. Initialization of the simulator is done when
         initializing the Ensemble class (see __init__). The names of the mandatory methods in a simulator are:
@@ -401,16 +414,17 @@ class Assimilate:
         assim_step : int
                      Current assimilation step.
 
-        ----------------------------------------------------------------------------------------------------------------
+        Notes
+        -----
         Parallel run in "ampersand" mode means that it will be started in the background and run independently of the
         Python script. Hence, check for simulation finished or error must be conducted!
 
-        NOTE: It is only necessary to get the results from the forward simulations that corresponds to the observed
+        .. info:: It is only necessary to get the results from the forward simulations that corresponds to the observed
         data at the particular assimilation step. That is, results from all data types are not necessary to
         extract at step iv; if they are not present in the obs_data (indicated by a None type) then this result does
         not need to be extracted.
 
-        OBS: It is assumed that no underscore is inputted in DATATYPE. If there are underscores in DATATYPE
+        .. info:: It is assumed that no underscore is inputted in DATATYPE. If there are underscores in DATATYPE
         entries, well, then we may have a problem when finding out which response to extract in get_sim_results below.
         """
         # Add an option to load existing sim results. The user must actively create the restart file by renaming an

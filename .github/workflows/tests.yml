@@ -6,7 +6,7 @@
 # - Also config for conda
 # - Lint
 
-name: Run tests
+name: CI tests
 
 on:
   push:

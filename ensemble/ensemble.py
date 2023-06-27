@@ -475,13 +475,18 @@ class Ensemble:
         Method for making predictions using the state variable. Will output the simulator response for all report steps
         and all data values provided to the simulator.
 
-        Optional input:
-                - input_state:          Use an input state instead of internal state (stored in self) to run predictions
-                - save_prediction       Save the predictions as a <save_prediction>.npz file (numpy compressed file)
+        Parameters
+        ----------
+        input_state:
+            Use an input state instead of internal state (stored in self) to run predictions
+        save_prediction:
+            Save the predictions as a <save_prediction>.npz file (numpy compressed file)
 
-        Output:
-                - prediction            List of dictionaries with keys equal to data types (in DATATYPE), containing
-                                        the responses at each time step given in PREDICTION.
+        Returns
+        -------
+        prediction:
+            List of dictionaries with keys equal to data types (in DATATYPE),
+            containing the responses at each time step given in PREDICTION.
 
         """
 
@@ -579,7 +584,9 @@ class Ensemble:
         """
         We use pickle to dump all the information we have in 'self'. Can be used, e.g., if some error has occurred.
 
-        ST 28/2-17
+        Changelog
+        ---------
+        - ST 28/2-17
         """
         # Open save file and dump all info. in self
         with open(self.pickle_restart_file, 'wb') as f:
@@ -589,7 +596,9 @@ class Ensemble:
         """
         Load a pickled file and save all info. in self.
 
-        ST 28/2-17
+        Changelog
+        ---------
+        - ST 28/2-17
         """
         # Open file and read with pickle
         with open(self.pickle_restart_file, 'rb') as f:
@@ -604,8 +613,10 @@ class Ensemble:
         integer to the setup of the forward run. This will initiate the correct simulator fidelity.
         The function then runs the set of state through the different simulator fidelities.
 
-        Optional input:
-            - input_state: If simulation is run stand-alone one can input any state.
+        Parameters
+        ----------
+        input_state:
+            If simulation is run stand-alone one can input any state.
         """
 
 

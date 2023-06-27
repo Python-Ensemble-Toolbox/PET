@@ -18,11 +18,17 @@ class flow(eclipse):
         """
         Call OPM flow simulator via shell.
 
-        Input:
-            - folder:               Folder with runfiles
-            - wait_for_proc:        Boolean determining if we wait for process to be done or not.
+        Parameters
+        ----------
+        folder : str
+            Folder with runfiles.
 
-        ST 18/10-18
+        wait_for_proc : bool
+            Boolean determining if we wait for the process to be done or not.
+
+        Changelog
+        ---------
+        - ST 18/10-18
         """
         # Filename
         if folder is not None:
@@ -55,7 +61,9 @@ class flow(eclipse):
         """
         Check in RPT file for "End of simulation" to see if OPM flow is done.
 
-        ST 19/10-18
+        Changelog
+        ---------
+        - ST 19/10-18
         """
         # Initialize output
         # member = None
@@ -82,11 +90,17 @@ class ebos(eclipse):
         """
         Call OPM flow simulator via shell.
 
-        Input:
-            - folder:               Folder with runfiles
-            - wait_for_proc:        Boolean determining if we wait for process to be done or not.
+        Parameters
+        ----------
+        folder : str
+            Folder with runfiles.
 
-        RJL 27/08-19
+        wait_for_proc : bool
+            Determines whether to wait for the process to be done or not.
+
+        Changelog
+        ---------
+        - RJL 27/08-19
         """
         # Filename
         if folder is not None:
@@ -106,7 +120,9 @@ class ebos(eclipse):
         """
         Check in RPT file for "End of simulation" to see if OPM ebos is done.
 
-        RJL 27/08-19
+        Changelog
+        ---------
+        - RJL 27/08-19
         """
         # Initialize output
         # member = None

@@ -6,13 +6,19 @@ import numpy as np
 
 def read_data_csv(filename, datatype, truedataindex):
     """
-    Input:
-        - filename:         Name of csv-file
-        - datatype:         List of data types as strings
-        - truedataindex:    List of where the "TRUEDATA" has been extracted (e.g., at which time, etc)
+    Parameters
+    ----------
+    filename:
+        Name of csv-file
+    datatype:
+        List of data types as strings
+    truedataindex:
+        List of where the "TRUEDATA" has been extracted (e.g., at which time, etc)
 
-    Output:
-        - imported_data:    List of observed data
+    Returns
+    -------
+    some-type:
+        List of observed data
     """
 
     df = pd.read_csv(filename)  # Read the file
@@ -75,13 +81,21 @@ def read_data_csv(filename, datatype, truedataindex):
 
 def read_var_csv(filename, datatype, truedataindex):
     """
-    Input:
-        - filename:         Name of csv-file
-        - datatype:         List of data types as strings
-        - truedataindex:    List of where the "TRUEDATA" has been extracted (e.g., at which time, etc)
+    Parameters
+    ----------
+    filename : str
+        Name of the CSV file.
 
-    Output:
-        - imported_var:    List of variances
+    datatype : list
+        List of data types as strings.
+
+    truedataindex : list
+        List of indices where the "TRUEDATA" has been extracted.
+
+    Returns
+    -------
+    imported_var : list
+        List of variances.
     """
 
     df = pd.read_csv(filename)  # Read the file
