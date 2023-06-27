@@ -1,3 +1,5 @@
+"""Stochastic iterative ensemble smoother (IES, i.e. EnRML) with *subspace* implementation."""
+
 import numpy as np
 from copy import deepcopy
 import copy as cp

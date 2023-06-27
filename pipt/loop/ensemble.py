@@ -1,3 +1,5 @@
+"""Descriptive description."""
+
 # External import
 import logging
 import os.path

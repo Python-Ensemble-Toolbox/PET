@@ -1,3 +1,5 @@
+"Net present value cost function with injection from RENewable energy"
+
 import numpy as np
 
 

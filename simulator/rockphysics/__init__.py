@@ -1,1 +1,1 @@
-
+"""Compute elastic properties."""

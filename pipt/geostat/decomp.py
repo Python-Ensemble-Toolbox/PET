@@ -1,3 +1,4 @@
+"""Covariance matrix tools"""
 __author__ = 'svenn'
 
 # External imports

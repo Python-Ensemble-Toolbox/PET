@@ -1,3 +1,4 @@
+"""Wrap OPM-flow"""
 # External imports
 from subprocess import call, DEVNULL
 import os

@@ -1,3 +1,5 @@
+"""Descriptive description."""
+
 from copy import deepcopy
 import csv
 import datetime as dt

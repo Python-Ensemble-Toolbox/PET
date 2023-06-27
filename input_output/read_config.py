@@ -1,3 +1,4 @@
+"""Parse config files."""
 from misc import read_input_csv as ricsv
 from copy import deepcopy
 from input_output.organize import Organize_input

@@ -1,3 +1,5 @@
+"""Descriptive description."""
+
 __author__ = 'TM'
 
 # standardrp.py

@@ -1,3 +1,5 @@
+"""Descriptive description."""
+
 import os, re, sys
 import multiprocessing.context as ctx
 import platform

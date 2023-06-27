@@ -1,8 +1,11 @@
 """
-Collection of tools that can be used in update/analysis schemes. Only put tools here that are so general that they can
+Collection of tools that can be used in update/analysis schemes.
+
+Only put tools here that are so general that they can
 be used by several update/analysis schemes. If some method is only applicable to the update scheme you are
 implementing, leave it in that class.
 """
+
 # External imports
 import numpy as np          # Numerical tools
 from scipy import linalg    # Linear algebra tools

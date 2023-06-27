@@ -1,3 +1,4 @@
+"""Ensemble analysis/conditioning/inversion schemes."""
 # Add path to private repo to access the private methods
 #import os
 #home = os.path.expanduser("~") # os independent home
