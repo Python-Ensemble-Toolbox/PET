@@ -9,9 +9,10 @@
 name: CI tests
 
 on:
-  push:
-    branches:
-      - '*'
+  # push:
+  #   branches:
+  #     - main
+  #     - master
   pull_request:
     branches:
       - '*'
