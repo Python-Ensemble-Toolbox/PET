@@ -11,10 +11,6 @@ at NORCE Norwegian Research Centre AS.
 
 ## Installation
 
-Two tips before installation: use virtual environments and add your SSH key to
-Github! You can read more about virtual environments
-[here](https://docs.python.org/3/tutorial/venv.html) and adding SSH key [here](https://help.github.com/en/articles/adding-a-new-ssh-key-to-your-github-account).
-
 To install PET, first clone the repo with (assuming you have added the SSH key)
 
 ```sh
