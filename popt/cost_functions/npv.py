@@ -39,7 +39,7 @@ def npv(pred_data, keys_opt, report):
         disc = keys_opt['npv_const'][4][1]
 
         val = (Qop * wop + Qgp * wgp - Qwp * wwp - Qwi * wwi) / (
-                (1 + disc) ** (delta_days / 365))
+            (1 + disc) ** (delta_days / 365))
 
         values.append(val)
 

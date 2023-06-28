@@ -11,9 +11,9 @@ import datetime as dt
 from scipy import interpolate
 from subprocess import call, DEVNULL
 from misc import ecl, grdecl
-from shutil import rmtree,copytree  # rmtree for removing folders
+from shutil import rmtree, copytree  # rmtree for removing folders
 import time
-#import rips
+# import rips
 
 # Internal imports
 from misc.system_tools.environ_var import EclipseRunEnvironment
@@ -120,7 +120,8 @@ class eclipse:
             self.options['sim_limit'] = self.input_dict['sim_limit']
 
         if 'reportdates' in self.input_dict:
-            self.reportdates = [x * 30 for x in range(1, int(self.input_dict['reportdates'][1]))]
+            self.reportdates = [
+                x * 30 for x in range(1, int(self.input_dict['reportdates'][1]))]
 
         if 'read_sch' in self.input_dict:
             # self.read_sch = self.input_dict['read_sch'][0]
@@ -176,10 +177,12 @@ class eclipse:
                     # a well coordinate (x and y) as elements in the inner list.
                     self.upscale['wells'] = []
                     for j in range(1, len(self.input_dict['upscale'][i])):
-                        self.upscale['wells'].append([int(elem) for elem in self.input_dict['upscale'][i][j]])
+                        self.upscale['wells'].append(
+                            [int(elem) for elem in self.input_dict['upscale'][i][j]])
                 if self.input_dict['upscale'][i][0] == 'radius':
                     # List of radius lengths
-                    self.upscale['radius'] = [int(elem) for elem in self.input_dict['upscale'][i][1]]
+                    self.upscale['radius'] = [int(elem)
+                                              for elem in self.input_dict['upscale'][i][1]]
                 if self.input_dict['upscale'][i][0] == 'us_type':
                     self.upscale['us_type'] = self.input_dict['upscale'][i][1]
 
@@ -217,7 +220,8 @@ class eclipse:
         if hasattr(self, 'reportdates'):
             self.report = {'dates': self.reportdates}
         elif 'reportmonths' in self.input_dict:  # for optimization
-            self.report = {'days': [30 * i for i in range(1, int(self.input_dict['reportmonths'][1]))]}
+            self.report = {
+                'days': [30 * i for i in range(1, int(self.input_dict['reportmonths'][1]))]}
         else:
             assimIndex = [i for i in range(len(self.l_prim))]
             trueOrder = self.true_order
@@ -225,7 +229,7 @@ class eclipse:
         self.pred_data = [deepcopy({}) for _ in range(len(assimIndex))]
         for ind in self.l_prim:
             for key in self.all_data_types:
-                self.pred_data[ind][key] = np.zeros((1,1))
+                self.pred_data[ind][key] = np.zeros((1, 1))
 
         if isinstance(trueOrder[1], list):  # Check if true data prim. ind. is a list
             self.true_prim = [trueOrder[0], [x for x in trueOrder[1]]]
@@ -240,12 +244,13 @@ class eclipse:
         # Initialise error summary
         self.error_smr = []
 
-        #Initiallize run time summary
+        # Initiallize run time summary
         self.run_time = []
 
         # Check that the .mako file is in the current working directory
         if not os.path.isfile('%s.mako' % self.file):
-            sys.exit('ERROR: .mako file is not in the current working directory. This file must be defined')
+            sys.exit(
+                'ERROR: .mako file is not in the current working directory. This file must be defined')
 
     def run_fwd_sim(self, state, member_i, del_folder=True):
         """
@@ -265,13 +270,12 @@ class eclipse:
         del_folder : bool, optional
             Boolean to determine if the ensemble folder should be deleted. Default is False.
         """
-        if hasattr(self,'level'):
+        if hasattr(self, 'level'):
             state['level'] = self.level
         else:
-            state['level'] = 0 # default value
+            state['level'] = 0  # default value
         os.mkdir('En_' + str(member_i))
         folder = 'En_' + str(member_i) + os.sep
-
 
         # If the run is upscaled, run the upscaling procedure
         if self.upscale is not None:
@@ -279,7 +283,8 @@ class eclipse:
                 self.upscale['maxtrunc'] = self.trunc_level[self.level]
             if self.upscale['maxtrunc'] > 0:  # if the truncation level is 0, we do not perform upscaling
                 self.coarsen(folder, state)
-            elif hasattr(self, 'coarse'):  # if the level is 0, and upscaling has been performed earlier this must be
+            # if the level is 0, and upscaling has been performed earlier this must be
+            elif hasattr(self, 'coarse'):
                 # removed
                 del self.coarse
 
@@ -321,7 +326,8 @@ class eclipse:
         try:
             rmtree(folder)  # Try to delete folder
         except:  # If deleting fails, just rename to 'En_<ensembleMember>_date'
-            os.rename(folder, folder + '_' + dt.datetime.now().strftime("%m-%d-%Y_%H-%M-%S"))
+            os.rename(folder, folder + '_' +
+                      dt.datetime.now().strftime("%m-%d-%Y_%H-%M-%S"))
 
     def extract_data(self, member):
         # get the formated data
@@ -362,14 +368,14 @@ class eclipse:
         else:
             coarsenParam = self.inv_state[self.upscale['state']]
 
-
-        if self.upscale['us_type'].lower() == 'haar': # the upscaling is based on a Haar wavelet
+        if self.upscale['us_type'].lower() == 'haar':  # the upscaling is based on a Haar wavelet
             # Do not add any dead-cells
             # TODO: Make a better method for determining dead or inactive cells.
 
             orig_wght = np.ones((self.upscale['dim'][0], self.upscale['dim'][1]))
             # Get the new cell structure by a 2-D unbalanced Haar transform.
-            wght = self._Haar(coarsenParam.reshape((self.upscale['dim'][0], self.upscale['dim'][1])), orig_wght)
+            wght = self._Haar(coarsenParam.reshape(
+                (self.upscale['dim'][0], self.upscale['dim'][1])), orig_wght)
 
         elif self.upscale['us_type'].lower() == 'unif':
             # This option generates a grid where the cells are upscaled uniformly in a dyadic manner. We utilize the
@@ -378,7 +384,8 @@ class eclipse:
             # case the fraction gives the number of upscaling levels, 1 is all possible levels, 0 is no upscaling.
             wght = self._unif((self.upscale['dim'][0], self.upscale['dim'][1]))
 
-        self.write_coarse(folder, wght, coarsenParam.reshape((int(self.upscale['dim'][0]),int(self.upscale['dim'][1]))))
+        self.write_coarse(folder, wght, coarsenParam.reshape(
+            (int(self.upscale['dim'][0]), int(self.upscale['dim'][1]))))
 
     def write_coarse(self, folder, whgt, image):
         """
@@ -422,7 +429,6 @@ class eclipse:
 
             level_dim = 2 ** (level + 1)
 
-
             for i in range(0, merged_at_level.shape[0]):
                 for j in range(0, merged_at_level.shape[1]):
                     if merged_at_level[i, j] == 1:
@@ -431,25 +437,28 @@ class eclipse:
                         # only merging square cells
                         if (i + 1) * level_dim <= image.shape[0] and (j + 1) * level_dim <= image.shape[1]:
                             if coarse[i * level_dim:(i + 1) * level_dim, j * level_dim:(j + 1) * level_dim].all():
-                                coarse[i * level_dim:(i + 1) * level_dim, j * level_dim:(j + 1) * level_dim] = False
+                                coarse[i * level_dim:(i + 1) * level_dim,
+                                       j * level_dim:(j + 1) * level_dim] = False
                                 ecl_coarse.append([j * level_dim + 1, (j + 1) * level_dim,
-                                                i * level_dim + 1, (i + 1) * level_dim, 1, 1, 1, 1, 1])
+                                                   i * level_dim + 1, (i + 1) * level_dim, 1, 1, 1, 1, 1])
                                 # f.write('%i %i %i %i 1 1 1 1 1 / \n' % (j * level_dim + 1, (j + 1) * level_dim,
                                 #                                         i * level_dim + 1, (i + 1) * level_dim))
                         # cells at first edge, non-square
                         if (i + 1)*level_dim > image.shape[0] and (j + 1) * level_dim <= image.shape[1]:
                             if coarse[i * level_dim::, j * level_dim:(j + 1) * level_dim].all():
-                                coarse[i * level_dim::, j * level_dim:(j + 1) * level_dim] = False
+                                coarse[i * level_dim::, j *
+                                       level_dim:(j + 1) * level_dim] = False
                                 ecl_coarse.append([j * level_dim + 1, (j + 1) * level_dim,
-                                                                i * level_dim + 1, image.shape[0], 1, 1, 1, 1, 1])
+                                                   i * level_dim + 1, image.shape[0], 1, 1, 1, 1, 1])
                                 # f.write('%i %i %i %i 1 1 1 1 1 / \n' % (j * level_dim + 1, (j + 1) * level_dim,
                                 #                                         i * level_dim + 1, image.shape[0]))
                         # cells at second edge, non-square
                         if (j + 1)*level_dim > image.shape[1] and (i + 1) * level_dim <= image.shape[0]:
                             if coarse[i * level_dim:(i + 1) * level_dim, j * level_dim::].all():
-                                coarse[i * level_dim:(i + 1) * level_dim, j * level_dim::] = False
+                                coarse[i * level_dim:(i + 1) * level_dim,
+                                       j * level_dim::] = False
                                 ecl_coarse.append([j * level_dim + 1, image.shape[1],
-                                                                i * level_dim + 1, (i + 1) * level_dim, 1, 1, 1, 1, 1])
+                                                   i * level_dim + 1, (i + 1) * level_dim, 1, 1, 1, 1, 1])
                                 # f.write('%i %i %i %i 1 1 1 1 1 / \n' % (j * level_dim + 1, image.shape[1],
                                 #                                         i * level_dim + 1, (i + 1) * level_dim))
                         # cells at intersection between first and second edge, non-square
@@ -457,7 +466,7 @@ class eclipse:
                             if coarse[i * level_dim::, j * level_dim::].all():
                                 coarse[i * level_dim::, j * level_dim::] = False
                                 ecl_coarse.append([j * level_dim + 1, image.shape[1],
-                                                                i * level_dim + 1, image.shape[0], 1, 1, 1, 1, 1])
+                                                   i * level_dim + 1, image.shape[0], 1, 1, 1, 1, 1])
                                 # f.write('%i %i %i %i 1 1 1 1 1 / \n' % (j * level_dim + 1, image.shape[1],
                                 #                                         i * level_dim + 1, image.shape[0]))
         # f.write('/')
@@ -522,11 +531,15 @@ class eclipse:
 
                 for axis in range(0, 2):
                     # Initialise the matrix for storing the details and smoothing
-                    level_diff_columns = np.empty((int(np.ceil(len(image[:, 0]) / 2)), len(image[0, :])))
+                    level_diff_columns = np.empty(
+                        (int(np.ceil(len(image[:, 0]) / 2)), len(image[0, :])))
                     # level_diff_rows = np.empty((len(image[:, 0]), int(np.ceil(len(image[0, :])/2))))
-                    level_smooth_columns = np.empty((int(np.ceil(len(image[:, 0]) / 2)), len(image[0, :])))
-                    level_weight_columns = np.empty((int(np.ceil(len(image[:, 0]) / 2)), len(image[0, :])))
-                    level_alpha_columns = np.empty((int(np.ceil(len(image[:, 0]) / 2)), len(image[0, :])))
+                    level_smooth_columns = np.empty(
+                        (int(np.ceil(len(image[:, 0]) / 2)), len(image[0, :])))
+                    level_weight_columns = np.empty(
+                        (int(np.ceil(len(image[:, 0]) / 2)), len(image[0, :])))
+                    level_alpha_columns = np.empty(
+                        (int(np.ceil(len(image[:, 0]) / 2)), len(image[0, :])))
 
                     for i in range(0, image.shape[1]):
                         if len(image[:, i]) % 2 == 0:
@@ -608,12 +621,15 @@ class eclipse:
             min_dim = min_dim/2
             max_levels += 1
 
-        trunc_level = int(np.floor(max_levels*self.upscale['maxtrunc'])) #conservative choice
+        # conservative choice
+        trunc_level = int(np.floor(max_levels*self.upscale['maxtrunc']))
 
-        wght = [np.ones(tuple([int(elem) for elem in dim]))] # all the initial cells are upscaled
+        # all the initial cells are upscaled
+        wght = [np.ones(tuple([int(elem) for elem in dim]))]
 
         for i in range(trunc_level):
-            new_dim = [int(np.ceil(elem/2)) for elem in wght[i].shape] # always take a larger dimension
+            new_dim = [int(np.ceil(elem/2))
+                       for elem in wght[i].shape]  # always take a larger dimension
             wght.append(np.ones(tuple(new_dim)))
 
         return wght
@@ -737,7 +753,8 @@ class eclipse:
 
         # Add startdate
         if hasattr(self, 'startDate'):
-            state['startdate'] = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day'])
+            state['startdate'] = dt.datetime(
+                self.startDate['year'], self.startDate['month'], self.startDate['day'])
 
         # Add the coarsing values
         if hasattr(self, 'coarse'):
@@ -805,21 +822,23 @@ class eclipse:
         if member is not None:
             # Get results
             if hasattr(self, 'ecl_case'):
-                rt_mem = int(self.ecl_case.root.split('/')[0].split('_')[1]) # En_XX/YYYY.DATA is the folder setup
-                if rt_mem != member: # wrong case
-                     self.ecl_case = ecl.EclipseCase('En_' + str(member) + os.sep +
-                                            self.input_dict['runfile'].upper() + '.DATA')
+                # En_XX/YYYY.DATA is the folder setup
+                rt_mem = int(self.ecl_case.root.split('/')[0].split('_')[1])
+                if rt_mem != member:  # wrong case
+                    self.ecl_case = ecl.EclipseCase('En_' + str(member) + os.sep +
+                                                    self.input_dict['runfile'].upper() + '.DATA')
             else:
                 self.ecl_case = ecl.EclipseCase('En_' + str(member) + os.sep + self.input_dict['runfile'].upper()
-                                                + '.DATA') 
+                                                + '.DATA')
             if ext_data_info[0] == 'days':
                 time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
-                       dt.timedelta(days=ext_data_info[1])
+                    dt.timedelta(days=ext_data_info[1])
                 dates = self.ecl_case.by_date
                 if time not in dates and 'date_slack' in self.input_dict:
                     slack = int(self.input_dict['date_slack'])
                     if slack > 0:
-                        v = [el for el in dates if np.abs((el-time).total_seconds()) < slack]
+                        v = [el for el in dates if np.abs(
+                            (el-time).total_seconds()) < slack]
                         if len(v) > 0:
                             time = v[0]
             else:
@@ -836,22 +855,26 @@ class eclipse:
                             self.rft_case = ecl.EclipseRFT('En_' + str(member) + os.sep +
                                                            self.input_dict['runfile'].upper())
                     else:
-                        self.rft_case = ecl.EclipseRFT('En_' + str(member) + os.sep + self.input_dict['runfile'].upper())
+                        self.rft_case = ecl.EclipseRFT(
+                            'En_' + str(member) + os.sep + self.input_dict['runfile'].upper())
                     # Get the data. Due to formating we can slice the property.
-                    rft_prop = self.rft_case.rft_data(well=whichResponse.split(' ')[1], prop=whichResponse.split(' ')[0][4:])
+                    rft_prop = self.rft_case.rft_data(well=whichResponse.split(
+                        ' ')[1], prop=whichResponse.split(' ')[0][4:])
                     # rft_data are collected for open connections. This may vary throughout the simulation, hence we
                     # must also collect the depth for the rft_data to check if all data is present
-                    rft_depth = self.rft_case.rft_data(well=whichResponse.split(' ')[1], prop='DEPTH')
+                    rft_depth = self.rft_case.rft_data(
+                        well=whichResponse.split(' ')[1], prop='DEPTH')
                     # to check this we import the referance depth if this is available. If not we assume that the data
                     # is ok.
                     try:
-                        ref_depth_f = np.load(whichResponse.split(' ')[1].upper() + '_rft_ref_depth.npz')
+                        ref_depth_f = np.load(whichResponse.split(
+                            ' ')[1].upper() + '_rft_ref_depth.npz')
                         ref_depth = ref_depth_f[ref_depth_f.files[0]]
                         yFlow = np.array([])
                         interp = interpolate.interp1d(rft_depth, rft_prop, kind='linear', bounds_error=False,
-                                          fill_value=(rft_prop[0],rft_prop[-1]))
+                                                      fill_value=(rft_prop[0], rft_prop[-1]))
                         for d in ref_depth:
-                            yFlow = np.append(yFlow,interp(d))
+                            yFlow = np.append(yFlow, interp(d))
                     except:
                         yFlow = rft_prop
                 else:
@@ -869,7 +892,7 @@ class eclipse:
 
             # store the run time. NB: elapsed must be defined in .DATA file for this to work
             if 'save_elapsed' in self.input_dict and len(self.run_time) <= member:
-               self.run_time.extend(self.ecl_case.summary_data('ELAPSED', time))
+                self.run_time.extend(self.ecl_case.summary_data('ELAPSED', time))
 
             # If we have performed coarsening, we store the number of active grid-cells
             if self.upscale is not None:
@@ -886,7 +909,7 @@ class eclipse:
             case = ecl.EclipseCase(self.input_dict['runfile'].upper() + '.DATA')
             if ext_data_info[0] == 'days':
                 time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
-                       dt.timedelta(days=ext_data_info[1])
+                    dt.timedelta(days=ext_data_info[1])
             else:
                 time = ext_data_info[1]
 
@@ -896,26 +919,29 @@ class eclipse:
                 if 'rft_' in whichResponse:
                     rft_case = ecl.EclipseRFT(self.input_dict['runfile'].upper())
                     # Get the data. Due to formating we can slice the property.
-                    rft_prop = rft_case.rft_data(well=whichResponse.split(' ')[1], prop=whichResponse.split(' ')[0][4:])
+                    rft_prop = rft_case.rft_data(well=whichResponse.split(
+                        ' ')[1], prop=whichResponse.split(' ')[0][4:])
                     # rft_data are collected for open connections. This may vary throughout the simulation, hence we
                     # must also collect the depth for the rft_data to check if all data is present
-                    rft_depth = rft_case.rft_data(well=whichResponse.split(' ')[1], prop='DEPTH')
+                    rft_depth = rft_case.rft_data(
+                        well=whichResponse.split(' ')[1], prop='DEPTH')
                     try:
-                        ref_depth_f = np.load(whichResponse.split(' ')[1].upper() + '_rft_ref_depth.npz')
+                        ref_depth_f = np.load(whichResponse.split(
+                            ' ')[1].upper() + '_rft_ref_depth.npz')
                         ref_depth = ref_depth_f[ref_depth_f.files[0]]
                         yFlow = np.array([])
                         interp = interpolate.interp1d(rft_depth, rft_prop, kind='linear', bounds_error=False,
-                                          fill_value=(rft_prop[0],rft_prop[-1]))
+                                                      fill_value=(rft_prop[0], rft_prop[-1]))
                         for d in ref_depth:
-                            yFlow = np.append(yFlow,interp(d))
+                            yFlow = np.append(yFlow, interp(d))
                     except:
                         yFlow = rft_prop
                 else:
-                # If well, read the rsm file
+                    # If well, read the rsm file
                     if ext_data_info is not None:  # Get the data at a specific well and time
                         yFlow = case.summary_data(whichResponse, time)
             elif len(whichResponse.split(' ')) == 1:
-                if whichResponse in ['FOPT','FWPT','FGPT','FWIT','FGIT']:
+                if whichResponse in ['FOPT', 'FWPT', 'FGPT', 'FWIT', 'FGIT']:
                     if ext_data_info is not None:
                         yFlow = case.summary_data(whichResponse, time)
                 else:
@@ -952,15 +978,16 @@ class eclipse:
                 # Save with key equal variable name and the actual variable
                 if isinstance(eval('self.' + var), dict):
                     # save directly
-                    np.savez('fwd_debug_%s_%i' %(var, assimstep), **eval('self.' + var))
+                    np.savez('fwd_debug_%s_%i' % (var, assimstep), **eval('self.' + var))
                 else:
                     save_dict[var] = eval('self.' + var)
 
-            np.savez('fwd_debug_%i' %(assimstep), **save_dict)
+            np.savez('fwd_debug_%i' % (assimstep), **save_dict)
 
-    def write_to_grid(self,value,propname, path,dim,t_ind=None):
+    def write_to_grid(self, value, propname, path, dim, t_ind=None):
         if t_ind == None:
             trans_dict = {}
+
             def _lookup(kw):
                 return trans_dict[kw] if kw in trans_dict else kw
 
@@ -970,16 +997,17 @@ class eclipse:
         else:
             pass
             # some errors with rips
-            #p = Process(target=_write_to_resinsight, args=(list(value[~value.mask]),propname, t_ind))
+            # p = Process(target=_write_to_resinsight, args=(list(value[~value.mask]),propname, t_ind))
             # Find an open resinsight case
-            #p.start()
-            #time.sleep(1)
-            #p.terminate()
+            # p.start()
+            # time.sleep(1)
+            # p.terminate()
 
 # def _write_to_resinsight(value, name,t_ind):
 #     resinsight = rips.Instance.find()
 #     case = resinsight.project.case(case_id=0)
 #     case.set_active_cell_property(value, 'GENERATED', name,t_ind)
+
 
 class ecl_100(eclipse):
     '''
@@ -1025,24 +1053,26 @@ class ecl_100(eclipse):
         success = True
         try:
             with EclipseRunEnvironment(filename):
-                com =['eclrun', '--nocleanup', 'eclipse', filename + '.DATA']
+                com = ['eclrun', '--nocleanup', 'eclipse', filename + '.DATA']
                 if 'sim_limit' in self.options:
                     call(com, stdout=DEVNULL, timeout=self.options['sim_limit'])
                 else:
                     call(com, stdout=DEVNULL)
                 raise ValueError
         except:
-            print('\nError in the eclipse run.') # add rerun?
+            print('\nError in the eclipse run.')  # add rerun?
             if not os.path.exists('Crashdump'):
                 copytree(path, 'Crashdump')
             success = False
 
         return success
 
+
 class ecl_300(eclipse):
     '''
     eclipse 300 class
     '''
+
     def call_sim(self, path=None, wait_for_proc=False):
         """
         Method for calling the ecl_300 simulator.

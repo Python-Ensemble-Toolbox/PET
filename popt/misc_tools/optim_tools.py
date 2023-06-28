@@ -6,6 +6,7 @@ implementing, leave it in that class.
 import numpy as np
 from scipy.linalg import block_diag
 
+
 def aug_optim_state(state, list_state):
     """
     Augment the state variables to get one augmented array.
@@ -153,7 +154,8 @@ def time_correlation(a, state, n_timesteps, dt=1.0):
             for j in range(n_timesteps):
                 for k in range(m):
                     for l in range(m):
-                        corr_single_block[i * m + k, j * m + l] = (k == l) * a ** abs(dt * (i - j))
+                        corr_single_block[i * m + k, j * m +
+                                          l] = (k == l) * a ** abs(dt * (i - j))
         blocks.append(corr_single_block)
 
     return block_diag(*blocks)

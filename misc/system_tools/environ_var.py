@@ -1,6 +1,8 @@
 """Descriptive description."""
 
-import os, re, sys
+import os
+import re
+import sys
 import multiprocessing.context as ctx
 import platform
 
@@ -157,13 +159,13 @@ class CmgRunEnvironment:
 
         # Check system platform.
         # TODO: Figure out paths in other systems (read Windows...) and remove assertion.
-        assert(platform.system() == 'Linux') , \
+        assert (platform.system() == 'Linux'), \
             'Sorry, we have only set up paths for Linux systems... But hey, maybe you can implemented it for your ' \
             'system? :)'
 
         # Base path to simulator folders
         self.path_base = self.root + self.ver + os.sep + self.sim + os.sep + self.ver[:-3] + os.sep + \
-                         'linux_x64' + os.sep
+            'linux_x64' + os.sep
 
         # Path to exe file
         self.path_exe = self.path_base + 'exe'
@@ -193,7 +195,8 @@ class CmgRunEnvironment:
         # LD_LIBRARY_PATH
         if 'LD_LIBRARY_PATH' in os.environ:
             self.ld_path = os.environ['LD_LIBRARY_PATH']
-            os.environ['LD_LIBRARY_PATH'] = self.path_lib + os.pathsep + os.environ['LD_LIBRARY_PATH']
+            os.environ['LD_LIBRARY_PATH'] = self.path_lib + \
+                os.pathsep + os.environ['LD_LIBRARY_PATH']
         else:
             self.ld_path = ''
             os.environ['LD_LIBRARY_PATH'] = self.path_lib
@@ -243,6 +246,7 @@ class CmgRunEnvironment:
 
         # Return False (exit 0?)
         return False
+
 
 class OPMRunEnvironment:
     """
@@ -316,6 +320,7 @@ class OPMRunEnvironment:
             return False
         return True
 
+
 class FlowRockRunEnvironment:
     """
     A context manager class to run flowRock simulators with correct environmental variables.
@@ -385,6 +390,8 @@ class FlowRockRunEnvironment:
             sys.exit(1)
 
         return False
+
+
 class EclipseRunEnvironment:
     """
     A context manager class to run eclipse simulators with correct environmental variables.
@@ -441,7 +448,6 @@ class EclipseRunEnvironment:
         # Reset Process context
         ctx._default_context = self.ctx
 
-
         error_dict = {}
 
         with open(self.filename + '.ECLEND', 'r') as f:
@@ -458,7 +464,8 @@ class EclipseRunEnvironment:
         # not finished.
         if len(error_dict) > 0:
             if error_dict['Errors'] > 0:
-                print('\n\033[1;31mERROR: RUN has failed with {} errors!\033[1;m'.format(error_dict['Errors']))
+                print('\n\033[1;31mERROR: RUN has failed with {} errors!\033[1;m'.format(
+                    error_dict['Errors']))
                 sys.exit(1)
 
         # Return False (exit 0?)

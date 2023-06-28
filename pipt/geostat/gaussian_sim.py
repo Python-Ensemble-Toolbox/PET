@@ -7,7 +7,6 @@ from scipy.linalg import toeplitz
 def fast_gaussian(dimension, sdev, corr):
 
     # print('Fast Gaussian!')
-
     """
     Generates random vector from distribution satisfying Gaussian variogram in dimension up to 3-d.
 
@@ -132,9 +131,11 @@ def fast_gaussian(dimension, sdev, corr):
     else:  # 3-d
         # either dimension 1 and 2 or 2 and 3 need to be grouped together.
         if n <= p:
-            x = np.dot(np.dot(np.kron(cholt2, cholt1), np.reshape(x, (m * n, p))), cholt3.T)
+            x = np.dot(np.dot(np.kron(cholt2, cholt1),
+                       np.reshape(x, (m * n, p))), cholt3.T)
         else:
-            x = np.dot(np.dot(cholt1, np.reshape(x, (m, n * p))), np.kron(cholt3.T, cholt2.T))
+            x = np.dot(np.dot(cholt1, np.reshape(x, (m, n * p))),
+                       np.kron(cholt3.T, cholt2.T))
 
     # reshape back
     x = np.reshape(x, (dim,), order='F')

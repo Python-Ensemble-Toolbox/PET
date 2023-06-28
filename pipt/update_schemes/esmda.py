@@ -24,7 +24,7 @@ class esmdaMixIn(Ensemble):
     illustrate how a algorithm using the Mda loop can be implemented.
     """
 
-    def __init__(self, keys_da, keys_fwd,sim):
+    def __init__(self, keys_da, keys_fwd, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `input_output` ... `pipt_init.ReadInitFile`.
@@ -39,7 +39,7 @@ class esmdaMixIn(Ensemble):
         [1] A. Emerick & A. Reynods, Computers & Geosciences, 55, p. 3-15, 2013
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da,keys_fwd,sim)
+        super().__init__(keys_da, keys_fwd, sim)
 
         self.prev_data_misfit = None
 
@@ -50,16 +50,18 @@ class esmdaMixIn(Ensemble):
             # are given as in the Simultaneous loop.
             self.check_assimindex_simultaneous()
             self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
+                self.obs_data, self.assim_index)
 
             # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
             # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
             self.max_iter = len(self._ext_assim_steps())+1
             self.iteration = 0
-            self.lam = 0 # set LM lamda to zero as we are doing one full update.
+            self.lam = 0  # set LM lamda to zero as we are doing one full update.
             if 'energy' in self.keys_da:
-                self.trunc_energy = self.keys_da['energy'] # initial energy (Remember to extract this)
-                if self.trunc_energy > 1: # ensure that it is given as percentage
+                # initial energy (Remember to extract this)
+                self.trunc_energy = self.keys_da['energy']
+                if self.trunc_energy > 1:  # ensure that it is given as percentage
                     self.trunc_energy /= 100.
             else:
                 self.trunc_energy = 0.98
@@ -108,12 +110,13 @@ class esmdaMixIn(Ensemble):
         """
         # Get assimilation order as a list
         # reformat predicted data
-        _,self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                                   self.list_datatypes)
+        _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                     self.list_datatypes)
 
         init_en = Cholesky()  # Initialize GeoStat class for generating realizations
-        if self.iteration == 1: # first iteration
-            data_misfit = at.calc_objectivefun(self.real_obs_data_conv,self.aug_pred_data,self.cov_data)
+        if self.iteration == 1:  # first iteration
+            data_misfit = at.calc_objectivefun(
+                self.real_obs_data_conv, self.aug_pred_data, self.cov_data)
 
             # Store the (mean) data misfit (also for conv. check)
             self.data_misfit = np.mean(data_misfit)
@@ -122,18 +125,21 @@ class esmdaMixIn(Ensemble):
             self.data_misfit = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
 
-            self.logger.info(f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
+            self.logger.info(
+                f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
             self.data_random_state = deepcopy(np.random.get_state())
             self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
-                                                                   self.alpha[self.iteration-1]*self.cov_data, self.ne,
+                                                                   self.alpha[self.iteration-1] *
+                                                                   self.cov_data, self.ne,
                                                                    return_chol=True)
-            self.E = np.dot(self.real_obs_data,self.proj)
+            self.E = np.dot(self.real_obs_data, self.proj)
         else:
             self.data_random_state = deepcopy(np.random.get_state())
-            self.obs_data_vector,_ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                                   self.list_datatypes)
+            self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                           self.list_datatypes)
             self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
-                                                                   self.alpha[self.iteration - 1] * self.cov_data,
+                                                                   self.alpha[self.iteration -
+                                                                              1] * self.cov_data,
                                                                    self.ne,
                                                                    return_chol=True)
             self.E = np.dot(self.real_obs_data, self.proj)
@@ -143,20 +149,21 @@ class esmdaMixIn(Ensemble):
         else:
             if len(self.scale_data.shape) == 1:
                 self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                       np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
             else:
-                self.pert_preddata = scilinalg.solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+                self.pert_preddata = scilinalg.solve(
+                    self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
             aug_state = at.aug_state(self.current_state, self.list_states)
 
-
             self.update()
-            if hasattr(self,'step'):
+            if hasattr(self, 'step'):
                 aug_state_upd = aug_state + self.step
-            if hasattr(self,'w_step'):
+            if hasattr(self, 'w_step'):
                 self.W = self.current_W + self.w_step
                 aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-                aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+                aug_state_upd = np.dot(aug_prior_state, (np.eye(
+                    self.ne) + self.W / np.sqrt(self.ne - 1)))
 
             # Extract updated state variables from aug_update
             self.state = at.update_state(aug_state_upd, self.state, self.list_states)
@@ -183,10 +190,10 @@ class esmdaMixIn(Ensemble):
         obs_data_vector, pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
                                                           self.list_datatypes)
 
-        data_misfit = at.calc_objectivefun(self.real_obs_data_conv,pred_data,self.cov_data)
+        data_misfit = at.calc_objectivefun(
+            self.real_obs_data_conv, pred_data, self.cov_data)
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
-
 
         # Logical variables for conv. criteria
         why_stop = {'rel_data_misfit': 1 - (self.data_misfit / self.prev_data_misfit),
@@ -201,9 +208,8 @@ class esmdaMixIn(Ensemble):
                 f'MDA iteration number {self.iteration}! Objective function increased from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
         # Return conv = False, why_stop var.
         self.current_state = deepcopy(self.state)
-        if hasattr(self,'W'):
+        if hasattr(self, 'W'):
             self.current_W = deepcopy(self.W)
-
 
         return False, True, why_stop
 
@@ -244,8 +250,8 @@ class esmdaMixIn(Ensemble):
 
             else:
                 assert len(alpha_tmp) == len(self._ext_assim_steps()), 'Number of parameters given in INFLATION_PARAM in MDA does ' \
-                                                         'not match the total number of assimilation steps given by ' \
-                                                         'TOT_ASSIM_STEPS in same keyword!'
+                    'not match the total number of assimilation steps given by ' \
+                    'TOT_ASSIM_STEPS in same keyword!'
 
                 # Inflation parameters for each assimilation step given directly
                 alpha = alpha_tmp
@@ -289,10 +295,12 @@ class esmdaMixIn(Ensemble):
             mda_opts = self.keys_da['mda']
 
         # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
-        assert 'tot_assim_steps' in list(zip(*mda_opts))[0], 'TOT_ASSIM_STEPS has not been given in MDA!'
+        assert 'tot_assim_steps' in list(
+            zip(*mda_opts))[0], 'TOT_ASSIM_STEPS has not been given in MDA!'
 
         # Extract max. iter
-        tot_no_assim = int([item[1] for item in mda_opts if item[0] == 'tot_assim_steps'][0])
+        tot_no_assim = int([item[1]
+                           for item in mda_opts if item[0] == 'tot_assim_steps'][0])
 
         # Make a list of assim. steps
         assim_steps = list(range(tot_no_assim))
@@ -310,14 +318,19 @@ class esmdaMixIn(Ensemble):
         # Return list assim. steps
         return assim_steps
 
-class esmda_approx(esmdaMixIn,approx_update):
+
+class esmda_approx(esmdaMixIn, approx_update):
     pass
 
+
 class esmda_full(esmdaMixIn, full_update):
-   pass
+    pass
+
 
 class esmda_subspace(esmdaMixIn, subspace_update):
-   pass
+    pass
+
+
 class esmda_geo(esmda_approx):
     """
     This is the implementation of the ES-MDA-GEO algorithm from [1]. The main analysis step in this algorithm is the
@@ -334,7 +347,7 @@ class esmda_geo(esmda_approx):
         ----------
         init_file: str
             PIPT init. file containing info. to run the inversion algorithm
-        
+
         References
         ----------
         [1] J. Rafiee & A. Reynolds, Inverse Problems 33 (11), 2017

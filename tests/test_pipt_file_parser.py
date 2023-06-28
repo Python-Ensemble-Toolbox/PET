@@ -7,6 +7,7 @@ class TestPiptInit(unittest.TestCase):
     """
     Test core methods in read_txt() which parser .pipt files.
     """
+
     def setUp(self):
         # Read "parser_input.pipt" and parse with core methods in read_txt
         lines = read_clean_file('tests/parser_input.pipt')
@@ -66,11 +67,10 @@ class TestPiptInit(unittest.TestCase):
         self.assertIsInstance(self.keys['keyword8'][1][0], str)
         self.assertIsInstance(self.keys['keyword8'][1][1], list)
 
-        self.assertListEqual(self.keys['keyword8'], [['string1', [1.0, 2.0], [3.0, 4.0], 'string2', 5.0], 
-            ['string3', [6.0, 7.0, 8.0]]])
+        self.assertListEqual(self.keys['keyword8'], [['string1', [1.0, 2.0], [3.0, 4.0], 'string2', 5.0],
+                                                     ['string3', [6.0, 7.0, 8.0]]])
 
     def test_string_without_tab(self):
         # String with whitespaces instead of \t are parsed as single string
         self.assertIsInstance(self.keys['keyword9'], str)
         self.assertEqual(self.keys['keyword9'], 'string1 string2')
-    

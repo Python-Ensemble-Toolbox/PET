@@ -52,13 +52,15 @@ class EnOpt(PETEnsemble):
         # Calculate objective function of startpoint
         self.ne = self.num_models
         for key in self.state.keys():
-            self.state[key] = np.array(self.state[key])  # make sure state is a numpy array
+            # make sure state is a numpy array
+            self.state[key] = np.array(self.state[key])
         if self.num_models > 1:
             self.aux_input = list(np.arange(self.num_models))
         np.savez('ini_state.npz', **self.state)
         self.calc_prediction()
         self.num_func_eval += self.ne
-        self.obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
+        self.obj_func_values = self.obj_func(
+            self.pred_data, self.keys_opt, self.sim.true_order)
         self.save_analysis_debug(0)
 
         # Initialize function values and covariance
@@ -114,7 +116,8 @@ class EnOpt(PETEnsemble):
             self.num_func_eval += self.ne
             new_func_values = 0
             if run_success:
-                new_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
+                new_func_values = self.obj_func(
+                    self.pred_data, self.keys_opt, self.sim.true_order)
 
             if np.mean(new_func_values) - np.mean(self.obj_func_values) > self.obj_func_tol:
 
@@ -135,7 +138,8 @@ class EnOpt(PETEnsemble):
                 # Write logging info
                 if logger is not None:
                     info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
-                        format(iteration, self.alpha_iter, np.mean(self.obj_func_values), alpha, self.cov[0, 0])
+                        format(iteration, self.alpha_iter, np.mean(
+                            self.obj_func_values), alpha, self.cov[0, 0])
                     logger.info(info_str_iter)
 
                 # Update self.alpha in the one-dimensional case
@@ -234,7 +238,7 @@ class EnOpt(PETEnsemble):
                 self.alpha_cov = enopt[ind_alpha_cov[0]][ind_alpha_cov[1] + 1]
             # Assign beta, if not exit, assign default value
             ind_beta = bt.index2d(enopt, 'beta')
-                # step_tol does not exist
+            # step_tol does not exist
             if ind_beta is None:
                 self.beta = default_beta
             # step_tol present; assign value
@@ -248,7 +252,8 @@ class EnOpt(PETEnsemble):
                 self.alpha_iter_max = default_alpha_iter_max
             # alpha_iter present; assign value
             else:
-                self.alpha_iter_max = enopt[ind_alpha_iter_max[0]][ind_alpha_iter_max[1] + 1]
+                self.alpha_iter_max = enopt[ind_alpha_iter_max[0]
+                                            ][ind_alpha_iter_max[1] + 1]
 
             # Assign number of models, if not exit, assign default value
             ind_num_models = bt.index2d(enopt, 'num_models')
@@ -269,7 +274,8 @@ class EnOpt(PETEnsemble):
             value_cov = np.array([])
             for name in self.prior_info.keys():
                 self.state[name] = self.prior_info[name]['mean']
-                value_cov = np.append(value_cov, self.prior_info[name]['variance'] * np.ones((len(self.state[name]),)))
+                value_cov = np.append(
+                    value_cov, self.prior_info[name]['variance'] * np.ones((len(self.state[name]),)))
                 if 'limits' in self.prior_info[name].keys():
                     self.lower_bound.append(self.prior_info[name]['limits'][0])
                     self.upper_bound.append(self.prior_info[name]['limits'][1])
@@ -311,7 +317,8 @@ class EnOpt(PETEnsemble):
         self._invert_scale_state()
         self.calc_prediction()
         self.num_func_eval += self.ne
-        obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
+        obj_func_values = self.obj_func(
+            self.pred_data, self.keys_opt, self.sim.true_order)
         obj_func_values = np.array(obj_func_values)
 
         # Finally, we calculate the ensemble sensitivity matrix.
@@ -330,7 +337,8 @@ class EnOpt(PETEnsemble):
         g_m = np.zeros(aug_state.shape[0])
         for i in np.arange(self.ne):
             g_m = g_m + pert_obj_func[i] * pert_state[:, i]
-            g_c = g_c + pert_obj_func[i] * (np.outer(pert_state[:, i], pert_state[:, i]) - self.cov)
+            g_c = g_c + pert_obj_func[i] * \
+                (np.outer(pert_state[:, i], pert_state[:, i]) - self.cov)
 
         self.cov_sens_matrix = g_c / (self.ne - 1)
         self.sens_matrix = g_m / (self.ne - 1)
@@ -356,20 +364,23 @@ class EnOpt(PETEnsemble):
             if self.upper_bound and self.lower_bound:
                 np.clip(temp_state_en, 0, 1, out=temp_state_en)
 
-            state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en,1)]).T
+            state_en[statename] = np.array(
+                [mean]).T + temp_state_en - np.array([np.mean(temp_state_en, 1)]).T
 
         return state_en
 
     def _scale_state(self):
         if self.upper_bound and self.lower_bound:
             for i, key in enumerate(self.state):
-                self.state[key] = (self.state[key] - self.lower_bound[i]) / (self.upper_bound[i] - self.lower_bound[i])
+                self.state[key] = (self.state[key] - self.lower_bound[i]) / \
+                    (self.upper_bound[i] - self.lower_bound[i])
                 np.clip(self.state[key], 0, 1, out=self.state[key])
 
     def _invert_scale_state(self):
         if self.upper_bound and self.lower_bound:
             for i, key in enumerate(self.state):
-                self.state[key] = self.lower_bound[i] + self.state[key] * (self.upper_bound[i] - self.lower_bound[i])
+                self.state[key] = self.lower_bound[i] + self.state[key] * \
+                    (self.upper_bound[i] - self.lower_bound[i])
 
     def save_analysis_debug(self, iteration):
         if 'analysisdebug' in self.keys_opt:
@@ -394,4 +405,3 @@ class EnOpt(PETEnsemble):
 
             # Save the variables
             np.savez('debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
-

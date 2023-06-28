@@ -21,7 +21,7 @@ class esMixIn():
     structure and `enkf` is inherited to get `calc_analysis`, so we do not have to implement it again.
     """
 
-    def __init__(self, keys_da, keys_fwd,sim):
+    def __init__(self, keys_da, keys_fwd, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
@@ -32,7 +32,7 @@ class esMixIn():
             PIPT init. file containing info. to run the inversion algorithm
         """
         # Pass init. file to Simultaneous parent class (Python searches parent classes from left to right).
-        super().__init__(keys_da,keys_fwd,sim)
+        super().__init__(keys_da, keys_fwd, sim)
 
         if self.restart is False:
             # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
@@ -42,6 +42,7 @@ class esMixIn():
             # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
             # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
             self.max_iter = 2
+
     def check_convergence(self):
         """
         Calculate the "convergence" of the method. Important to
@@ -49,18 +50,19 @@ class esMixIn():
         self.prev_data_misfit = self.prior_data_misfit
         # only calulate for the final (posterior) estimate
         if self.iteration == len(self.keys_da['assimindex']):
-            assim_index = [self.keys_da['obsname'], list(np.concatenate(self.keys_da['assimindex']))]
+            assim_index = [self.keys_da['obsname'], list(
+                np.concatenate(self.keys_da['assimindex']))]
             list_datatypes = self.list_datatypes
             obs_data_vector, pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, assim_index,
                                                               list_datatypes)
 
-            data_misfit = at.calc_objectivefun(self.full_real_obs_data,pred_data,self.full_cov_data)
+            data_misfit = at.calc_objectivefun(
+                self.full_real_obs_data, pred_data, self.full_cov_data)
             self.data_misfit = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
 
-        else: # sequential updates not finished. Misfit is not relevant
+        else:  # sequential updates not finished. Misfit is not relevant
             self.data_misfit = self.prior_data_misfit
-
 
         # Logical variables for conv. criteria
         why_stop = {'rel_data_misfit': 1 - (self.data_misfit / self.prev_data_misfit),
@@ -81,19 +83,23 @@ class esMixIn():
         # Return conv = False, why_stop var.
         return False, True, why_stop
 
-class es_approx(esMixIn,enkf_approx):
+
+class es_approx(esMixIn, enkf_approx):
     """
     Mixin of ES class and approximate update
     """
     pass
-class es_full(esMixIn,enkf_approx):
+
+
+class es_full(esMixIn, enkf_approx):
     """
     mixin of ES class and approx update.
     Note that since we do not iterate there is no difference between is full and approx.
     """
     pass
 
-class es_subspace(esMixIn,enkf_subspace):
+
+class es_subspace(esMixIn, enkf_subspace):
     """
     mixin of ES class and subspace update.
     """

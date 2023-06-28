@@ -8,6 +8,7 @@ class TestDecompChol(unittest.TestCase):
     """
     Test for generating covariance and realizations with methods in Cholesky class
     """
+
     def setUp(self):
         # Instantiate Cholesky class
         self.stat = Cholesky()
@@ -39,8 +40,9 @@ class TestDecompChol(unittest.TestCase):
         ne = 2
 
         # Generate covariance
-        cov = self.stat.gen_cov2d(x_size=nx, y_size=1, variance=var, var_range=1., aspect=1., angle=0., var_type='sph')
-        
+        cov = self.stat.gen_cov2d(x_size=nx, y_size=1, variance=var,
+                                  var_range=1., aspect=1., angle=0., var_type='sph')
+
         # Check covariance. Should be equal to np.diag(var)
         self.assertTupleEqual(cov.shape, (nx, nx))
         self.assertTrue(np.all(np.isclose(cov, np.diag(var))))
@@ -67,9 +69,9 @@ class TestDecompChol(unittest.TestCase):
         ne = 2
 
         # Generate covariance
-        cov = self.stat.gen_cov2d(x_size=nx, y_size=ny, variance=var, var_range=1., aspect=1., angle=0., 
-            var_type='sph')
-        
+        cov = self.stat.gen_cov2d(x_size=nx, y_size=ny, variance=var, var_range=1., aspect=1., angle=0.,
+                                  var_type='sph')
+
         # Check covariance. Should be equal to np.diag(var)
         self.assertTupleEqual(cov.shape, (nx * ny, nx * ny))
         self.assertTrue(np.all(np.isclose(cov, np.diag(var))))
@@ -97,9 +99,9 @@ class TestDecompChol(unittest.TestCase):
         ne = 2
 
         # Generate covariance
-        cov = self.stat.gen_cov3d(nx=nx, ny=ny, nz=nz, sill=var, var_range=1., aniso1=1., aniso2=1., ang1=0., ang2=0., 
-            ang3=0., var_type='sph')
-        
+        cov = self.stat.gen_cov3d(nx=nx, ny=ny, nz=nz, sill=var, var_range=1., aniso1=1., aniso2=1., ang1=0., ang2=0.,
+                                  ang3=0., var_type='sph')
+
         # Check covariance. Should be equal to np.diag(var)
         self.assertTupleEqual(cov.shape, (nx * ny * nz, nx * ny * nz))
         self.assertTrue(np.all(np.isclose(cov, np.diag(var))))

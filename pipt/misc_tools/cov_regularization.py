@@ -29,7 +29,9 @@ __author__ = 'kfo005'
 import numpy as np
 import scipy.linalg as linalg
 from scipy.special import expit
-import os, pickle, csv
+import os
+import pickle
+import csv
 import datetime as dt
 from shutil import rmtree
 from scipy import sparse
@@ -38,11 +40,11 @@ from scipy.spatial import distance
 # internal import
 import pipt.misc_tools.analysis_tools as at
 
+
 class localization():
     #####
     # TODO: Check field dimensions, should always ensure that we can provide i ,j ,k (x, y, z)
     ###
-
 
     def __init__(self, parsed_info, assimIndex, data_typ, free_parameter, ne):
         """
@@ -101,10 +103,11 @@ class localization():
                 tmp_info = elem.split()
 
                 # format the data and time elements
-                if len(tmp_info)==11: # data has only one name
+                if len(tmp_info) == 11:  # data has only one name
                     name = (tmp_info[8].lower(), float(tmp_info[9]), tmp_info[10].lower())
                 else:
-                    name = (tmp_info[8].lower() + ' ' + tmp_info[9].lower(), float(tmp_info[10]), tmp_info[11].lower())
+                    name = (tmp_info[8].lower() + ' ' + tmp_info[9].lower(),
+                            float(tmp_info[10]), tmp_info[11].lower())
 
                 # assert if the data to be localized actually exists
                 if name in init_local.keys():
@@ -116,9 +119,12 @@ class localization():
                         init_local[name]['file'] = tmp_info[1]
                     else:
                         # the position can span over multiple cells, e.g., 55:100. Hence keep this input as a string
-                        init_local[name]['position'] = [[int(float(tmp_info[1])), int(float(tmp_info[2])), int(float(tmp_info[3]))]]
-                        init_local[name]['range'] = [int(tmp_info[4]), int(tmp_info[5])]  # the range is always an integer
-                        init_local[name]['anisotropi'] = [float(tmp_info[6]), float(tmp_info[7])]
+                        init_local[name]['position'] = [
+                            [int(float(tmp_info[1])), int(float(tmp_info[2])), int(float(tmp_info[3]))]]
+                        init_local[name]['range'] = [int(tmp_info[4]), int(
+                            tmp_info[5])]  # the range is always an integer
+                        init_local[name]['anisotropi'] = [
+                            float(tmp_info[6]), float(tmp_info[7])]
 
         # fist element of the parsed info is field size
         assert parsed_info[0][0].upper() == 'FIELD'
@@ -141,28 +147,32 @@ class localization():
         init_local['mask'] = {}
         # loop over all localization info to ensure that all the masks have been generated
         # Store masks with the key ('taper_function', 'anisotropi', 'range')
-        loc_mask_info = [(init_local[el]['taper_func'], init_local[el]['anisotropi'][0], init_local[el]['anisotropi'][1]
-                          , init_local[el]['range']) for el in init_local.keys() if len(el) == 3]
+        loc_mask_info = [(init_local[el]['taper_func'], init_local[el]['anisotropi'][0], init_local[el]
+                          ['anisotropi'][1], init_local[el]['range']) for el in init_local.keys() if len(el) == 3]
         for test_key in loc_mask_info:
             if not len(init_local['mask']):
                 if test_key[0] == 'region':
                     if isinstance(test_key[3], list):
-                        new_key = ('region', test_key[3][0], test_key[3][1], test_key[3][2])
+                        new_key = ('region', test_key[3][0],
+                                   test_key[3][1], test_key[3][2])
                     else:
                         new_key = ('region', test_key[3])
                     init_local['mask'][new_key] = self._gen_loc_mask(taper_function=test_key[0],
-                                                                     anisotropi=[test_key[1], test_key[2]],
+                                                                     anisotropi=[
+                                                                         test_key[1], test_key[2]],
                                                                      loc_range=test_key[3],
                                                                      field_size=init_local['field'],
                                                                      ne=ne
                                                                      )
                 else:
                     if isinstance(test_key[3], list):
-                        new_key = (test_key[0], test_key[1], test_key[2], test_key[3][0], test_key[3][1])
+                        new_key = (test_key[0], test_key[1],
+                                   test_key[2], test_key[3][0], test_key[3][1])
                     else:
                         new_key = test_key
                     init_local['mask'][new_key] = self._gen_loc_mask(taper_function=test_key[0],
-                                                                     anisotropi=[test_key[1], test_key[2]],
+                                                                     anisotropi=[
+                                                                         test_key[1], test_key[2]],
                                                                      loc_range=test_key[3][0],
                                                                      field_size=init_local['field'],
                                                                      ne=ne
@@ -174,14 +184,16 @@ class localization():
                     # 1: file. Unique parameters ('region', filename)
                     # 2: area. Unique parameters ('region', 'x', 'y','z')
                     if isinstance(test_key[3], list):
-                        new_key = ('region', test_key[3][0], test_key[3][1], test_key[3][2])
+                        new_key = ('region', test_key[3][0],
+                                   test_key[3][1], test_key[3][2])
                     else:
                         new_key = ('region', test_key[3])
 
                     if new_key not in init_local['mask']:
                         # generate this mask
                         init_local['mask'][new_key] = self._gen_loc_mask(taper_function=test_key[0],
-                                                                         anisotropi=[test_key[1], test_key[2]],
+                                                                         anisotropi=[
+                                                                             test_key[1], test_key[2]],
                                                                          loc_range=test_key[3],
                                                                          field_size=init_local['field'],
                                                                          ne=ne
@@ -189,14 +201,16 @@ class localization():
 
                 else:
                     if isinstance(test_key[3], list):
-                        new_key = (test_key[0], test_key[1], test_key[2], test_key[3][0], test_key[3][1])
+                        new_key = (test_key[0], test_key[1],
+                                   test_key[2], test_key[3][0], test_key[3][1])
                     else:
                         new_key = test_key
 
                     if new_key not in init_local['mask']:
                         # generate this mask
                         init_local['mask'][new_key] = self._gen_loc_mask(taper_function=test_key[0],
-                                                                         anisotropi=[test_key[1], test_key[2]],
+                                                                         anisotropi=[
+                                                                             test_key[1], test_key[2]],
                                                                          loc_range=test_key[3][0],
                                                                          field_size=init_local['field'],
                                                                          ne=ne
@@ -220,8 +234,10 @@ class localization():
                             if not self.loc_info[(data, time, param)]['taper_func'] == 'region':
                                 if isinstance(self.loc_info[(data, time, param)]['range'], list):
                                     key = (self.loc_info[(data, time, param)]['taper_func'],
-                                           self.loc_info[(data, time, param)]['anisotropi'][0],
-                                           self.loc_info[(data, time, param)]['anisotropi'][1],
+                                           self.loc_info[(data, time, param)
+                                                         ]['anisotropi'][0],
+                                           self.loc_info[(data, time, param)
+                                                         ]['anisotropi'][1],
                                            self.loc_info[(data, time, param)]['range'][0],
                                            self.loc_info[(data, time, param)]['range'][1])
                                     mask = self._repos_locmask(self.loc_info['mask'][key],
@@ -230,8 +246,10 @@ class localization():
                                                                z_range=self.loc_info[(data, time, param)]['range'][1])
                                 else:
                                     key = (self.loc_info[(data, time, param)]['taper_func'],
-                                           self.loc_info[(data, time, param)]['anisotropi'][0],
-                                           self.loc_info[(data, time, param)]['anisotropi'][1],
+                                           self.loc_info[(data, time, param)
+                                                         ]['anisotropi'][0],
+                                           self.loc_info[(data, time, param)
+                                                         ]['anisotropi'][1],
                                            self.loc_info[(data, time, param)]['range'])
                                     mask = self._repos_locmask(self.loc_info['mask'][key],
                                                                [[el[0], el[1]] for el in
@@ -274,7 +292,8 @@ class localization():
                                 # set the localization mask to zeros for this parameter
                                 for i in range(data_size[time_count][count]):
                                     if self.loc_info['actnum'] is not None:
-                                        tmp_loc[i].append(mask[i, self.loc_info['actnum']])
+                                        tmp_loc[i].append(
+                                            mask[i, self.loc_info['actnum']])
                                     else:
                                         tmp_loc[i].append(mask[i, :])
                                 # tmp_loc = np.hstack((tmp_loc, mask)) if tmp_loc.size else mask
@@ -298,7 +317,7 @@ class localization():
         return sparse.vstack(loc).transpose()
         # return np.array(loc).T
 
-    def auto_ada_loc(self, pert_state, proj_pred_data,curr_param,**kwargs):
+    def auto_ada_loc(self, pert_state, proj_pred_data, curr_param, **kwargs):
         if 'prior_info' in kwargs:
             prior_info = kwargs['prior_info']
         else:
@@ -308,9 +327,9 @@ class localization():
 
         ne = pert_state.shape[1]
         rp_index = np.random.permutation(ne)
-        shuffled_ensemble = pert_state[:,rp_index]
-        corr_mtx = self.get_corr_mtx(pert_state,proj_pred_data)
-        corr_mtx_shuffled = self.get_corr_mtx(shuffled_ensemble,proj_pred_data)
+        shuffled_ensemble = pert_state[:, rp_index]
+        corr_mtx = self.get_corr_mtx(pert_state, proj_pred_data)
+        corr_mtx_shuffled = self.get_corr_mtx(shuffled_ensemble, proj_pred_data)
 
         tapering_matrix = np.ones(corr_mtx.shape)
 
@@ -323,17 +342,18 @@ class localization():
             if param == 'NA':
                 num_active = tapering_matrix.shape[0]
             else:
-                if 'active' in prior_info[param]: # if this is defined
+                if 'active' in prior_info[param]:  # if this is defined
                     num_active = int(prior_info[param]['active'])
             prop_index = np.arange(num_active) + count
-            current_tapering = self.tapering_function(corr_mtx[prop_index,:],corr_mtx_shuffled[prop_index,:])
-            tapering_matrix[prop_index,:] = current_tapering
+            current_tapering = self.tapering_function(
+                corr_mtx[prop_index, :], corr_mtx_shuffled[prop_index, :])
+            tapering_matrix[prop_index, :] = current_tapering
             count += num_active
-        step = np.dot(np.multiply(tapering_matrix,pert_state),proj_pred_data)
+        step = np.dot(np.multiply(tapering_matrix, pert_state), proj_pred_data)
 
         return step
 
-    def tapering_function(self,cf,cf_s):
+    def tapering_function(self, cf, cf_s):
 
         nstd = 1
         if self.loc_info['nstd'] is not None:
@@ -342,53 +362,54 @@ class localization():
         tc = np.zeros(cf.shape)
 
         for i in range(cf.shape[1]):
-            current_cf = cf[:,i]
-            est_noise_std = np.median( np.absolute(cf_s[:,i]), axis=0 ) / 0.6745
-            cutoff_point = np.sqrt( 2*np.log(np.prod(current_cf.shape))) *  est_noise_std
+            current_cf = cf[:, i]
+            est_noise_std = np.median(np.absolute(cf_s[:, i]), axis=0) / 0.6745
+            cutoff_point = np.sqrt(2*np.log(np.prod(current_cf.shape))) * est_noise_std
             cutoff_point = nstd * est_noise_std
             if 'type' in self.loc_info and self.loc_info['type'] == 'soft':
                 current_tc = self.rational_function(1-np.absolute(current_cf),
-                                                    1- cutoff_point)
+                                                    1 - cutoff_point)
             elif 'type' in self.loc_info and self.loc_info['type'] == 'sigm':
                 current_tc = self.rational_function_sigmoid(np.absolute(current_cf),
-                                                    nstd)
-            else: # default to hard thresholding
+                                                            nstd)
+            else:  # default to hard thresholding
                 set_upper = np.where(np.absolute(current_cf) > cutoff_point)
                 current_tc = np.zeros(current_cf.shape)
-                current_tc[set_upper] = 1 # this is hard thresholding
-            tc[:,i] = current_tc.flatten()
+                current_tc[set_upper] = 1  # this is hard thresholding
+            tc[:, i] = current_tc.flatten()
 
         return tc
 
-    def rational_function(self,dist,lc):
+    def rational_function(self, dist, lc):
 
         z = np.absolute(dist) / lc
         index_1 = np.where(z <= 1)
         index_2 = np.where(z <= 2)
-        index_12 = np.setdiff1d(index_2,index_1)
+        index_12 = np.setdiff1d(index_2, index_1)
 
         y = np.zeros(len(z))
 
-        y[index_1] = 1 - (np.power(z[index_1],5) / 4) \
-                       + (np.power(z[index_1],4) / 2) \
-                       + (5*np.power(z[index_1],3) / 8) \
-                       - (5*np.power(z[index_1],2) / 3)
+        y[index_1] = 1 - (np.power(z[index_1], 5) / 4) \
+            + (np.power(z[index_1], 4) / 2) \
+            + (5*np.power(z[index_1], 3) / 8) \
+            - (5*np.power(z[index_1], 2) / 3)
 
         y[index_12] = (np.power(z[index_12], 5) / 12) \
-                     - (np.power(z[index_12], 4) / 2) \
-                     + (5 * np.power(z[index_12], 3) / 8) \
-                     + (5 * np.power(z[index_12], 2) / 3) \
-                     - 5*z[index_12] \
-                     - np.divide(2,3*z[index_12]) + 4
+            - (np.power(z[index_12], 4) / 2) \
+            + (5 * np.power(z[index_12], 3) / 8) \
+            + (5 * np.power(z[index_12], 2) / 3) \
+            - 5*z[index_12] \
+            - np.divide(2, 3*z[index_12]) + 4
 
         return y
-    def rational_function_sigmoid(self,dist,lc):
-        steepness = 50 # define how steep the transition is
+
+    def rational_function_sigmoid(self, dist, lc):
+        steepness = 50  # define how steep the transition is
         y = expit((dist-(1-lc))*steepness)
 
         return y
 
-    def get_corr_mtx(self,pert_state,proj_pred_data):
+    def get_corr_mtx(self, pert_state, proj_pred_data):
 
         # compute correlation matrix
 
@@ -411,7 +432,8 @@ class localization():
         B2 = np.outer(std_data, np.ones(ne))
         normalized_simData = np.divide((proj_pred_data - A2), B2)
 
-        corr_mtx = np.divide(np.dot(normalized_ensemble, np.transpose(normalized_simData)), ne)
+        corr_mtx = np.divide(
+            np.dot(normalized_ensemble, np.transpose(normalized_simData)), ne)
 
         corr_mtx[std_model < 10 ** -6, :] = 0
         corr_mtx[:, std_data < 10 ** -6] = 0
@@ -447,23 +469,27 @@ class localization():
                     # d = np.sqrt(np.sum(lt**2))
 
                     # Gaspari-Chon
-                    ratio = np.sqrt((lt[0] / tot_range[0]) ** 2 + (lt[1] / tot_range[1]) ** 2)
+                    ratio = np.sqrt((lt[0] / tot_range[0]) ** 2 +
+                                    (lt[1] / tot_range[1]) ** 2)
                     h1 = ratio
-                    h2 = np.sqrt((lt[0] / (2 * tot_range[0])) ** 2 + (lt[1] / (2 * tot_range[1])) ** 2)
+                    h2 = np.sqrt((lt[0] / (2 * tot_range[0])) ** 2 +
+                                 (lt[1] / (2 * tot_range[1])) ** 2)
 
                     if ((h1 <= 1) & (h2 <= 1)):  # check that this layer should be localized
                         mask[i, j] = (-1 / 4) * ratio ** 5 + (1 / 2) * ratio ** 4 + (5 / 8) * ratio ** 3 - \
                                      (5 / 3) * ratio ** 2 + 1
                     elif ((h1 > 1) & (h2 <= 1)):  # check that this layer should be localized
                         mask[i, j] = (1 / 12) * ratio ** 5 - (1 / 2) * ratio ** 4 + (5 / 8) * ratio ** 3 + \
-                                     (5 / 3) * ratio ** 2 - 5 * ratio + 4 - (2 / 3) * ratio ** (-1)
+                                     (5 / 3) * ratio ** 2 - 5 * \
+                            ratio + 4 - (2 / 3) * ratio ** (-1)
                     elif (h1 > 1) & (h2 > 1):
                         mask[i, j] = 0
             # only return non-zero part
             return mask[mask.nonzero()[0].min():mask.nonzero()[0].max() + 1,
-                   mask.nonzero()[1].min():mask.nonzero()[1].max() + 1]
+                        mask.nonzero()[1].min():mask.nonzero()[1].max() + 1]
 
-        if taper_function == 'fb':  # Taper function based on a covariance structure, as defined by eq (23) in "R.Furrer and
+        # Taper function based on a covariance structure, as defined by eq (23) in "R.Furrer and
+        if taper_function == 'fb':
             # T.Bengtsson, Estimation of high-dimensional prior and posterior covariance matrices
             # in Kalman filter variants, Journal of Multivariate Analysis, 2007."
 
@@ -493,14 +519,15 @@ class localization():
                     # Todo: Include different variogram models
                     tmp = 0
                     if (d < loc_range):
-                        tmp = 1 - 1 * (1.5 * np.abs(d) / loc_range - .5 * (d / loc_range) ** 3)
+                        tmp = 1 - 1 * (1.5 * np.abs(d) / loc_range - .5 *
+                                       (d / loc_range) ** 3)
                     # eq (23) of Furrer and Bengtsson
                     tmp_mask = (ne * tmp ** 2) / ((tmp ** 2) * (ne + 1) + 1 ** 2)
                     if mask[i, j] < tmp_mask:
                         mask[i, j] = tmp_mask
 
             return mask[mask.nonzero()[0].min():mask.nonzero()[0].max() + 1,
-                   mask.nonzero()[1].min():mask.nonzero()[1].max() + 1]
+                        mask.nonzero()[1].min():mask.nonzero()[1].max() + 1]
 
         if taper_function == 'region':
             # since this matrix always is field size, store as sparse
@@ -521,27 +548,26 @@ class localization():
                 loc_mask = np.maximum(loc_mask, self._repos_mask(mask, data))
         elif len(data_pos) == 1:  # single position
             loc_mask = self._repos_mask(mask, data_pos[0])
-        else: # no data pos, i.e. this data should not update this parameter
+        else:  # no data pos, i.e. this data should not update this parameter
             loc_mask = np.zeros(grid_dim)
 
         if self.loc_info['actnum'] is not None:
             if z_range == ':':
                 return loc_mask.flatten()[self.loc_info['actnum']]
             else:
-                new_loc_mask = loc_mask[z_range,:,:]
-                new_actnum = self.loc_info['actnum'].reshape(grid_dim)[z_range,:,:]
+                new_loc_mask = loc_mask[z_range, :, :]
+                new_actnum = self.loc_info['actnum'].reshape(grid_dim)[z_range, :, :]
                 return new_loc_mask.flatten()[new_actnum.flatten()]
         else:
             if z_range == ':':
                 return loc_mask.flatten()
             else:
-                return loc_mask[z_range,:,:].flatten()
+                return loc_mask[z_range, :, :].flatten()
 
     def _repos_mask(self, mask, data_pos):
         grid_dim = self.loc_info['field'][1:]
         mask_dimX = mask.shape[0]
         mask_dimY = mask.shape[1]
-
 
         # If the mask is placed sufficiently inside the grid, it only requires padding
 
@@ -554,7 +580,8 @@ class localization():
             pad_y_d = data_pos[0] - int(mask_dimY / 2)
             pad_y_u = grid_dim[1] - (data_pos[0] + int(np.ceil(mask_dimY / 2)))
 
-            loc_2d_mask = np.pad(mask, ((pad_x_l, pad_x_r), (pad_y_d, pad_y_u)), 'constant')
+            loc_2d_mask = np.pad(
+                mask, ((pad_x_l, pad_x_r), (pad_y_d, pad_y_u)), 'constant')
 
         elif ((grid_dim[0] - (data_pos[1] + mask_dimX / 2) > 0) and data_pos[1] - mask_dimX / 2 > 0) \
                 and not (((grid_dim[1] - (data_pos[0] + mask_dimY / 2) > 0)) and (data_pos[0] - mask_dimY / 2 > 0)):
@@ -584,11 +611,11 @@ class localization():
             if pad_y_d < 0:
                 pad_y_d = 0
                 pos_y2 += pos_y1
-            if pos_y1==pos_y2:
+            if pos_y1 == pos_y2:
                 pos_y2 += 1
 
-            loc_2d_mask = np.pad(mask, ((pad_x_l, pad_x_r), (pad_y_d, pad_y_u)), 'constant')[:, pos_y1:pos_y2]
-
+            loc_2d_mask = np.pad(mask, ((pad_x_l, pad_x_r), (pad_y_d, pad_y_u)), 'constant')[
+                :, pos_y1:pos_y2]
 
         elif not ((grid_dim[0] - (data_pos[1] + mask_dimX / 2) > 0) and data_pos[1] - mask_dimX / 2 > 0) \
                 and (((grid_dim[1] - (data_pos[0] + mask_dimY / 2) > 0)) and (data_pos[0] - mask_dimY / 2 > 0)):
@@ -617,10 +644,11 @@ class localization():
             if pad_x_l < 0:
                 pad_x_l = 0
                 pos_x2 += pos_x1
-            if pos_x1==pos_x2:
+            if pos_x1 == pos_x2:
                 pos_x2 += 1
 
-            loc_2d_mask = np.pad(mask, ((pad_x_l, pad_x_r), (pad_y_d, pad_y_u)), 'constant')[pos_x1:pos_x2, :]
+            loc_2d_mask = np.pad(mask, ((pad_x_l, pad_x_r), (pad_y_d, pad_y_u)), 'constant')[
+                pos_x1:pos_x2, :]
         else:
             pad_x_r = 0
             pad_y_u = 0
@@ -664,17 +692,19 @@ class localization():
             if pad_x_l < 0:
                 pad_x_l = 0
                 pos_x2 += pos_x1
-            if pos_x1==pos_x2:
-                pos_x2+=1
-            if pos_y1==pos_y2:
+            if pos_x1 == pos_x2:
+                pos_x2 += 1
+            if pos_y1 == pos_y2:
                 pos_y2 += 1
-            loc_2d_mask = np.pad(mask, ((pad_x_l, pad_x_r), (pad_y_d, pad_y_u)), 'constant')[pos_x1:pos_x2, pos_y1:pos_y2]
+            loc_2d_mask = np.pad(mask, ((pad_x_l, pad_x_r), (pad_y_d, pad_y_u)), 'constant')[
+                pos_x1:pos_x2, pos_y1:pos_y2]
 
         loc_mask = np.zeros(self.loc_info['field'])
         loc_mask[data_pos[2], :, :] = loc_2d_mask
         return loc_mask
 
-def _calc_distance(data_pos,index_unique,current_data_list,assim_index,obs_data,pred_data,param_pos):
+
+def _calc_distance(data_pos, index_unique, current_data_list, assim_index, obs_data, pred_data, param_pos):
     """
     Calculate the distance between data and parameters.
 
@@ -711,43 +741,45 @@ def _calc_distance(data_pos,index_unique,current_data_list,assim_index,obs_data,
             for indx in assim_index[1]:
                 indx_data_pos = data_pos[dat][indx]
                 if obs_data[indx] is not None and obs_data[indx][dat] is not None:
-                    dist.append(min(distance.cdist(indx_data_pos,param_pos).flatten()))  # add shortest distance
+                    # add shortest distance
+                    dist.append(min(distance.cdist(indx_data_pos, param_pos).flatten()))
     else:
         dist = []
         for data in current_data_list:
             elem_data_pos = data_pos[data]
-            obs,_ = at.aug_obs_pred_data(obs_data,pred_data,assim_index,[data])
-            dist.extend(len(obs)*[min(distance.cdist(elem_data_pos, param_pos).flatten())])
+            obs, _ = at.aug_obs_pred_data(obs_data, pred_data, assim_index, [data])
+            dist.extend(
+                len(obs)*[min(distance.cdist(elem_data_pos, param_pos).flatten())])
 
     return dist
 
 
-def _calc_loc(max_dist, distance, prior_info,loc_type,ne):
-        # given the parameter type (to get the prior info) and the range to the data points we can calculate the
-        # localization mask
-        variance = prior_info['variance'][0]
-        mask = np.zeros(len(distance))
-        if loc_type == 'fb':
-            # assume that FB localization is utilized. Here vi can add all different localization functions
-            for i in range(len(distance)):
-                if distance[i] < max_dist:
-                    tmp = variance - variance * (
-                                1.5 * np.abs(distance[i]) / max_dist - .5 * (distance[i] / max_dist) ** 3)
-                else:
-                    tmp = 0
+def _calc_loc(max_dist, distance, prior_info, loc_type, ne):
+    # given the parameter type (to get the prior info) and the range to the data points we can calculate the
+    # localization mask
+    variance = prior_info['variance'][0]
+    mask = np.zeros(len(distance))
+    if loc_type == 'fb':
+        # assume that FB localization is utilized. Here vi can add all different localization functions
+        for i in range(len(distance)):
+            if distance[i] < max_dist:
+                tmp = variance - variance * (
+                    1.5 * np.abs(distance[i]) / max_dist - .5 * (distance[i] / max_dist) ** 3)
+            else:
+                tmp = 0
 
-                mask[i] = (ne * tmp ** 2) / ((tmp ** 2) * (ne + 1) + variance ** 2)
-        elif loc_type == 'gc':
-            for count, i in enumerate(np.abs(distance)):
-                if (i <= max_dist):
-                    tmp = -(1. / 4.) * (i / max_dist) ** 5 + (1. / 2.) * (i / max_dist) ** 4 + (5. / 8.) * (
-                                i / max_dist) ** 3 - (5. / 3.) * (i / max_dist) ** 2 + 1
-                elif (i <= 2 * max_dist):
-                    tmp = (1. / 12.) * (i / max_dist) ** 5 - (1. / 2.) * (i / max_dist) ** 4 + (5. / 8.) * (
-                                i / max_dist) ** 3 + (5. / 3.) * (i / max_dist) ** 2 - 5. * (i / max_dist) + 4. - (
-                                      2. / 3.) * (max_dist / i)
-                else:
-                    tmp = 0.
-                mask[count] = tmp
+            mask[i] = (ne * tmp ** 2) / ((tmp ** 2) * (ne + 1) + variance ** 2)
+    elif loc_type == 'gc':
+        for count, i in enumerate(np.abs(distance)):
+            if (i <= max_dist):
+                tmp = -(1. / 4.) * (i / max_dist) ** 5 + (1. / 2.) * (i / max_dist) ** 4 + (5. / 8.) * (
+                    i / max_dist) ** 3 - (5. / 3.) * (i / max_dist) ** 2 + 1
+            elif (i <= 2 * max_dist):
+                tmp = (1. / 12.) * (i / max_dist) ** 5 - (1. / 2.) * (i / max_dist) ** 4 + (5. / 8.) * (
+                    i / max_dist) ** 3 + (5. / 3.) * (i / max_dist) ** 2 - 5. * (i / max_dist) + 4. - (
+                    2. / 3.) * (max_dist / i)
+            else:
+                tmp = 0.
+            mask[count] = tmp
 
-        return mask[np.newaxis,:]
+    return mask[np.newaxis, :]
