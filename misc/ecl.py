@@ -115,7 +115,7 @@ _TYPES = {
                       dsk=numpy.dtype('>f8'), mem=numpy.float64),
     'CHAR': _DataType(siz=8, fmt='c', nch=False,
                       dsk=numpy.dtype('|S8'), mem=(
-                           numpy.dtype('<' + _STR_TYPE + '8'))),
+                          numpy.dtype('<' + _STR_TYPE + '8'))),
     'MESS': _DataType(siz=0, fmt='x', nch=True,
                       dsk=numpy.void, mem=numpy.void),
 }
@@ -265,6 +265,7 @@ class EclipseFile (object):
 
     Access to this object must be within a monitor (`with`-statement).
     """
+
     def __init__(self, root, ext):
         """Initialize file object from a path in the filesystem.
 
@@ -356,6 +357,7 @@ class EclipseFile (object):
 # pylint: disable=too-few-public-methods, too-many-instance-attributes
 class EclipseGrid (object):
     """Corner-point geometry data from an Eclipse Extensive Grid file."""
+
     def __init__(self, root):
         # save the root variable for later
         self.root = root
@@ -482,6 +484,7 @@ def _intehead_date(intehead):
 # pylint: disable=too-few-public-methods, too-many-instance-attributes
 class EclipseData (object):
     """Base class for both static and recurrent data."""
+
     def __init__(self, grid, root, ext):
         self.grid = grid  # grid extent information
         self.root = root  # underlaying file name
@@ -696,6 +699,7 @@ def _intehead_phases(intehead):
 # pylint: disable=too-few-public-methods, too-many-instance-attributes
 class EclipseInit (EclipseData):
     """Read information from static data (init) file."""
+
     def __init__(self, root):
         # bootstrap ourself; if the base class is reading a property
         # that require reformatting, then we have all the information
@@ -737,6 +741,7 @@ class EclipseInit (EclipseData):
 
 class EclipseRestart (EclipseData):
     """Read information from a recurrent data (restart) file."""
+
     def __init__(self, grid, seq):
         """
         :param grid:  Initialization file which contains grid dimensions.
@@ -759,6 +764,7 @@ class EclipseRestart (EclipseData):
 
 class EclipseSummary (EclipseData):
     """Read information from a recurrent data (summary) file."""
+
     def __init__(self, grid, seq):
         """
         :param grid:  Initialization file which contains grid dimensions.
@@ -820,6 +826,7 @@ def _quick_date(fileobj):
 
 class EclipseCase (object):
     """Read data for an Eclipse simulation case."""
+
     def __init__(self, casename):
         """
         :param casename:  Path to the case, with or without extension.
@@ -1071,6 +1078,7 @@ class EclipseCase (object):
 
 class EclipseRFT (object):
     """Read data from an Eclipse RFT file."""
+
     def __init__(self, casename):
         """
         :param casename:  Path to the case, with or without extension.

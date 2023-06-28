@@ -30,6 +30,7 @@ class Ensemble:
     and prediction runs are performed. General methods that are useful in various ensemble loops have also been
     implemented here.
     """
+
     def __init__(self, keys_en, sim, redund_sim=None):
         """
         Class extends the ReadInitFile class. First the PIPT init. file is passed to the parent class for reading and
@@ -83,9 +84,11 @@ class Ensemble:
             self.logger.info('\033[92m--- Restart run initiated! ---\033[92m')
             # Check if the pickle save file exists in folder
             try:
-                assert(self.pickle_restart_file in [f for f in os.listdir('.') if os.path.isfile(f)])
+                assert (self.pickle_restart_file in [
+                        f for f in os.listdir('.') if os.path.isfile(f)])
             except AssertionError as err:
-                self.logger.exception('The restart file "{0}" does not exist in folder. Cannot restart!'.format(self.pickle_restart_file))
+                self.logger.exception('The restart file "{0}" does not exist in folder. Cannot restart!'.format(
+                    self.pickle_restart_file))
                 raise err
 
             # Load restart file
@@ -146,9 +149,12 @@ class Ensemble:
             self.multilevel = {}
             for i, opt in enumerate(list(zip(*self.keys_en['multilevel']))[0]):
                 if opt == 'levels':
-                    self.multilevel['levels'] = [elem for elem in range(int(self.keys_en['multilevel'][i][1]))]
+                    self.multilevel['levels'] = [elem for elem in range(
+                        int(self.keys_en['multilevel'][i][1]))]
                 if opt == 'en_size':
-                    self.multilevel['ne'] = [range(int(el)) for el in self.keys_en['multilevel'][i][1]]
+                    self.multilevel['ne'] = [range(int(el))
+                                             for el in self.keys_en['multilevel'][i][1]]
+
     def _ext_prior_info(self):
         """
         Extract prior information on STATE from keyword(s) PRIOR_<STATE entries>.
@@ -188,7 +194,7 @@ class Ensemble:
             self.prior_info[name]['angle'] = angle
             corr_length = [None]
             self.prior_info[name]['corr_length'] = corr_length
-            self.prior_info[name]['nx'] = self.prior_info[name]['ny'] =self.prior_info[name]['nz']= None
+            self.prior_info[name]['nx'] = self.prior_info[name]['ny'] = self.prior_info[name]['nz'] = None
 
             # Extract info. from the prior keyword
             for i, opt in enumerate(list(zip(*self.keys_en['prior_' + name]))[0]):
@@ -223,7 +229,7 @@ class Ensemble:
                     grid_dim = self.keys_en['prior_' + name][i][1]
                 elif opt == 'limits':  # Truncation values
                     limits = self.keys_en['prior_' + name][i][1:]
-                elif opt == 'active': # Number of active cells (single number)
+                elif opt == 'active':  # Number of active cells (single number)
                     active = self.keys_en['prior_' + name][i][1]
 
             # Check if mean needs to be loaded, or if loaded
@@ -267,7 +273,8 @@ class Ensemble:
                         .format(len(mean), nz)
 
                     # Only 1 entry; copy this to all layers
-                    print('\033[1;33mSingle entry for MEAN will be copied to all {0} layers\033[1;m'.format(nz))
+                    print(
+                        '\033[1;33mSingle entry for MEAN will be copied to all {0} layers\033[1;m'.format(nz))
                     self.prior_info[name]['mean'] = mean * nz
 
                 else:
@@ -281,7 +288,8 @@ class Ensemble:
                         .format(len(vario), nz)
 
                     # Only 1 entry; copy this to all layers
-                    print('\033[1;33mSingle entry for VARIO will be copied to all {0} layers\033[1;m'.format(nz))
+                    print(
+                        '\033[1;33mSingle entry for VARIO will be copied to all {0} layers\033[1;m'.format(nz))
                     self.prior_info[name]['vario'] = vario * nz
 
                 else:
@@ -295,7 +303,8 @@ class Ensemble:
                         .format(len(variance), nz)
 
                     # Only 1 entry; copy this to all layers
-                    print('\033[1;33mSingle entry for VAR will be copied to all {0} layers\033[1;m'.format(nz))
+                    print(
+                        '\033[1;33mSingle entry for VAR will be copied to all {0} layers\033[1;m'.format(nz))
                     self.prior_info[name]['variance'] = variance * nz
 
                 else:
@@ -309,7 +318,8 @@ class Ensemble:
                         .format(len(aniso), nz)
 
                     # Only 1 entry; copy this to all layers
-                    print('\033[1;33mSingle entry for ANISO will be copied to all {0} layers\033[1;m'.format(nz))
+                    print(
+                        '\033[1;33mSingle entry for ANISO will be copied to all {0} layers\033[1;m'.format(nz))
                     self.prior_info[name]['aniso'] = aniso * nz
 
                 else:
@@ -323,7 +333,8 @@ class Ensemble:
                         .format(len(angle), nz)
 
                     # Only 1 entry; copy this to all layers
-                    print('\033[1;33mSingle entry for ANGLE will be copied to all {0} layers\033[1;m'.format(nz))
+                    print(
+                        '\033[1;33mSingle entry for ANGLE will be copied to all {0} layers\033[1;m'.format(nz))
                     self.prior_info[name]['angle'] = angle * nz
 
                 else:
@@ -337,7 +348,8 @@ class Ensemble:
                         .format(len(corr_length), nz)
 
                     # Only 1 entry; copy this to all layers
-                    print('\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
+                    print(
+                        '\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
                     self.prior_info[name]['corr_length'] = corr_length * nz
 
                 else:
@@ -346,7 +358,7 @@ class Ensemble:
                 # Limits, if exists
                 if limits is not None:
                     if isinstance(limits[0], list) and len(limits) < nz or \
-                                    not isinstance(limits[0], list) and len(limits) < 2 * nz:
+                            not isinstance(limits[0], list) and len(limits) < 2 * nz:
                         # Check if it is more than one entry and give error
                         assert (isinstance(limits[0], list) and len(limits) == 1), \
                             'Information from LIMITS has been given for {0} layers, whereas {1} is needed!' \
@@ -356,7 +368,8 @@ class Ensemble:
                             .format(len(limits) / 2, nz)
 
                         # Only 1 entry; copy this to all layers
-                        print('\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
+                        print(
+                            '\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
                         self.prior_info[name]['limits'] = [limits] * nz
 
             else:  # 2D grid only, or optimization case
@@ -416,7 +429,8 @@ class Ensemble:
                 # If mean is scalar, no covariance matrix is needed
                 if type(self.prior_info[name]['mean']).__module__ == 'numpy':
                     # Generate covariance matrix
-                    cov = init_en.gen_cov2d(nx, ny, variance[i], corr_length[i], aniso[i], angle[i], vario[i])
+                    cov = init_en.gen_cov2d(
+                        nx, ny, variance[i], corr_length[i], aniso[i], angle[i], vario[i])
                 else:
                     cov = np.array(variance[i])
 
@@ -429,7 +443,8 @@ class Ensemble:
                 if limits is None:
                     real = init_en.gen_real(mean_layer, cov, self.ne)
                 else:
-                    real = init_en.gen_real(mean_layer, cov, self.ne, {'upper': limits[i][1], 'lower': limits[i][0]})
+                    real = init_en.gen_real(mean_layer, cov, self.ne, {
+                                            'upper': limits[i][1], 'lower': limits[i][0]})
 
                 # Stack realizations for each layer
                 if i == 0:
@@ -462,7 +477,8 @@ class Ensemble:
         if self.restart is True:
             # List simulations we already have done. Do this by checking pred_data.
             # OBS: Minus 1 here do to the aborted simulation is also not None.
-            sim_done = list(range(len([ind for ind, p in enumerate(self.pred_data) if p is not None]) - 1))
+            sim_done = list(
+                range(len([ind for ind, p in enumerate(self.pred_data) if p is not None]) - 1))
 
             # Update list of assim. steps by removing simulations we have done
             list_assim = [ind for ind in list_assim if ind not in sim_done]
@@ -493,11 +509,11 @@ class Ensemble:
         if hasattr(self, 'multilevel'):
             success = self.calc_ml_prediction(input_state)
         else:
-        # Number of parallel runs
+            # Number of parallel runs
             no_tot_run = int(self.sim.input_dict['parallel'])
             self.pred_data = []
 
-            #for level in self.multilevel['level']: #
+            # for level in self.multilevel['level']: #
             # Setup forward simulator and redundant simulator at the correct fidelity
             if self.sim.redund_sim is not None:
                 self.sim.redund_sim.setup_fwd_run()
@@ -529,7 +545,8 @@ class Ensemble:
             list_member_index = list(range(self.ne))
 
             # Run prediction in parallel using p_map
-            en_pred = p_map(self.sim.run_fwd_sim, list_state, list_member_index, num_cpus=no_tot_run)
+            en_pred = p_map(self.sim.run_fwd_sim, list_state,
+                            list_member_index, num_cpus=no_tot_run)
 
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
@@ -541,8 +558,10 @@ class Ensemble:
                 self.save()
                 success = False
                 if len(list_crash) > 1:
-                    print('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-                    self.logger.info('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+                    print(
+                        '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+                    self.logger.info(
+                        '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
                     sys.exit(1)
                 return success
 
@@ -551,25 +570,28 @@ class Ensemble:
                 # Replace crashed runs with (random) successful runs. If there are more crashed runs than successful once,
                 # we draw with replacement.
                 if len(list_crash) < len(list_success):
-                    copy_member = np.random.choice(list_success, size=len(list_crash), replace=False)
+                    copy_member = np.random.choice(
+                        list_success, size=len(list_crash), replace=False)
                 else:
-                    copy_member = np.random.choice(list_success, size=len(list_crash), replace=True)
+                    copy_member = np.random.choice(
+                        list_success, size=len(list_crash), replace=True)
 
                 # Insert the replaced runs in prediction list
                 for indx, el in enumerate(copy_member):
                     print(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member '
-                        f'{el}! ---\033[92m')
+                          f'{el}! ---\033[92m')
                     self.logger.info(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by '
-                        f'ensemble member {el}! ---\033[92m')
+                                     f'ensemble member {el}! ---\033[92m')
                     for key in self.state.keys():
                         if self.state[key].ndim > 1:
-                            self.state[key][:, list_crash[indx]] = deepcopy(self.state[key][:, el])
+                            self.state[key][:, list_crash[indx]] = deepcopy(
+                                self.state[key][:, el])
                     en_pred[list_crash[indx]] = deepcopy(en_pred[el])
 
             # Convert ensemble specific result into pred_data, and filter for NONE data
             self.pred_data.extend([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
-                               if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
-                               else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
+                                    if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
+                                    else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
 
         # some predicted data might need to be adjusted (e.g. scaled or compressed if it is 4D seis data). Do not
         # include this here.
@@ -607,7 +629,7 @@ class Ensemble:
         # Save in 'self'
         self.__dict__.update(tmp_load)
 
-    def calc_ml_prediction(self,input_state=None):
+    def calc_ml_prediction(self, input_state=None):
         """
         Function for running the simulator over several levels. We assume that it is sufficient to provide the level
         integer to the setup of the forward run. This will initiate the correct simulator fidelity.
@@ -619,11 +641,10 @@ class Ensemble:
             If simulation is run stand-alone one can input any state.
         """
 
-
         no_tot_run = int(self.sim.input_dict['parallel'])
         ml_pred_data = []
 
-        for level in tqdm(self.multilevel['levels'], desc='Fidelity level',position=1): #
+        for level in tqdm(self.multilevel['levels'], desc='Fidelity level', position=1):
             # Setup forward simulator and redundant simulator at the correct fidelity
             if self.sim.redund_sim is not None:
                 self.sim.redund_sim.setup_fwd_run(level=level)
@@ -651,7 +672,8 @@ class Ensemble:
             list_member_index = list(ml_ne)
 
             # Run prediction in parallel using p_map
-            en_pred = p_map(self.sim.run_fwd_sim, list_state, list_member_index, num_cpus=no_tot_run)
+            en_pred = p_map(self.sim.run_fwd_sim, list_state,
+                            list_member_index, num_cpus=no_tot_run)
 
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
@@ -663,8 +685,10 @@ class Ensemble:
                 self.save()
                 success = False
                 if len(list_crash) > 1:
-                    print('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-                    self.logger.info('\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+                    print(
+                        '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+                    self.logger.info(
+                        '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
                     sys.exit(1)
                 return success
 
@@ -673,25 +697,29 @@ class Ensemble:
                 # Replace crashed runs with (random) successful runs. If there are more crashed runs than successful once,
                 # we draw with replacement.
                 if len(list_crash) < len(list_success):
-                    copy_member = np.random.choice(list_success, size=len(list_crash), replace=False)
+                    copy_member = np.random.choice(
+                        list_success, size=len(list_crash), replace=False)
                 else:
-                    copy_member = np.random.choice(list_success, size=len(list_crash), replace=True)
+                    copy_member = np.random.choice(
+                        list_success, size=len(list_crash), replace=True)
 
                 # Insert the replaced runs in prediction list
                 for indx, el in enumerate(copy_member):
                     print(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member '
-                        f'{el}! ---\033[92m')
+                          f'{el}! ---\033[92m')
                     self.logger.info(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by '
-                        f'ensemble member {el}! ---\033[92m')
+                                     f'ensemble member {el}! ---\033[92m')
                     for key in self.state[level].keys():
-                        self.state[level][key][:, list_crash[indx]] = deepcopy(self.state[level][key][:, el])
+                        self.state[level][key][:, list_crash[indx]] = deepcopy(
+                            self.state[level][key][:, el])
                     en_pred[list_crash[indx]] = deepcopy(en_pred[el])
 
             # Convert ensemble specific result into pred_data, and filter for NONE data
             ml_pred_data.append([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
-                               if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
-                               else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
+                                  if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
+                                  else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
 
-        self.pred_data = np.array(ml_pred_data).T.tolist() # loop over time instance first, and the level instance.
+        # loop over time instance first, and the level instance.
+        self.pred_data = np.array(ml_pred_data).T.tolist()
 
         return success

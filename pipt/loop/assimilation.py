@@ -38,7 +38,7 @@ class Assimilate:
     """
     # TODO: Sequential iterative loop
 
-    def __init__(self, ensemble : Ensemble):
+    def __init__(self, ensemble: Ensemble):
         """
         Initialize by passing the PIPT init. file up the hierarchy.
 
@@ -51,8 +51,8 @@ class Assimilate:
         self.ensemble = ensemble
 
         if self.ensemble.restart is False:
-        # Default max. iter if not defined in the ensemble
-            if hasattr(ensemble,'max_iter'):
+            # Default max. iter if not defined in the ensemble
+            if hasattr(ensemble, 'max_iter'):
                 self.max_iter = self.ensemble.max_iter
             else:
                 self.max_iter = self._ext_max_iter()
@@ -88,7 +88,8 @@ class Assimilate:
         success_iter = True
 
         # Initiallize progressbar
-        pbar_out = tqdm(total=self.max_iter, desc='Iterations (Obj. func. val: )', position=0)
+        pbar_out = tqdm(total=self.max_iter,
+                        desc='Iterations (Obj. func. val: )', position=0)
 
         # Check if we want to perform a Quality Assurance of the forecast
         qaqc = None
@@ -102,7 +103,7 @@ class Assimilate:
             # Add a check to see if this is the prior model
             if self.ensemble.iteration == 0:
                 # Calc forecast for prior model
-                ## Inset 0 as input to forecast all data
+                # Inset 0 as input to forecast all data
                 self.calc_forecast()
 
                 # remove outliers
@@ -110,16 +111,21 @@ class Assimilate:
                     self.remove_outliers()
 
                 if 'qa' in self.ensemble.keys_da:  # Check if we want to perform a Quality Assurance of the forecast
-                    qaqc.set(self.ensemble.pred_data, self.ensemble.state, self.ensemble.lam)  # set updated prediction, state and lam
-                    qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))  # Level 1,2 all data, and subspace
+                    # set updated prediction, state and lam
+                    qaqc.set(self.ensemble.pred_data,
+                             self.ensemble.state, self.ensemble.lam)
+                    # Level 1,2 all data, and subspace
+                    qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))
                     qaqc.calc_coverage()  # Compute data coverage
-                    qaqc.calc_kg({'plot_all_kg':True,'only_log':False,'num_store':5})  # Compute kalman gain
+                    qaqc.calc_kg({'plot_all_kg': True, 'only_log': False,
+                                 'num_store': 5})  # Compute kalman gain
 
                 success_iter = True
 
                 # always store prior forcast, unless specifically told not to
                 if 'nosave' not in self.ensemble.keys_da:
-                    np.savez('prior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
+                    np.savez('prior_forecast.npz', **
+                             {'pred_data': self.ensemble.pred_data})
 
             # For the remaining iterations we start by applying the analysis and finish by running the forecast
             else:
@@ -129,9 +135,11 @@ class Assimilate:
                 if 'qa' in self.ensemble.keys_da and 'screendata' in self.ensemble.keys_da and \
                         self.ensemble.keys_da['screendata'] == 'yes' and self.ensemble.iteration == 1:
                     #  need to update datavar, and recompute mahalanobis measures
-                    self.logger.info('Recomputing Mahalanobis distance with updated datavar')
+                    self.logger.info(
+                        'Recomputing Mahalanobis distance with updated datavar')
                     qaqc.datavar = self.datavar  # this is updated from calc_analysis
-                    qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))  # Level 1,2 all data, and subspace
+                    # Level 1,2 all data, and subspace
+                    qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))
 
                 # Forecast with the updated state
                 self.calc_forecast()
@@ -159,10 +167,14 @@ class Assimilate:
                     if 'analysisdebug' in self.ensemble.keys_da:
                         self._save_analysis_debug()
                     if 'qc' in self.ensemble.keys_da:  # Check if we want to perform a Quality Control of the updated state
-                        qaqc.set(self.ensemble.pred_data, self.ensemble.state, self.ensemble.lam)  # set updated prediction, state and lam
+                        # set updated prediction, state and lam
+                        qaqc.set(self.ensemble.pred_data,
+                                 self.ensemble.state, self.ensemble.lam)
                         qaqc.calc_da_stat()  # Compute statistics for updated parameters
                     if 'qa' in self.ensemble.keys_da:  # Check if we want to perform a Quality Assurance of the forecast
-                        qaqc.set(self.ensemble.pred_data, self.ensemble.state, self.ensemble.lam)  # set updated prediction, state and lam
+                        # set updated prediction, state and lam
+                        qaqc.set(self.ensemble.pred_data,
+                                 self.ensemble.state, self.ensemble.lam)
                         qaqc.calc_mahalanobis(
                             (1, 'time', 2, 'time', 1, None, 2, None))  # Level 1,2 all data, and subspace
                         #  qaqc.calc_coverage()  # Compute data coverage
@@ -226,9 +238,11 @@ class Assimilate:
                 if self.ensemble.obs_data[i][key] is not None and self.ensemble.obs_data[i][key].shape == (1,):
                     prod_obs = np.concatenate((prod_obs, self.ensemble.obs_data[i][key]))
                     prod_cov = np.concatenate((prod_cov, self.ensemble.datavar[i][key]))
-                    prod_pred = np.concatenate((prod_pred, self.ensemble.pred_data[i][key]))
+                    prod_pred = np.concatenate(
+                        (prod_pred, self.ensemble.pred_data[i][key]))
 
-        mat_prod_obs = np.dot(prod_obs.reshape((len(prod_obs), 1)), np.ones((1, self.ensemble.ne)))
+        mat_prod_obs = np.dot(prod_obs.reshape((len(prod_obs), 1)),
+                              np.ones((1, self.ensemble.ne)))
 
         hm = np.diag(np.dot((prod_pred - mat_prod_obs).T, np.dot(np.expand_dims(prod_cov ** (-1), axis=1),
                                                                  np.ones((1, self.ensemble.ne))) * (prod_pred - mat_prod_obs)))
@@ -244,7 +258,8 @@ class Assimilate:
 
             # replace state
             for el in self.ensemble.state.keys():
-                self.ensemble.state[el][:, index] = deepcopy(self.ensemble.state[el][:, new_index])
+                self.ensemble.state[el][:, index] = deepcopy(
+                    self.ensemble.state[el][:, new_index])
 
             # replace the failed forecast
             for i, data_ind in enumerate(self.ensemble.pred_data):
@@ -252,10 +267,12 @@ class Assimilate:
                     for el in data_ind.keys():
                         if self.ensemble.pred_data[i][el] is not None:
                             if type(self.ensemble.pred_data[i][el]) is list:
-                                self.ensemble.pred_data[i][el][index] = deepcopy(self.ensemble.pred_data[i][el][new_index])
+                                self.ensemble.pred_data[i][el][index] = deepcopy(
+                                    self.ensemble.pred_data[i][el][new_index])
                             else:
-                                self.ensemble.pred_data[i][el][:, index] = deepcopy(self.ensemble.pred_data[i][el][:, new_index])
-        
+                                self.ensemble.pred_data[i][el][:, index] = deepcopy(
+                                    self.ensemble.pred_data[i][el][:, new_index])
+
     def _ext_max_iter(self):
         """
         Extract max iterations from ITERATION keyword in DATAASSIM part (mandatory keyword for iteration loops).
@@ -284,7 +301,8 @@ class Assimilate:
                 iter_opts = self.ensemble.keys_da['iteration']
 
             # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
-            assert 'max_iter' in list(zip(*iter_opts))[0], 'MAX_ITER has not been given in ITERATION!'
+            assert 'max_iter' in list(
+                zip(*iter_opts))[0], 'MAX_ITER has not been given in ITERATION!'
 
             # Extract max. iter
             max_iter = [item[1] for item in iter_opts if item[0] == 'max_iter'][0]
@@ -297,7 +315,8 @@ class Assimilate:
                 iter_opts = self.ensemble.keys_da['mda']
 
             # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
-            assert 'tot_assim_steps' in list(zip(*iter_opts))[0], 'TOT_ASSIM_STEPS has not been given in MDA!'
+            assert 'tot_assim_steps' in list(
+                zip(*iter_opts))[0], 'TOT_ASSIM_STEPS has not been given in MDA!'
 
             # Extract max. iter
             max_iter = [item[1] for item in iter_opts if item[0] == 'tot_assim_steps'][0]
@@ -306,7 +325,7 @@ class Assimilate:
             max_iter = 1
         # Return max. iter
         return max_iter
-    
+
     def _save_iteration_information(self):
         """
         More general method for saving all relevant information from a analysis/forecast step. Note that this is
@@ -326,7 +345,7 @@ class Assimilate:
             saveinfo = [self.ensemble.keys_da['iterinfo']]
 
         for el in saveinfo:
-            if '.py' in el: #This is a unique python file
+            if '.py' in el:  # This is a unique python file
                 iter_info_func = import_module(el.strip('.py'))
                 # Note: the function must be named main, and we pass the full current instance of the object.
                 iter_info_func.main(self)
@@ -341,7 +360,8 @@ class Assimilate:
         tempsave: list
             Info. from the TEMPSAVE keyword
         """
-        self.ensemble.logger.info('The TEMPSAVE feature is no longer supported. Please you debug_analyses, or iterinfo.')
+        self.ensemble.logger.info(
+            'The TEMPSAVE feature is no longer supported. Please you debug_analyses, or iterinfo.')
         # Save at specific points
         # if isinstance(tempsave, list):
         #     # Save at regular intervals
@@ -358,7 +378,7 @@ class Assimilate:
         # # Save at all assimilation steps
         # elif tempsave == 'yes' or tempsave == 'all':
         #     self.ensemble.save_temp_state_iter(self.ensemble.iteration + 1, self.max_iter)
-        
+
     def _save_analysis_debug(self):
         """
         Moved Old analysis debug here to retain consistency.
@@ -428,7 +448,7 @@ class Assimilate:
         entries, well, then we may have a problem when finding out which response to extract in get_sim_results below.
         """
         # Add an option to load existing sim results. The user must actively create the restart file by renaming an
-        # existing sim_results.p file to restart_sim_results.p. 
+        # existing sim_results.p file to restart_sim_results.p.
         if os.path.exists('restart_sim_results.p'):
             with open('restart_sim_results.p', 'rb') as f:
                 self.ensemble.pred_data = pickle.load(f)
@@ -445,12 +465,15 @@ class Assimilate:
         # Get assimilation order as a list where first entry are the string(s) in OBSNAME and second entry are
         # the associated array(s)
         if assim_step == 0 or assim_step == len(self.ensemble.keys_da['assimindex']):
-            assim_ind = [self.ensemble.keys_da['obsname'], list(np.concatenate(self.ensemble.keys_da['assimindex']))]
+            assim_ind = [self.ensemble.keys_da['obsname'], list(
+                np.concatenate(self.ensemble.keys_da['assimindex']))]
         else:
-            assim_ind = [self.ensemble.keys_da['obsname'], self.ensemble.keys_da['assimindex'][assim_step]]
+            assim_ind = [self.ensemble.keys_da['obsname'],
+                         self.ensemble.keys_da['assimindex'][assim_step]]
 
         # Get TRUEDATAINDEX
-        true_order = [self.ensemble.keys_da['obsname'], self.ensemble.keys_da['truedataindex']]
+        true_order = [self.ensemble.keys_da['obsname'],
+                      self.ensemble.keys_da['truedataindex']]
 
         # List assim. index
         if isinstance(true_order[1], list):  # Check if true data prim. ind. is a list
@@ -467,8 +490,8 @@ class Assimilate:
 
         # Filter pred. data needed at current assimilation step. This essentially means deleting pred. data not
         # contained in the assim. indices for current assim. step or does not have obs. data at this index
-        self.ensemble.pred_data = [elem for i, elem in enumerate(self.ensemble.pred_data) if i in l_prim or 
-            true_prim[1][i] is not None]
+        self.ensemble.pred_data = [elem for i, elem in enumerate(self.ensemble.pred_data) if i in l_prim or
+                                   true_prim[1][i] is not None]
 
         # Scale data if required (currently only one group of data can be scaled)
         if 'scale' in self.ensemble.keys_da:
@@ -485,11 +508,12 @@ class Assimilate:
         # numpy arrays
         if 'dynamicvar' in self.ensemble.keys_da and assim_step == 0:
             for dyn_state in self.ensemble.keys_da['dynamicvar']:
-                self.ensemble.state[dyn_state] = np.array(self.ensemble.state[dyn_state]).T
+                self.ensemble.state[dyn_state] = np.array(
+                    self.ensemble.state[dyn_state]).T
 
         # Extra option debug
         if 'saveforecast' in self.ensemble.sim.input_dict:
-            with open('sim_results.p','wb') as f:
+            with open('sim_results.p', 'wb') as f:
                 pickle.dump(self.ensemble.pred_data, f)
 
     def post_process_forecast(self):
@@ -508,12 +532,12 @@ class Assimilate:
 
                     # Store according to sparse_info
                     if vintage < len(self.ensemble.sparse_info['mask']) and \
-                        pred_data[key].shape[0] == int(np.sum(self.ensemble.sparse_info['mask'][vintage])):
+                            pred_data[key].shape[0] == int(np.sum(self.ensemble.sparse_info['mask'][vintage])):
 
                         # If first entry in pred_data_tmp
                         if pred_data_tmp[i] is None:
                             pred_data_tmp[i] = {key: pred_data[key]}
-                        
+
                         else:
                             pred_data_tmp[i][key] = pred_data[key]
 
@@ -527,7 +551,7 @@ class Assimilate:
                     scale = pickle.load(f)
                 # base the scaling on the first dataset and the first iteration
                 self.scale_val = np.sum(scale[0]) / len(scale[0])
-            
+
             if self.ensemble.sparse_info is not None:
                 for i in range(len(pred_data_tmp)):  # INDEX
                     if pred_data_tmp[i] is not None:
@@ -539,7 +563,8 @@ class Assimilate:
                 for i in range(len(self.ensemble.pred_data)):  # TRUEDATAINDEX
                     for k in self.ensemble.pred_data[i]:  # DATATYPE
                         if 'sim2seis' in k and self.ensemble.pred_data[i][k] is not None:
-                            self.ensemble.pred_data[i][k] = self.ensemble.pred_data[i][k] / self.scale_val
+                            self.ensemble.pred_data[i][k] = self.ensemble.pred_data[i][k] / \
+                                self.scale_val
 
         # If wavelet compression is based on the simulated data, we need to recompute obs_data, datavar and pred_data.
         if self.ensemble.sparse_info:
@@ -550,10 +575,11 @@ class Assimilate:
                     for k in pred_data_tmp[i]:  # DATATYPE
                         if vintage < len(self.ensemble.sparse_info['mask']) and \
                                 len(pred_data_tmp[i][k]) == int(np.sum(self.ensemble.sparse_info['mask'][vintage])):
-                            self.ensemble.pred_data[i][k] = np.zeros((len(self.ensemble.obs_data[i][k]), self.ensemble.ne))
+                            self.ensemble.pred_data[i][k] = np.zeros(
+                                (len(self.ensemble.obs_data[i][k]), self.ensemble.ne))
                             for m in range(pred_data_tmp[i][k].shape[1]):
                                 data_array = self.ensemble.compress(pred_data_tmp[i][k][:, m], vintage,
-                                    self.ensemble.sparse_info['use_ensemble'])
+                                                                    self.ensemble.sparse_info['use_ensemble'])
                                 self.ensemble.pred_data[i][k][:, m] = data_array
                             vintage = vintage + 1
             if self.ensemble.sparse_info['use_ensemble']:
@@ -565,8 +591,7 @@ class Assimilate:
             # Save the reconstructed signal for later analysis
             if self.ensemble.sparse_data:
                 for vint in np.arange(len(self.ensemble.data_rec)):
-                    self.ensemble.data_rec[vint] = np.asarray(self.ensemble.data_rec[vint]).T
+                    self.ensemble.data_rec[vint] = np.asarray(
+                        self.ensemble.data_rec[vint]).T
                 with open('rec_results.p', 'wb') as f:
                     pickle.dump(self.ensemble.data_rec, f)
-
-

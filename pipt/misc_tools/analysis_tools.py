@@ -9,8 +9,8 @@ implementing, leave it in that class.
 # External imports
 import numpy as np          # Numerical tools
 from scipy import linalg    # Linear algebra tools
-from misc.system_tools.environ_var import OpenBlasSingleThread # only single thread
-import multiprocessing as mp # parallel updates
+from misc.system_tools.environ_var import OpenBlasSingleThread  # only single thread
+import multiprocessing as mp  # parallel updates
 import time
 import pickle
 from importlib import import_module  # To import packages
@@ -19,7 +19,7 @@ from scipy.spatial import cKDTree
 
 
 def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_data, pred_data, parallel, actnum=None,
-                 field_dim=None, act_data_list=None, scale_data=None, num_states=1, emp_d_cov = False):
+                 field_dim=None, act_data_list=None, scale_data=None, num_states=1, emp_d_cov=False):
     """
     Script to initialize and control a parallel update of the ensemble state following [1].
 
@@ -68,18 +68,21 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
 
     # Generate a list over the grid coordinates
     if field_dim is not None:
-        k_coord, j_coord, i_coord = np.meshgrid(range(field_dim[0]),range(field_dim[1]),range(field_dim[2]),indexing='ij')
-        tot_g = np.array([k_coord,j_coord,i_coord])
+        k_coord, j_coord, i_coord = np.meshgrid(range(field_dim[0]), range(
+            field_dim[1]), range(field_dim[2]), indexing='ij')
+        tot_g = np.array([k_coord, j_coord, i_coord])
         if actnum is not None:
-            act_g = tot_g[:,actnum.reshape(field_dim)]
+            act_g = tot_g[:, actnum.reshape(field_dim)]
         else:
-            act_g = tot_g[:,np.ones(tuple(field_dim), dtype=bool)]
+            act_g = tot_g[:, np.ones(tuple(field_dim), dtype=bool)]
 
     dat = [el for el in local_mask_info.keys()]
     # data coordinates to initialize search
-    tot_completions = [tuple(el) for dat_mask in dat if type(dat_mask) == tuple for el in local_mask_info[dat_mask]['position']]
+    tot_completions = [tuple(el) for dat_mask in dat if type(
+        dat_mask) == tuple for el in local_mask_info[dat_mask]['position']]
     uniq_completions = [el for el in set(tot_completions)]
-    tot_w_name = [dat_mask for dat_mask in dat if type(dat_mask) == tuple for _ in local_mask_info[dat_mask]['position']]
+    tot_w_name = [dat_mask for dat_mask in dat if type(
+        dat_mask) == tuple for _ in local_mask_info[dat_mask]['position']]
     uniq_w_name = [tot_w_name[tot_completions.index(el)] for el in uniq_completions]
     # todo: limit to active datanan
     coord_search = cKDTree(data=uniq_completions)
@@ -90,14 +93,15 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
         tot_well_dict = {}
         for well in set(act_w_name):
             tot_well_dict[well] = [el for el in local_mask_info.keys() if type(el) == tuple and
-                                      el[0].split()[1] == well]
+                                   el[0].split()[1] == well]
     except:
         tot_well_dict = local_mask_info
 
     if len(scale_data.shape) == 1:
-        diff = np.dot(np.expand_dims(scale_data**(-1),axis=1),np.ones((1, pred_data.shape[1])))*(obs_data - pred_data)
+        diff = np.dot(np.expand_dims(scale_data**(-1), axis=1),
+                      np.ones((1, pred_data.shape[1])))*(obs_data - pred_data)
     else:
-        diff = linalg.solve(scale_data,(obs_data - pred_data))
+        diff = linalg.solve(scale_data, (obs_data - pred_data))
 
     # initiallize the update
     upd = {}
@@ -105,19 +109,24 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
     # Assume that we have three types of parameters. The full 3D fields, layers (2D fields), or scalar values. These are
     # handled individually.
 
-    field_states = [state for state in list_state if states_dict[state].shape[0] == act_g.shape[1]] # field states
-    layer_states = [state for state in list_state if 1 < states_dict[state].shape[0] < act_g.shape[1]] # layer states
-    scalar_states = [state for state in list_state if states_dict[state].shape[0] == 1] # scalar states
+    field_states = [state for state in list_state if states_dict[state].shape[0]
+                    == act_g.shape[1]]  # field states
+    layer_states = [state for state in list_state if 1 <
+                    states_dict[state].shape[0] < act_g.shape[1]]  # layer states
+    # scalar states
+    scalar_states = [state for state in list_state if states_dict[state].shape[0] == 1]
 
     # We handle the field states first. These are the most time consuming, and requires parallelization.
 
     # since X must be passed to all processes I spit the state into equal portions, and let the row updates loop over
     # the different portions
-    split_coord = np.array_split(act_g, parallel,axis=1) # coordinates for active parameters
+    # coordinates for active parameters
+    split_coord = np.array_split(act_g, parallel, axis=1)
     # Assuming that all parameters are spatial fields
     split_state = [{} for _ in range(parallel)]
-    tmp_loc = {} # intitallize for checking similar localization info
-    for state in field_states:# assume for now that everything is spatial, if not we require an extra loop or (if/else block)
+    tmp_loc = {}  # intitallize for checking similar localization info
+    # assume for now that everything is spatial, if not we require an extra loop or (if/else block)
+    for state in field_states:
         # Augment the joint state variables (originally a dictionary) and the prior state variable
         aug_state = states_dict[state]
         # aug_prior_state = at.aug_state(self.prior_state, self.list_states)
@@ -129,12 +138,12 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
                                              np.ones((1, aug_state.shape[1]))))
         else:
             pert_state = (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
-                                                         np.ones((1, aug_state.shape[1])))) / (np.sqrt(aug_state.shape[1] - 1))
+                                             np.ones((1, aug_state.shape[1])))) / (np.sqrt(aug_state.shape[1] - 1))
 
-        tmp_state = np.array_split(pert_state,parallel)
+        tmp_state = np.array_split(pert_state, parallel)
         for i, elem in enumerate(tmp_state):
             split_state[i][state] = elem
-        tmp_loc[state] = [el for el in local_mask_info if el[2]==state]
+        tmp_loc[state] = [el for el in local_mask_info if el[2] == state]
     # loc_info = [local_mask_info for _ in range(parallel)]
     # tot_X = [X for _ in range(parallel)]
     # tot_coord_seach = [coord_search for _ in range(parallel)] # might promt error if coord_search is to large
@@ -142,11 +151,12 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
     # tot_data_list = [act_data_list for _ in range(parallel)]
     # tot_well_dict_list = [tot_well_dict for _ in range(parallel)]
     non_similar = []
-    for state in field_states[1:]: # check localication
-        non_shared = {k: ' ' for i,k in enumerate(tmp_loc[field_states[0]]) if local_mask_info[k] != local_mask_info[tmp_loc[state][i]]}
+    for state in field_states[1:]:  # check localication
+        non_shared = {k: ' ' for i, k in enumerate(
+            tmp_loc[field_states[0]]) if local_mask_info[k] != local_mask_info[tmp_loc[state][i]]}
         non_similar.append(len(non_shared))
 
-    if sum(non_similar)==0:
+    if sum(non_similar) == 0:
         identical_loc = True
     else:
         identical_loc = False
@@ -160,7 +170,7 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
     #                  tot_well_dict_list)
     to_workers = zip(split_state, split_coord, tot_file_name)
 
-    parallel = 1 # test
+    parallel = 1  # test
     #
     with OpenBlasSingleThread():
         if parallel > 1:
@@ -171,7 +181,7 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
             s = [el for el in tmp_s]
 
     for tmp_key in field_states:
-        upd[tmp_key] = np.concatenate([el[tmp_key] for el in s],axis=0)
+        upd[tmp_key] = np.concatenate([el[tmp_key] for el in s], axis=0)
 
     ####################################################################################################################
     # Now handle the layer states
@@ -182,22 +192,22 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
         mean_state = np.mean(aug_state, 1)
         if emp_d_cov:
             pert_state = {state: (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
-                                                    np.ones((1, aug_state.shape[1]))))}
+                                                     np.ones((1, aug_state.shape[1]))))}
         else:
             pert_state = {state: (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
-                                                    np.ones((1, aug_state.shape[1])))) / (np.sqrt(aug_state.shape[1] - 1))}
+                                                     np.ones((1, aug_state.shape[1])))) / (np.sqrt(aug_state.shape[1] - 1))}
         # Layer
         # make a rule that requires the parameter name to end with the "_ + layer number". E.g. "multz_5"
         layer = int(state.split('_')[-1])
         l_act = np.full(field_dim, False)
-        l_act[layer,:,:] = actnum.reshape(field_dim)[layer,:,:]
-        act_g = tot_g[:,l_act]
+        l_act[layer, :, :] = actnum.reshape(field_dim)[layer, :, :]
+        act_g = tot_g[:, l_act]
 
         to_workers = zip([pert_state], [act_g], ['meta_analysis.p'])
 
         # with OpenBlasSingleThread():
         s = map(_calc_row_upd, to_workers)
-        upd[state] = np.concatenate([el[state] for el in s],axis=0)
+        upd[state] = np.concatenate([el[state] for el in s], axis=0)
 
     ####################################################################################################################
     # Finally the scalar states
@@ -207,17 +217,17 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
         mean_state = np.mean(aug_state, 1)
         if emp_d_cov:
             pert_state = {state: (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
-                                                        np.ones((1, aug_state.shape[1]))))}
+                                                     np.ones((1, aug_state.shape[1]))))}
         else:
             pert_state = {state: (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
-                                                    np.ones((1, aug_state.shape[1])))) / (np.sqrt(aug_state.shape[1] - 1))}
+                                                     np.ones((1, aug_state.shape[1])))) / (np.sqrt(aug_state.shape[1] - 1))}
 
         to_workers = zip([pert_state], [tot_g], ['meta_analysis.p'])
 
         # with OpenBlasSingleThread():
         s = map(_calc_row_upd, to_workers)
 
-        upd[state] = np.concatenate([el[state] for el in s],axis=0)
+        upd[state] = np.concatenate([el[state] for el in s], axis=0)
 
     return upd
 
@@ -232,16 +242,17 @@ def _calc_row_upd(inp):
         List of [state, param_coordinates, metadata file name]
     """
 
-    with open(inp[2],'rb') as file:
+    with open(inp[2], 'rb') as file:
         meta_data = pickle.load(file)
     states = [el for el in inp[0].keys()]
     Ne = inp[0][states[0]].shape[1]
     upd = {}
     for el in states:
-        upd[el] = [np.zeros((1,Ne))]*(inp[0][el].shape[0])
+        upd[el] = [np.zeros((1, Ne))]*(inp[0][el].shape[0])
 
     # Check and define regions for wells
-    regions = _calc_region(meta_data['local_mask_info'], states, meta_data['local_mask_info']['field'], meta_data['actnum'])
+    regions = _calc_region(meta_data['local_mask_info'], states,
+                           meta_data['local_mask_info']['field'], meta_data['actnum'])
     max_r = {}
     for state in states:
         tmp_r = [meta_data['local_mask_info'][el]['range'][0] for el in meta_data['local_mask_info'].keys() if
@@ -255,27 +266,29 @@ def _calc_row_upd(inp):
             uniq_well = []
             if len(regions[el]):
                 for reg in regions[el]:
-                    if max_r[el] == 0: # only use wells in the region, no taper
+                    if max_r[el] == 0:  # only use wells in the region, no taper
                         tmp_unique = []
                         for ind, w in enumerate(meta_data['unique_w_name']):
                             for comp in reg.T:
                                 if meta_data['unique_completions'][ind][2] == comp[0] and \
-                                    meta_data['unique_completions'][ind][1] == comp[1] and \
-                                    meta_data['unique_completions'][ind][0] == comp[2]:
+                                        meta_data['unique_completions'][ind][1] == comp[1] and \
+                                        meta_data['unique_completions'][ind][0] == comp[2]:
                                     tmp_unique.append(w)
                                     break
                         uniq_well.extend(tmp_unique)
-                    else: # only wells in the region, with taper
+                    else:  # only wells in the region, with taper
                         uniq_well.extend([w for w in set([meta_data['unique_w_name'][el] for el in
-                                    meta_data['coord_search'].query_ball_point(x=(inp[1][2, i], inp[1][1, i], inp[1][0, i]), r=max_r[el])])])
+                                                          meta_data['coord_search'].query_ball_point(x=(inp[1][2, i], inp[1][1, i], inp[1][0, i]), r=max_r[el])])])
             else:
-                uniq_well.extend([w for w in set([meta_data['unique_w_name'][el] for el in meta_data['coord_search'].query_ball_point(x=(inp[1][2,i], inp[1][1,i], inp[1][0,i]), r=max_r[el])])])
+                uniq_well.extend([w for w in set([meta_data['unique_w_name'][el] for el in meta_data['coord_search'].query_ball_point(
+                    x=(inp[1][2, i], inp[1][1, i], inp[1][0, i]), r=max_r[el])])])
 
-            uniq_well = [(w[0],w[1],el) for w in set(uniq_well)]
+            uniq_well = [(w[0], w[1], el) for w in set(uniq_well)]
             row_loc = np.zeros(meta_data['diff'].shape[0])
             for well in uniq_well:
                 try:
-                    tot_act_well = [elem for elem in meta_data['tot_well_dict'][well[0].split()[1]] if elem[2]==el]
+                    tot_act_well = [elem for elem in meta_data['tot_well_dict']
+                                    [well[0].split()[1]] if elem[2] == el]
                 except:
                     tot_act_well = [elem for elem in meta_data['tot_well_dict'][well]]
                 # curr_completions = frozenset((inp[1][tot_act_well[0]]['position']))
@@ -285,8 +298,8 @@ def _calc_row_upd(inp):
                         if el_well[0].split()[0] == data_typ:
                             tmp_loc_info = el_well
                             break
-                    curr_rho = _calc_loc(grid_pos=(inp[1][2,i], inp[1][1,i], inp[1][0,i]),
-                                     loc_info=meta_data['local_mask_info'][tmp_loc_info], ne=Ne)
+                    curr_rho = _calc_loc(grid_pos=(inp[1][2, i], inp[1][1, i], inp[1][0, i]),
+                                         loc_info=meta_data['local_mask_info'][tmp_loc_info], ne=Ne)
                     index = meta_data['act_data_list'][tmp_loc_info[0]]
                     row_loc[index] = curr_rho
                 # for act_well in tot_act_well:
@@ -299,14 +312,15 @@ def _calc_row_upd(inp):
             if 'identical_loc' in meta_data and meta_data['identical_loc']:
                 for el_upd in states:
                     upd[el_upd][i] = np.dot(np.expand_dims(row_loc * np.dot(inp[0][el_upd][i, :], meta_data['X']), axis=0),
-                                        meta_data['diff'])
+                                            meta_data['diff'])
                 break
             else:
-                upd[el][i] = np.dot(np.expand_dims(row_loc*np.dot(inp[0][el][i,:],meta_data['X']),axis=0),meta_data['diff'])
+                upd[el][i] = np.dot(np.expand_dims(
+                    row_loc*np.dot(inp[0][el][i, :], meta_data['X']), axis=0), meta_data['diff'])
 
     tot_upd = {}
     for el in states:
-        tot_upd[el] = np.concatenate(upd[el],axis=0)
+        tot_upd[el] = np.concatenate(upd[el], axis=0)
 
     return tot_upd
 
@@ -340,16 +354,17 @@ def _calc_region(loc_info, states, field_dim, actnum):
         for reg in unique_reg:
             upd_reg = []
             for el in reg:
-                if ':' in el: # convert region boundaries (x0:x1) into list of integers [x0,x1]
+                # convert region boundaries (x0:x1) into list of integers [x0,x1]
+                if ':' in el:
                     upd_reg.extend([int(l) for l in el.split(':')])
                 else:
                     upd_reg.append(el)
-            regions[state].append(_get_region(upd_reg,field_dim,actnum))
+            regions[state].append(_get_region(upd_reg, field_dim, actnum))
 
     return regions
 
 
-def _get_region(reg, field_dim = None, actnum=None):
+def _get_region(reg, field_dim=None, actnum=None):
     """
     Calculate the coordinates of the region. Consider two formats.
     <ol>
@@ -377,11 +392,12 @@ def _get_region(reg, field_dim = None, actnum=None):
             lines = file.readlines()
             # Extract all lines that start with a digit, and make a list of all digits
             tot_char = [el for l in lines if len(l.strip())
-                         and l.strip()[0][0].isdigit() for el in l.split() if el[0].isdigit()]
+                        and l.strip()[0][0].isdigit() for el in l.split() if el[0].isdigit()]
         if field_dim is not None:
             # CHECK THIS AT SOME POINT!
-            k_coord, j_coord, i_coord = np.meshgrid(range(field_dim[0]),range(field_dim[1]),range(field_dim[2]),indexing='ij')
-            tot_g = np.array([k_coord,j_coord,i_coord])
+            k_coord, j_coord, i_coord = np.meshgrid(range(field_dim[0]), range(
+                field_dim[1]), range(field_dim[2]), indexing='ij')
+            tot_g = np.array([k_coord, j_coord, i_coord])
             if actnum is not None:
                 tot_f = np.zeros(field_dim).flatten()
                 count = 0
@@ -390,32 +406,35 @@ def _get_region(reg, field_dim = None, actnum=None):
                         if int(l) in flag_region:
                             tot_f[count] = 1
                         count += 1
-                    else: # assume that we have input on the format num_cells*region_number
+                    else:  # assume that we have input on the format num_cells*region_number
                         num_cell, tmp_region = l.split('*')
                         if int(tmp_region) in flag_region:
                             for i in range(int(num_cell)):
                                 tot_f[count + i] = 1
                         count += int(num_cell)
                 tot_f[~actnum] = 0
-                act_g = tot_g[:,tot_f]
+                act_g = tot_g[:, tot_f]
     else:
         # Get the domain
         if field_dim is not None:
-            k_coord, j_coord, i_coord = np.meshgrid(range(field_dim[0]),range(field_dim[1]),range(field_dim[2]),indexing='ij')
-            tot_g = np.array([k_coord,j_coord,i_coord])
+            k_coord, j_coord, i_coord = np.meshgrid(range(field_dim[0]), range(
+                field_dim[1]), range(field_dim[2]), indexing='ij')
+            tot_g = np.array([k_coord, j_coord, i_coord])
             if actnum is not None:
                 tot_f = np.zeros(field_dim, dtype=bool)
-                tot_f[reg[4]:reg[5],reg[2]:reg[3], reg[0]:reg[1]] = actnum.reshape(field_dim)[reg[4]:reg[5],reg[2]:reg[3],reg[0]:reg[1]]
-                act_g = tot_g[:,tot_f]
+                tot_f[reg[4]:reg[5], reg[2]:reg[3], reg[0]:reg[1]] = actnum.reshape(
+                    field_dim)[reg[4]:reg[5], reg[2]:reg[3], reg[0]:reg[1]]
+                act_g = tot_g[:, tot_f]
             else:
                 tot_f = np.zeros(field_dim, dtype=bool)
-                tot_f[reg[4]:reg[5],reg[2]:reg[3],reg[0]:reg[1]] = np.ones(field_dim, dtype=bool)[reg[4]:reg[5],reg[2]:reg[3],reg[0]:reg[1]]
-                act_g = tot_g[:,tot_f]
+                tot_f[reg[4]:reg[5], reg[2]:reg[3], reg[0]:reg[1]] = np.ones(
+                    field_dim, dtype=bool)[reg[4]:reg[5], reg[2]:reg[3], reg[0]:reg[1]]
+                act_g = tot_g[:, tot_f]
 
     return act_g
 
 
-def _calc_loc(grid_pos = [0,0,0], loc_info=None, ne=1):
+def _calc_loc(grid_pos=[0, 0, 0], loc_info=None, ne=1):
     """
     _summary_
 
@@ -448,7 +467,9 @@ def _calc_loc(grid_pos = [0,0,0], loc_info=None, ne=1):
         if loc_info['taper_func'] == 'fb':
             # assume that FB localization is utilized. Here vi can add all different localization functions
             if dist < loc_info['range'][0]:
-                tmp = 1 - 1 * (1.5 * np.abs(dist) / loc_info['range'][0] - .5 * (dist / loc_info['range'][0]) ** 3)
+                tmp = 1 - 1 * \
+                    (1.5 * np.abs(dist) / loc_info['range']
+                     [0] - .5 * (dist / loc_info['range'][0]) ** 3)
             else:
                 tmp = 0
 
@@ -479,32 +500,34 @@ def _calc_dist(x1, x2):
     elif len(x1) == 3:
         return np.sqrt((x1[0]-x2[0])**2 + (x1[1]-x2[1])**2 + (x1[2]-x2[2])**2)
 
+
 def calc_autocov(pert):
-        """
-        Calculate sample auto-covariance matrix.
+    """
+    Calculate sample auto-covariance matrix.
 
-        Parameters
-        ----------
-        pert: ndarray
-            Perturbation matrix (matrix of variables perturbed with their mean)
+    Parameters
+    ----------
+    pert: ndarray
+        Perturbation matrix (matrix of variables perturbed with their mean)
 
-        Returns
-        -------
-        cov_auto: ndarray
-            Sample auto-covariance matrix
-        """
-        # TODO: Implement sqrt-covariance matrices
+    Returns
+    -------
+    cov_auto: ndarray
+        Sample auto-covariance matrix
+    """
+    # TODO: Implement sqrt-covariance matrices
 
-        # No of samples
-        ne = pert.shape[1]
+    # No of samples
+    ne = pert.shape[1]
 
-        # Standard sample auto-covariance calculation
-        cov_auto = (1 / (ne - 1)) * np.dot(pert, pert.T)
+    # Standard sample auto-covariance calculation
+    cov_auto = (1 / (ne - 1)) * np.dot(pert, pert.T)
 
-        # Return the auto-covariance matrix
-        return cov_auto
+    # Return the auto-covariance matrix
+    return cov_auto
 
-def calc_objectivefun(pert_obs,pred_data,Cd):
+
+def calc_objectivefun(pert_obs, pred_data, Cd):
     """
     Calculate the objective function.
 
@@ -528,11 +551,13 @@ def calc_objectivefun(pert_obs,pred_data,Cd):
     r = (pred_data - pert_obs)
     if len(Cd.shape) == 1:
         precission = Cd**(-1)
-        data_misfit = np.diag(r.T.dot(r*precission[:,None]))
+        data_misfit = np.diag(r.T.dot(r*precission[:, None]))
     else:
         data_misfit = np.diag(r.T.dot(linalg.solve(Cd, r)))
 
     return data_misfit
+
+
 def calc_crosscov(pert1, pert2):
     """
     Calculate sample cross-covariance matrix.
@@ -557,6 +582,7 @@ def calc_crosscov(pert1, pert2):
 
     # Return the cross-covariance matrix
     return cov_cross
+
 
 def update_datavar(cov_data, datavar, assim_index, list_data):
     """
@@ -615,6 +641,7 @@ def update_datavar(cov_data, datavar, assim_index, list_data):
     # Return
     return datavar
 
+
 def save_analysisdebug(ind_save, **kwargs):
     """
     Save variables in analysis step for debugging purpose
@@ -625,7 +652,7 @@ def save_analysisdebug(ind_save, **kwargs):
         Index of analysis step
     **kwargs: dict
         Variables that will be saved to npz file
-    
+
     Notes
     -----
     Use kwargs here because the input will be a dictionary with names equal the variable names to store, and when this
@@ -760,7 +787,6 @@ def gen_covdata(datavar, assim_index, list_data):
                         c_var_temp = var
                         c_var = np.append(c_var, c_var_temp)
 
-
     # Generate the covariance matrix
     cd = c_var
 
@@ -817,6 +843,7 @@ def screen_data(cov_data, pred_data, obs_data_vector, keys_da, iteration):
 
     return cov_data
 
+
 def store_ensemble_sim_information(saveinfo, member):
     """
     Here, we can either run a unique python script or do some other post-processing routines. The function should
@@ -826,10 +853,11 @@ def store_ensemble_sim_information(saveinfo, member):
 
     for el in saveinfo:
         if '.py' in el:  # This is a unique python file
-            sim_info_func = import_module(el[:-3]) # remove .py ending
+            sim_info_func = import_module(el[:-3])  # remove .py ending
             # Note: the function must be named main, and we pass the full current instance of the object pluss the
             # current member.
             sim_info_func.main(member)
+
 
 def extract_tot_empirical_cov(data_var, assim_index, list_data, ne):
     """
@@ -864,14 +892,17 @@ def extract_tot_empirical_cov(data_var, assim_index, list_data, ne):
         for dat in list_data:
             if data_var[el][dat] is not None:
                 if len(data_var[el][dat].shape) == 1:
-                    tmp_tmp_E[dat] = np.sqrt(data_var[el][dat][:,np.newaxis])*np.random.randn(data_var[el][dat].shape[0], ne)
+                    tmp_tmp_E[dat] = np.sqrt(
+                        data_var[el][dat][:, np.newaxis])*np.random.randn(data_var[el][dat].shape[0], ne)
                 else:
                     if data_var[el][dat].shape[0] == data_var[el][dat].shape[1]:
-                        tmp_tmp_E[dat] = np.dot(linalg.cholesky(data_var[el][dat]),np.random.randn(data_var[el][dat].shape[1], ne))
+                        tmp_tmp_E[dat] = np.dot(linalg.cholesky(
+                            data_var[el][dat]), np.random.randn(data_var[el][dat].shape[1], ne))
                     else:
                         tmp_tmp_E[dat] = data_var[el][dat]
         tmp_E.append(tmp_tmp_E)
-    E = np.concatenate(tuple(tmp_E[i][dat] for i, el in enumerate(l_prim) for dat in list_data if data_var[el][dat] is not None))
+    E = np.concatenate(tuple(tmp_E[i][dat] for i, el in enumerate(
+        l_prim) for dat in list_data if data_var[el][dat] is not None))
 
     return E
 
@@ -905,15 +936,16 @@ def aug_obs_pred_data(obs_data, pred_data, assim_index, list_data):
     else:
         l_prim = [int(assim_index[1])]
 
-
     # make this more efficient
 
-    tot_pred = tuple(pred_data[el][dat] for el in l_prim if pred_data[el] is not None for dat in list_data if obs_data[el][dat] is not None)
-    if len(tot_pred): # if this is done during the initiallization tot_pred contains nothing
+    tot_pred = tuple(pred_data[el][dat] for el in l_prim if pred_data[el]
+                     is not None for dat in list_data if obs_data[el][dat] is not None)
+    if len(tot_pred):  # if this is done during the initiallization tot_pred contains nothing
         pred = np.concatenate(tot_pred)
     else:
         pred = None
-    obs = np.concatenate(tuple(obs_data[el][dat] for el in l_prim for dat in list_data if obs_data[el][dat] is not None))
+    obs = np.concatenate(tuple(
+        obs_data[el][dat] for el in l_prim for dat in list_data if obs_data[el][dat] is not None))
 
     # Init. a logical variable to check if it is the first time in the loop below that we extract obs/pred data.
     # Need this because we stack the remaining data horizontally/vertically, and it is possible that we have "None"
@@ -1002,7 +1034,7 @@ def calc_kalmangain(cov_cross, cov_auto, cov_data, opt=None):
         calc_opt = 'lu'
 
     # Add data and predicted data auto-covariance matrices
-    if len(cov_data.shape)==1:
+    if len(cov_data.shape) == 1:
         cov_data = np.diag(cov_data)
     c_auto = cov_auto + cov_data
 
@@ -1060,8 +1092,8 @@ def calc_subspace_kalmangain(cov_cross, data_pert, cov_data, energy):
 
     # Calculate x_0 and its eigenvalue decomp.
     if len(cov_data.shape) == 1:
-        x_0 = np.dot(np.diag(s_d[:]**(-1)), np.dot(u_d[:, :].T, np.expand_dims(cov_data,axis=1)*np.dot(u_d[:, :],
-                                                                                                       np.diag(s_d[:]**(-1)).T)))
+        x_0 = np.dot(np.diag(s_d[:]**(-1)), np.dot(u_d[:, :].T, np.expand_dims(cov_data, axis=1)*np.dot(u_d[:, :],
+                                                                                                        np.diag(s_d[:]**(-1)).T)))
     else:
         x_0 = np.dot(np.diag(s_d[:] ** (-1)), np.dot(u_d[:, :].T, np.dot(cov_data, np.dot(u_d[:, :],
                                                                                           np.diag(s_d[:] ** (-1)).T))))
@@ -1071,13 +1103,14 @@ def calc_subspace_kalmangain(cov_cross, data_pert, cov_data, energy):
     x_1 = np.dot(u_d[:, :], np.dot(np.diag(s_d[:]**(-1)).T, u))
 
     # Calculate Kalman gain based on the subspace matrices we made above
-    k_g = np.dot(cov_cross, np.dot(x_1, linalg.solve((np.eye(s.shape[0]) + np.diag(s)), x_1.T)))
+    k_g = np.dot(cov_cross, np.dot(x_1, linalg.solve(
+        (np.eye(s.shape[0]) + np.diag(s)), x_1.T)))
 
     # Return subspace Kalman gain
     return k_g
 
 
-def compute_x(pert_preddata,cov_data,keys_da,alfa=None):
+def compute_x(pert_preddata, cov_data, keys_da, alfa=None):
     """
     INSERT DESCRIPTION
 
@@ -1109,7 +1142,7 @@ def compute_x(pert_preddata,cov_data,keys_da,alfa=None):
         if len(cov_data.shape) == 1:
             scale = np.expand_dims(np.sqrt(cov_data), axis=1)
         else:
-            scale = np.expand_dims(np.sqrt(np.diag(cov_data)),axis=1)
+            scale = np.expand_dims(np.sqrt(np.diag(cov_data)), axis=1)
 
         # Perform SVD on pred. data perturbations
         u_d, s_d, v_d = np.linalg.svd(pert_preddata/scale, full_matrices=False)
@@ -1130,26 +1163,29 @@ def compute_x(pert_preddata,cov_data,keys_da,alfa=None):
                                                                                        np.diag(s_d[:] ** (-1)).T)))
         else:
             x_0 = np.dot(np.diag(s_d[:] ** (-1)), np.dot(u_d[:, :].T, np.dot(cov_data, np.dot(u_d[:, :],
-                                                                                    np.diag(s_d[:] ** (-1)).T))))
+                                                                                              np.diag(s_d[:] ** (-1)).T))))
         s, u = np.linalg.eig(x_0)
 
         # Calculate x_1
         x_1 = np.dot(u_d[:, :], np.dot(np.diag(s_d[:] ** (-1)).T, u))/scale
 
         # Calculate X based on the subspace matrices we made above
-        X = np.dot(np.dot(pert_preddata.T, x_1), linalg.solve((np.eye(s.shape[0]) + np.diag(s)), x_1.T))
+        X = np.dot(np.dot(pert_preddata.T, x_1), linalg.solve(
+            (np.eye(s.shape[0]) + np.diag(s)), x_1.T))
 
     else:
         if len(cov_data.shape) == 1:
-            X = linalg.solve(np.dot(pert_preddata, pert_preddata.T) + np.diag(cov_data), pert_preddata)
+            X = linalg.solve(np.dot(pert_preddata, pert_preddata.T) +
+                             np.diag(cov_data), pert_preddata)
         else:
-            X = linalg.solve(np.dot(pert_preddata, pert_preddata.T) + cov_data, pert_preddata)
+            X = linalg.solve(np.dot(pert_preddata, pert_preddata.T) +
+                             cov_data, pert_preddata)
         X = X.T
 
     return X
 
 
-def aug_state(state, list_state,cell_index=None):
+def aug_state(state, list_state, cell_index=None):
     """
     Augment the state variables to an array.
 
@@ -1207,7 +1243,7 @@ def calc_scaling(state, list_state, prior_info):
         List of states for augmenting
     prior_info: dict
         Nested dictionary containing prior information
-    
+
     Returns
     -------
     scaling: numpy array
@@ -1216,18 +1252,20 @@ def calc_scaling(state, list_state, prior_info):
 
     scaling = []
     for elem in list_state:
-        if len(prior_info[elem]['variance'])>1: # more than single value. This is for multiple layers. Assume all values are active
-            scaling.append(np.concatenate(tuple(np.sqrt(prior_info[elem]['variance'][z])*
-                                                np.ones(prior_info[elem]['ny']*prior_info[elem]['nx'])
+        # more than single value. This is for multiple layers. Assume all values are active
+        if len(prior_info[elem]['variance']) > 1:
+            scaling.append(np.concatenate(tuple(np.sqrt(prior_info[elem]['variance'][z]) *
+                                                np.ones(
+                                                    prior_info[elem]['ny']*prior_info[elem]['nx'])
                                                 for z in range(prior_info[elem]['nz']))))
         else:
-            scaling.append(tuple(np.sqrt(prior_info[elem]['variance'])*
-                                                  np.ones(state[elem].shape[0])))
+            scaling.append(tuple(np.sqrt(prior_info[elem]['variance']) *
+                                 np.ones(state[elem].shape[0])))
 
     return np.concatenate(scaling)
 
 
-def update_state(aug_state, state, list_state,cell_index=None):
+def update_state(aug_state, state, list_state, cell_index=None):
     """
     Extract the separate state variables from an augmented state array. It is assumed that the augmented state
     array is made in `aug_state`, hence this is the reverse method of `aug_state`.
@@ -1270,7 +1308,7 @@ def update_state(aug_state, state, list_state,cell_index=None):
             no_rows = len(cell_index)
 
             # Extract the rows from aug and update 'state[key]'
-            state[key][cell_index,:] = aug_state[aug_row:aug_row + no_rows, :]
+            state[key][cell_index, :] = aug_state[aug_row:aug_row + no_rows, :]
 
             # Update tracking variable for row in 'aug'
             aug_row += no_rows
@@ -1281,7 +1319,7 @@ def resample_state(aug_state, state, list_state, new_en_size):
     """
     Extract the seperate state variables from an augmented state matrix. Calculate the mean and covariance, and resample
     this.
-    
+
     Parameters
     ----------
     aug_upd_state: ndarray
@@ -1292,7 +1330,7 @@ def resample_state(aug_state, state, list_state, new_en_size):
         List of state variable
     new_en_size: int
         Size of the new ensemble
-    
+
     Returns
     -------
     state: dict
@@ -1309,9 +1347,10 @@ def resample_state(aug_state, state, list_state, new_en_size):
 
         mean_state = np.mean(aug_state[aug_row:aug_row + no_rows, :], 1)
         pert_state = np.sqrt(1/(curr_ne - 1)) * (aug_state[aug_row:aug_row + no_rows, :] - np.dot(np.resize(mean_state,
-                                        (len(mean_state), 1)), np.ones((1, curr_ne))))
+                                                                                                            (len(mean_state), 1)), np.ones((1, curr_ne))))
         for i in range(new_en_size):
-            new_state[elem][:, i] = mean_state + np.dot(pert_state, np.random.normal(0, 1, pert_state.shape[1]))
+            new_state[elem][:, i] = mean_state + \
+                np.dot(pert_state, np.random.normal(0, 1, pert_state.shape[1]))
 
         aug_row += no_rows
 
@@ -1380,7 +1419,8 @@ def calc_kalman_filter_eq(aug_state, kalman_gain, obs_data, pred_data):
     aug_state_upd = np.zeros(aug_state.shape)  # Init. updated state
 
     for i in range(aug_state.shape[1]):  # Loop over ensemble members
-        aug_state_upd[:, i] = aug_state[:, i] + np.dot(kalman_gain, (obs_data[:, i] - pred_data[:, i]))
+        aug_state_upd[:, i] = aug_state[:, i] + \
+            np.dot(kalman_gain, (obs_data[:, i] - pred_data[:, i]))
 
     # Return the updated state
     return aug_state_upd
@@ -1396,7 +1436,7 @@ def limits(state, prior_info):
         Dictionary containing the states
     prior_info: dict
         Dictionary containing prior information for all the states.
-    
+
     Returns
     -------
     state: dict
@@ -1404,8 +1444,10 @@ def limits(state, prior_info):
     """
     for var in state.keys():
         if 'limits' in prior_info[var]:
-            state[var][state[var] < prior_info[var]['limits'][0][0]] = prior_info[var]['limits'][0][0]
-            state[var][state[var] > prior_info[var]['limits'][0][1]] = prior_info[var]['limits'][0][1]
+            state[var][state[var] < prior_info[var]['limits']
+                       [0][0]] = prior_info[var]['limits'][0][0]
+            state[var][state[var] > prior_info[var]['limits']
+                       [0][1]] = prior_info[var]['limits'][0][1]
     return state
 
 
@@ -1421,7 +1463,7 @@ def subsample_state(index, aug_state, pert_state):
         Original augmented state.
     pert_state: ndarray
         Perturbed augmented state, for error covariance.
-    
+
     Returns
     -------
     new_state: dict
@@ -1430,10 +1472,12 @@ def subsample_state(index, aug_state, pert_state):
 
     new_state = np.empty((aug_state.shape[0], len(index)))
     for i in range(len(index)):
-        new_state[:, i] = aug_state[:, index[i]] + np.dot(pert_state, np.random.normal(0, 1, pert_state.shape[1]))
+        new_state[:, i] = aug_state[:, index[i]] + \
+            np.dot(pert_state, np.random.normal(0, 1, pert_state.shape[1]))
         # select some elements
 
     return new_state
+
 
 def init_local_analysis(init, state):
     """Initialize local analysis.
@@ -1455,17 +1499,19 @@ def init_local_analysis(init, state):
 
     for i, opt in enumerate(list(zip(*init))[0]):
         if opt.lower() == 'region_parameter':  # define scalar parameters valid in a region
-            local['region_parameter'] = [elem for elem in init[i][1].split(' ') if elem in state]
+            local['region_parameter'] = [
+                elem for elem in init[i][1].split(' ') if elem in state]
         if opt.lower() == 'cell_parameter':  # define cell specific vector parameters
-            local['cell_parameter'] = [elem for elem in init[i][1].split(' ') if elem in state]
+            local['cell_parameter'] = [
+                elem for elem in init[i][1].split(' ') if elem in state]
         if opt.lower() == 'search_range':
             local['search_range'] = int(init[i][1])
         if opt.lower() == 'column_update':
             local['column_update'] = [elem for elem in init[i][1].split(',')]
-        if opt.lower() == 'parameter_position_file': # assume pickled format
-            with open(init[i][1],'rb') as file:
+        if opt.lower() == 'parameter_position_file':  # assume pickled format
+            with open(init[i][1], 'rb') as file:
                 local['parameter_position'] = pickle.load(file)
-        if opt.lower() == 'data_position_file': # assume pickled format
+        if opt.lower() == 'data_position_file':  # assume pickled format
             with open(init[i][1], 'rb') as file:
                 local['data_position'] = pickle.load(file)
         if opt.lower() == 'update_mask_file':
@@ -1480,32 +1526,37 @@ def init_local_analysis(init, state):
         assert 'data_position' in local, 'A pickle file containing the position of the data is MANDATORY'
 
         data_name = [elem for elem in local['data_position'].keys()]
-        if type(local['data_position'][data_name[0]][0]) == list: #assim index has spesific position
+        if type(local['data_position'][data_name[0]][0]) == list:  # assim index has spesific position
             local['unique'] = False
-            data_pos = [elem for data in data_name for assim_elem in local['data_position'][data] for elem in assim_elem]
-            data_ind = [f'{data}_{assim_indx}' for data in data_name for assim_indx,assim_elem in enumerate(local['data_position'][data])
+            data_pos = [elem for data in data_name for assim_elem in local['data_position'][data]
+                        for elem in assim_elem]
+            data_ind = [f'{data}_{assim_indx}' for data in data_name for assim_indx, assim_elem in enumerate(local['data_position'][data])
                         for _ in assim_elem]
         else:
             data_pos = [elem for data in data_name for elem in local['data_position'][data]]
-            data_ind = [data for data in data_name for _ in local['data_position'][data]]  # store the name for easy index
+            # store the name for easy index
+            data_ind = [data for data in data_name for _ in local['data_position'][data]]
         kde_search = cKDTree(data=data_pos)
 
         local['update_mask'] = {}
-        for param in local['cell_parameter']: # find data in a distance from the parameter
+        for param in local['cell_parameter']:  # find data in a distance from the parameter
             field_size = local['parameter_position'][param].shape
             local['update_mask'][param] = [[[[] for _ in range(field_size[2])] for _ in range(field_size[1])] for _
-                              in range(field_size[0])]
+                                           in range(field_size[0])]
             for k in range(field_size[0]):
                 for j in range(field_size[1]):
-                    new_iter = [elem for elem, val in enumerate(local['parameter_position'][param][k, j, :]) if val]
+                    new_iter = [elem for elem, val in enumerate(
+                        local['parameter_position'][param][k, j, :]) if val]
                     if len(new_iter):
                         for i in new_iter:
                             local['update_mask'][param][k][j][i] = set(
                                 [data_ind[elem] for elem in kde_search.query_ball_point(x=(k, j, i),
-                                                                                r=local['search_range'],workers=-1)])
+                                                                                        r=local['search_range'], workers=-1)])
 
-        for param in local['region_parameter']: # see if data is inside the region. Note parameter_position is boolean map
+        # see if data is inside the region. Note parameter_position is boolean map
+        for param in local['region_parameter']:
             in_region = [local['parameter_position'][param][elem] for elem in data_pos]
-            local['update_mask'][param] = set([data_ind[count] for count, val in enumerate(in_region) if val])
+            local['update_mask'][param] = set(
+                [data_ind[count] for count, val in enumerate(in_region) if val])
 
         return local

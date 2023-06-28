@@ -1,8 +1,8 @@
 """Quality Assurance of the forecast (QA) and analysis (QC) step."""
 import numpy as np
 import os
-#import matplotlib as mpl
-#mpl.use('Qt5Agg')
+# import matplotlib as mpl
+# mpl.use('Qt5Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as pat
 import matplotlib.collections as mcoll
@@ -12,7 +12,7 @@ import logging
 from pipt.misc_tools import cov_regularization
 from scipy.interpolate import interp1d
 from scipy.io import loadmat
-#import cv2
+# import cv2
 
 
 # Define the class for qa/qc tools.
@@ -44,11 +44,13 @@ class QAQC:
         else:
             self.logger = logging.getLogger('PET.PIPT.QCQA')
         self.prior_info = prior_info  # prior info for the different parameter types
-        self.sim = sim  # this class contains potential writing functions (this class can be saved to debug_analysis)
+        # this class contains potential writing functions (this class can be saved to debug_analysis)
+        self.sim = sim
         self.ini_state = ini_state  # the first state; used to compute statistics
         self.ne = 0
         if self.ini_state is not None:
-            self.ne = self.ini_state[list(self.ini_state.keys())[0]].shape[1]  # get the ensemble size from here
+            # get the ensemble size from here
+            self.ne = self.ini_state[list(self.ini_state.keys())[0]].shape[1]
 
         assim_step = 0  # Assume simultaneous assimiation
         assim_ind = [keys['obsname'], keys['assimindex'][assim_step]]
@@ -124,7 +126,6 @@ class QAQC:
         - NOTE: Not available in current version of PIPT
         """
 
-
     def calc_kg(self, options=None):
         """
         Check/write individual gain for parameters.
@@ -156,8 +157,6 @@ class QAQC:
         - Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
         - NOTE: Not available in current version of PIPT
         """
-
-
 
     def calc_mahalanobis(self, combi_list=(1, None)):
         """

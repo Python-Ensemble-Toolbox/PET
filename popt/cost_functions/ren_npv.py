@@ -46,16 +46,18 @@ def ren_npv(pred_data, keys_opt, report):
         for key in keys_opt['datatype']:
             if 'wwit' in key:
                 if 'ren' in key:
-                    Qrenwi.append(np.squeeze(pred_data[i][key]) - np.squeeze(pred_data[i - 1][key]))
+                    Qrenwi.append(np.squeeze(
+                        pred_data[i][key]) - np.squeeze(pred_data[i - 1][key]))
                 else:
-                    Qwi.append(np.squeeze(pred_data[i][key]) - np.squeeze(pred_data[i - 1][key]))
+                    Qwi.append(np.squeeze(pred_data[i][key]) -
+                               np.squeeze(pred_data[i - 1][key]))
         Qrenwi = np.sum(Qrenwi, axis=0)
         Qwi = np.sum(Qwi, axis=0)
 
         delta_days = (report[1][i] - report[1][i - 1]).days
 
         val = (Qop * wop + Qgp * wgp - Qwp * wwp - Qwi * wwi - Qrenwi * wrenwi) / (
-                (1 + disc) ** (delta_days / 365))
+            (1 + disc) ** (delta_days / 365))
 
         values.append(val)
 

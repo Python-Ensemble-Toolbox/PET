@@ -14,6 +14,7 @@ class flow(eclipse):
     Class for running OPM flow with Eclipse input files. Inherits eclipse parent class for setting up and running
     simulations, and reading the results.
     """
+
     def call_sim(self, folder=None, wait_for_proc=False):
         """
         Call OPM flow simulator via shell.
@@ -43,14 +44,15 @@ class flow(eclipse):
                 if self.options['mpi']:
                     com.extend(self.options['mpi'].split())
                 com.append(self.options['sim_path'] + 'flow')
-                com.extend(['--output-dir=' + folder, *self.options['sim_flag'].split(), filename + '.DATA'])
+                com.extend(['--output-dir=' + folder, *
+                           self.options['sim_flag'].split(), filename + '.DATA'])
                 if 'sim_limit' in self.options:
-                    call(com, stdout=DEVNULL,timeout=self.options['sim_limit'])
+                    call(com, stdout=DEVNULL, timeout=self.options['sim_limit'])
                 else:
                     call(com, stdout=DEVNULL)
                 raise ValueError  # catch errors in run_sim
         except:
-            print('\nError in the OPM run.') # add rerun?
+            print('\nError in the OPM run.')  # add rerun?
             if not os.path.exists('Crashdump'):
                 shutil.copytree(folder, 'Crashdump')
             success = False
@@ -86,6 +88,7 @@ class ebos(eclipse):
     Class for running OPM ebos with Eclipse input files. Inherits eclipse parent class for setting up and running
     simulations, and reading the results.
     """
+
     def call_sim(self, folder=None, wait_for_proc=False):
         """
         Call OPM flow simulator via shell.
@@ -113,8 +116,9 @@ class ebos(eclipse):
             self.options['sim_path'] = ''
 
         with OPMRunEnvironment(filename, 'OUT', 'Timing receipt'):
-            with open(filename+'.OUT','w') as f:
-                call([self.options['sim_path'] + 'ebos','--output-dir=' + folder, *self.options['sim_flag'].split(), filename + '.DATA'], stdout=f)
+            with open(filename+'.OUT', 'w') as f:
+                call([self.options['sim_path'] + 'ebos', '--output-dir=' + folder,
+                     *self.options['sim_flag'].split(), filename + '.DATA'], stdout=f)
 
     def check_sim_end(self, finished_member=None):
         """

@@ -9,6 +9,7 @@ import multiprocessing as mp
 # internal load
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
 
+
 class elasticproperties:
     """
     Calculate elastic properties from standard
@@ -55,7 +56,7 @@ class elasticproperties:
             self.overburden = npzfile['obvalues']
             npzfile.close()
         if 'baseline' in self.input_dict:
-            self.baseline = self.input_dict['baseline'] #4D baseline
+            self.baseline = self.input_dict['baseline']  # 4D baseline
         if 'parallel' in self.input_dict:
             self.parallel = self.input_dict['parallel']
 
@@ -77,21 +78,21 @@ class elasticproperties:
         ---------
         - KF 11/12-2018
         """
-        #self.inv_state = {}
-        #list_pem_param =[el for el in [foo for foo in self.pem['garn'].keys()] + [foo for foo in self.filter.keys()] +
+        # self.inv_state = {}
+        # list_pem_param =[el for el in [foo for foo in self.pem['garn'].keys()] + [foo for foo in self.filter.keys()] +
         #                 [foo for foo in self.__dict__.keys()]]
 
-        #list_tot_param = state.keys()
-        #for param in list_tot_param:
+        # list_tot_param = state.keys()
+        # for param in list_tot_param:
         #    if param in list_pem_param or (param.split('_')[-1] in ['garn', 'rest']):
         #        self.inv_state[param] = state[param]
 
         pass
 
     def calc_props(self, phases, saturations, pressure,
-                   porosity, wait_for_proc=None, ntg=None,Rs = None, press_init=None,ensembleMember=None):
+                   porosity, wait_for_proc=None, ntg=None, Rs=None, press_init=None, ensembleMember=None):
         ###
-        ### This doesn't initialize for models with no uncertainty
+        # This doesn't initialize for models with no uncertainty
         ###
         # # if some PEM properties have uncertainty, set the correct value
         # if ensembleMember is not None:
@@ -125,10 +126,10 @@ class elasticproperties:
         if not isinstance(saturations, list):
             saturations = [saturations]
         if not isinstance(pressure, list) and \
-                    type(pressure).__module__ != 'numpy':
+                type(pressure).__module__ != 'numpy':
             pressure = [pressure]
         if not isinstance(porosity, list) and \
-                    type(porosity).__module__ != 'numpy':
+                type(porosity).__module__ != 'numpy':
             porosity = [porosity]
         #
         # Load "overburden" into local variable to
@@ -166,33 +167,32 @@ class elasticproperties:
         #
         self.phases = phases
 
-        self.dens = np.zeros(len(saturations[:,0]))
-        self.bulkmod = np.zeros(len(saturations[:,0]))
-        self.shearmod = np.zeros(len(saturations[:,0]))
-        self.bulkvel = np.zeros(len(saturations[:,0]))
-        self.shearvel = np.zeros(len(saturations[:,0]))
-        self.bulkimp = np.zeros(len(saturations[:,0]))
-        self.shearimp = np.zeros(len(saturations[:,0]))
-
+        self.dens = np.zeros(len(saturations[:, 0]))
+        self.bulkmod = np.zeros(len(saturations[:, 0]))
+        self.shearmod = np.zeros(len(saturations[:, 0]))
+        self.bulkvel = np.zeros(len(saturations[:, 0]))
+        self.shearvel = np.zeros(len(saturations[:, 0]))
+        self.bulkimp = np.zeros(len(saturations[:, 0]))
+        self.shearimp = np.zeros(len(saturations[:, 0]))
 
         if ntg is None:
-            ntg = [None for _ in range(len(saturations[:,0]))]
+            ntg = [None for _ in range(len(saturations[:, 0]))]
         if Rs is None:
             Rs = [None for _ in range(len(saturations[:, 0]))]
         if p_init is None:
             p_init = [None for _ in range(len(saturations[:, 0]))]
 
-        for i in range(len(saturations[:,0])):
+        for i in range(len(saturations[:, 0])):
             #
             # Calculate fluid properties
             #
             # set Rs if needed
             densf, bulkf = \
                 self._fluidprops(self.phases,
-                        saturations[i, :], pressure[i],Rs[i])
+                                 saturations[i, :], pressure[i], Rs[i])
             #
             denss, bulks, shears = \
-                self._solidprops(porosity[i],ntg[i],i)
+                self._solidprops(porosity[i], ntg[i], i)
             #
             # Calculate dry rock moduli
             #
@@ -208,16 +208,16 @@ class elasticproperties:
             #
             # Density
             #
-            self.dens[i] = (porosity[i]*densf + \
-                           (1-porosity[i])*denss)*0.001
+            self.dens[i] = (porosity[i]*densf +
+                            (1-porosity[i])*denss)*0.001
             #
             # Moduli
             #
             self.bulkmod[i] = \
                 bulkd + (1 - bulkd/bulks)**2 / \
-                        (porosity[i]/bulkf +
-                        (1-porosity[i])/bulks -
-                         bulkd/(bulks**2))
+                (porosity[i]/bulkf +
+                 (1-porosity[i])/bulks -
+                 bulkd/(bulks**2))
             self.shearmod[i] = sheard
 
             # Velocities (due to bulk/shear modulus being
@@ -226,17 +226,17 @@ class elasticproperties:
             #
             self.bulkvel[i] = \
                 100*np.sqrt((abs(self.bulkmod[i]) +
-                    4*self.shearmod[i]/3)/(self.dens[i]))
+                             4*self.shearmod[i]/3)/(self.dens[i]))
             self.shearvel[i] = \
-                100*np.sqrt(self.shearmod[i]/
-                             (self.dens[i]))
+                100*np.sqrt(self.shearmod[i] /
+                            (self.dens[i]))
             #
             # Impedances (m/s)*(Kg/m3)
             #
-            self.bulkimp[i] = self.dens[i]* \
-                              self.bulkvel[i]
-            self.shearimp[i] = self.dens[i]* \
-                               self.shearvel[i]
+            self.bulkimp[i] = self.dens[i] * \
+                self.bulkvel[i]
+            self.shearimp[i] = self.dens[i] * \
+                self.shearvel[i]
 
     def getMatchProp(self, petElProp):
         if petElProp.lower() == 'density':
@@ -265,7 +265,6 @@ class elasticproperties:
                   "shear impedance")
             sys.exit(1)
         return self.match_prop
-
 
     def getDens(self):
         return self.dens
@@ -330,13 +329,13 @@ class elasticproperties:
             fdens = fdens + fsats[i]*abs(pdens)
             fbinv = fbinv + fsats[i]/abs(pbulk)
         fbulk = 1.0/fbinv
-            #
+        #
         return fdens, fbulk
     #
     # ---------------------------------------------------
     #
 
-    def _phaseprops(self, fphase, press,Rs=None):
+    def _phaseprops(self, fphase, press, Rs=None):
         #
         # Calculate properties for a single fluid phase
         #
@@ -397,7 +396,7 @@ class elasticproperties:
     # Solid properties start
     # =========================
     #
-    def _solidprops(self, poro, ntg=None,ind=None):
+    def _solidprops(self, poro, ntg=None, ind=None):
         #
         # Calculate bulk and shear solid rock (mineral)
         # moduli by averaging Hashin-Shtrikman bounds
@@ -634,12 +633,12 @@ class elasticproperties:
         #
         sa = shearhm
         sb = shears
-        sz = (shearhm/6)*((9*bulkhm + 8*shearhm)/ \
+        sz = (shearhm/6)*((9*bulkhm + 8*shearhm) /
                           (bulkhm + 2*shearhm))
         #
         # Calculate moduli
         #
-        bulkd  = self._gendryrock(poratio, ba, bb, bz)
+        bulkd = self._gendryrock(poratio, ba, bb, bz)
         sheard = self._gendryrock(poratio, sa, sb, sz)
         #
         return bulkd, sheard
@@ -682,7 +681,8 @@ class elasticproperties:
         peff = poverb - pfluid
         if peff < 0:
             print("\nError in _hertzmindlin method")
-            print("Negative effective pressure (" + str(peff) + "). Setting effective pressure to 0.01")
+            print("Negative effective pressure (" + str(peff) +
+                  "). Setting effective pressure to 0.01")
             peff = 0.01
    #         sys.exit(1)
         common = (peff/pref)**kappa
@@ -728,13 +728,14 @@ class elasticproperties:
     # Dry rock properties end
     # ===========================
 
+
 if __name__ == '__main__':
-#
-#Example input with two phases and three grid cells
-#
-    porosity = [ 0.34999999, 0.34999999, 0.34999999]
+    #
+    # Example input with two phases and three grid cells
+    #
+    porosity = [0.34999999, 0.34999999, 0.34999999]
 #    pressure = [ 29.29150963, 29.14003944, 28.88845444]
-    pressure = [ 29.3558, 29.2625, 29.3558]
+    pressure = [29.3558, 29.2625, 29.3558]
 #    pressure = [ 25.0, 25.0, 25.0]
     phases = ["Oil", "Wat"]
 #    saturations = [[0.72783828, 0.66568458, 0.58033288],
@@ -743,7 +744,7 @@ if __name__ == '__main__':
                    [0.3641, 0.4245, 0.3641]]
 #    saturations = [[0.4, 0.5, 0.6],
 #                   [0.6, 0.5, 0.4]]
-    petElProp ="bulk velocity"
+    petElProp = "bulk velocity"
     input_dict = {}
     input_dict['overburden'] = 'overb.npz'
 
@@ -752,7 +753,6 @@ if __name__ == '__main__':
     print("phases, saturations:", phases, saturations)
     print("petElProp:", petElProp)
     print("input_dict:", input_dict)
-
 
     satrock = elasticproperties(input_dict)
 
@@ -775,4 +775,3 @@ if __name__ == '__main__':
     print("\nOutput from getMatchProp:")
     print("Model output selected for data match:",
           satrock.match_prop)
-

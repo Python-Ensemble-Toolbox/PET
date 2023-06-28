@@ -6,7 +6,7 @@ import datetime as dt
 
 
 class Organize_input():
-    def __init__(self,keys_pr, keys_fwd):
+    def __init__(self, keys_pr, keys_fwd):
         self.keys_pr = keys_pr
         self.keys_fwd = keys_fwd
         self.keys_en = None
@@ -41,7 +41,8 @@ class Organize_input():
 
         if not isinstance(self.keys_fwd['datatype'], list):
             self.keys_fwd['datatype'] = [self.keys_fwd['datatype']]
-        self.keys_pr['datatype'] = self.keys_fwd['datatype']  # make copy for problem keywords
+        # make copy for problem keywords
+        self.keys_pr['datatype'] = self.keys_fwd['datatype']
 
     def _org_report(self):
         """
@@ -99,7 +100,8 @@ class Organize_input():
                             try:
                                 csv_data[ind] = int(col)
                             except ValueError:
-                                csv_data[ind] = dt.datetime.strptime(col, '%Y-%m-%d %H:%M:%S')
+                                csv_data[ind] = dt.datetime.strptime(
+                                    col, '%Y-%m-%d %H:%M:%S')
 
                         pred_prim.extend(csv_data)
                 self.keys_fwd['reportpoint'] = pred_prim

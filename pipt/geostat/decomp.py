@@ -3,7 +3,8 @@ __author__ = 'svenn'
 
 # External imports
 import numpy as np
-from scipy import linalg  # Linear algebra tools (from scipy rather than numpy; see scipy website)
+# Linear algebra tools (from scipy rather than numpy; see scipy website)
+from scipy import linalg
 import sys
 
 
@@ -13,6 +14,7 @@ class Cholesky:
 
     .. danger:: In danger of being deprecated due to lack of class structure. May become an assemblage of methods instead.
     """
+
     def __init__(self):
         pass
 
@@ -182,7 +184,7 @@ class Cholesky:
             gamma[s2] = 0
 
         elif var_type == 'exp':
-            smoothing = 1.9 # if extra smoothing is requires
+            smoothing = 1.9  # if extra smoothing is requires
             gamma = variance * (np.exp(-3*(np.fabs(d) / var_range)**smoothing))
 
         elif var_type == 'cub':
@@ -195,7 +197,8 @@ class Cholesky:
             gamma[s2] = 0
 
         else:
-            print('\033[1;31mERROR: Variogram model "{0)" has not been implemented!\033[1;m'.format(var_type))
+            print('\033[1;31mERROR: Variogram model "{0)" has not been implemented!\033[1;m'.format(
+                var_type))
             sys.exit(1)
 
         return gamma

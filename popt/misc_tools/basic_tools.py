@@ -32,6 +32,7 @@ def index2d(list2d, value):
     """
     return next(((i, j) for i, lst in enumerate(list2d) for j, x in enumerate(lst) if x == value), None)
 
+
 def read_file(val_type, filename):
     """
     Read an eclipse file with specified keyword.
@@ -86,6 +87,7 @@ def read_file(val_type, filename):
 
     values = np.hstack(data)
     return values
+
 
 def write_file(filename, val_type, data):
     """

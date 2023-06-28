@@ -2,37 +2,39 @@
 EnRML type schemes
 """
 # External imports
+import pipt.misc_tools.analysis_tools as at
+from pipt.geostat.decomp import Cholesky
+from pipt.loop.ensemble import Ensemble
+from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
+from pipt.update_schemes.update_methods_ns.full_update import full_update
+from pipt.update_schemes.update_methods_ns.approx_update import approx_update
 import sys
 import pkgutil
 import inspect
 import numpy as np
 import copy as cp
-from scipy.linalg import cholesky,solve
+from scipy.linalg import cholesky, solve
 
 # List all available packages in the namespace package
 # Import those that are present
 import pipt.update_schemes.update_methods_ns as ns_pkg
 tot_ns_pkg = []
-for finder, name, ispkg in pkgutil.walk_packages(ns_pkg.__path__): # extract all class methods from namespace
-    _module =finder.find_module(name).load_module(f'{name}')
-    tot_ns_pkg.extend(inspect.getmembers(_module,inspect.isclass))
+# extract all class methods from namespace
+for finder, name, ispkg in pkgutil.walk_packages(ns_pkg.__path__):
+    _module = finder.find_module(name).load_module(f'{name}')
+    tot_ns_pkg.extend(inspect.getmembers(_module, inspect.isclass))
 
 # import standard libraries
-from pipt.update_schemes.update_methods_ns.approx_update import approx_update
-from pipt.update_schemes.update_methods_ns.full_update import full_update
-from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
 
 # Check and import (if present) from other namespace packages
-if 'margIS_update' in [el[0] for el in tot_ns_pkg]: # only compare package name
+if 'margIS_update' in [el[0] for el in tot_ns_pkg]:  # only compare package name
     from pipt.update_schemes.update_methods_ns.margIS_update import margIS_update
 else:
     class margIS_update:
         pass
 
 # Internal imports
-from pipt.loop.ensemble import Ensemble
-from pipt.geostat.decomp import Cholesky
-import pipt.misc_tools.analysis_tools as at
+
 
 class lmenrmlMixIn(Ensemble):
     """
@@ -40,7 +42,7 @@ class lmenrmlMixIn(Ensemble):
     update_methods_ns. This class must therefore facititate many different update schemes.
     """
 
-    def __init__(self, keys_da,keys_fwd,sim):
+    def __init__(self, keys_da, keys_fwd, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
@@ -51,7 +53,7 @@ class lmenrmlMixIn(Ensemble):
             PIPT init. file containing info. to run the inversion algorithm
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da,keys_fwd,sim)
+        super().__init__(keys_da, keys_fwd, sim)
 
         if self.restart is False:
             # Save prior state in separate variable
@@ -77,14 +79,14 @@ class lmenrmlMixIn(Ensemble):
             # define the list of states
             self.list_states = list(self.state.keys())
             # define the list of datatypes
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
+                self.obs_data, self.assim_index)
             # Get the perturbed observations and observation scaling
             self.data_random_state = cp.deepcopy(np.random.get_state())
             self._ext_obs()
             # Get state scaling and svd of scaled prior
             self._ext_state()
             self.current_state = cp.deepcopy(self.state)
-
 
     def calc_analysis(self):
         """
@@ -93,11 +95,12 @@ class lmenrmlMixIn(Ensemble):
         """
 
         # reformat predicted data
-        _,self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                                   self.list_datatypes)
+        _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                     self.list_datatypes)
 
-        if self.iteration == 1: # first iteration
-            data_misfit = at.calc_objectivefun(self.real_obs_data,self.aug_pred_data,self.cov_data)
+        if self.iteration == 1:  # first iteration
+            data_misfit = at.calc_objectivefun(
+                self.real_obs_data, self.aug_pred_data, self.cov_data)
 
             # Store the (mean) data misfit (also for conv. check)
             self.data_misfit = np.mean(data_misfit)
@@ -107,7 +110,8 @@ class lmenrmlMixIn(Ensemble):
             if self.lam == 'auto':
                 self.lam = (0.5 * self.prior_data_misfit)/self.aug_pred_data.shape[0]
 
-            self.logger.info(f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}. Lambda for initial analysis: {self.lam}')
+            self.logger.info(
+                f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}. Lambda for initial analysis: {self.lam}')
 
         if 'localanalysis' in self.keys_da:
             self.local_analysis_update()
@@ -117,16 +121,18 @@ class lmenrmlMixIn(Ensemble):
                 self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
                                             np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
             else:
-                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+                self.pert_preddata = solve(
+                    self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
             aug_state = at.aug_state(self.current_state, self.list_states)
-            self.update() # run ordinary analysis
-            if hasattr(self,'step'):
+            self.update()  # run ordinary analysis
+            if hasattr(self, 'step'):
                 aug_state_upd = aug_state + self.step
-            if hasattr(self,'w_step'):
+            if hasattr(self, 'w_step'):
                 self.W = self.current_W + self.w_step
                 aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-                aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+                aug_state_upd = np.dot(aug_prior_state, (np.eye(
+                    self.ne) + self.W / np.sqrt(self.ne - 1)))
 
             # Extract updated state variables from aug_update
             self.state = at.update_state(aug_state_upd, self.state, self.list_states)
@@ -147,7 +153,7 @@ class lmenrmlMixIn(Ensemble):
         """
 
         _, pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                          self.list_datatypes)
+                                            self.list_datatypes)
         # Initialize the initial success value
         success = False
 
@@ -159,7 +165,7 @@ class lmenrmlMixIn(Ensemble):
         # mat_obs = np.dot(obs_data_vector.reshape((len(obs_data_vector),1)), np.ones((1, self.ne))) # use the perturbed
         # data instead.
 
-        data_misfit = at.calc_objectivefun(self.real_obs_data,pred_data,self.cov_data)
+        data_misfit = at.calc_objectivefun(self.real_obs_data, pred_data, self.cov_data)
 
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
@@ -201,19 +207,20 @@ class lmenrmlMixIn(Ensemble):
             ###############################################
             ##### update Lambda step-size values ##########
             ###############################################
-            if self.data_misfit < self.prev_data_misfit and self.data_misfit_std < self.prev_data_misfit_std:  # If reduction in mean data misfit, reduce damping param
+            # If reduction in mean data misfit, reduce damping param
+            if self.data_misfit < self.prev_data_misfit and self.data_misfit_std < self.prev_data_misfit_std:
                 # Reduce damping parameter (divide calculations for ANALYSISDEBUG purpose)
                 if self.lam > self.lam_min:
                     self.lam = self.lam / self.gamma
                 success = True
                 self.current_state = cp.deepcopy(self.state)
-                if hasattr(self,'W'):
+                if hasattr(self, 'W'):
                     self.current_W = cp.deepcopy(self.W)
             elif self.data_misfit < self.prev_data_misfit and self.data_misfit_std >= self.prev_data_misfit_std:
                 # accept itaration, but keep lam the same
                 success = True
                 self.current_state = cp.deepcopy(self.state)
-                if hasattr(self,'W'):
+                if hasattr(self, 'W'):
                     self.current_W = cp.deepcopy(self.W)
 
             else:  # Reject iteration, and increase lam
@@ -268,18 +275,23 @@ class lmenrmlMixIn(Ensemble):
                 self.gamma = self.keys_da['iteration'][i][1]
 
         if 'energy' in self.keys_da:
-                self.trunc_energy = self.keys_da['energy'] # initial energy (Remember to extract this)
-                if self.trunc_energy > 1: # ensure that it is given as percentage
-                    self.trunc_energy /= 100.
+            # initial energy (Remember to extract this)
+            self.trunc_energy = self.keys_da['energy']
+            if self.trunc_energy > 1:  # ensure that it is given as percentage
+                self.trunc_energy /= 100.
 
-class lmenrml_approx(lmenrmlMixIn,approx_update):
+
+class lmenrml_approx(lmenrmlMixIn, approx_update):
     pass
+
 
 class lmenrml_full(lmenrmlMixIn, full_update):
-   pass
-
-class lmenrml_subspace(lmenrmlMixIn,subspace_update):
     pass
+
+
+class lmenrml_subspace(lmenrmlMixIn, subspace_update):
+    pass
+
 
 class gnenrmlMixIn(Ensemble):
     """
@@ -287,7 +299,7 @@ class gnenrmlMixIn(Ensemble):
     update_methods_ns. This class must therefore facititate many different update schemes.
     """
 
-    def __init__(self, keys_da,keys_fwd,sim):
+    def __init__(self, keys_da, keys_fwd, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
@@ -298,14 +310,13 @@ class gnenrmlMixIn(Ensemble):
             PIPT init. file containing info. to run the inversion algorithm
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da,keys_fwd,sim)
+        super().__init__(keys_da, keys_fwd, sim)
 
         if self.restart is False:
             # Save prior state in separate variable
             self.prior_state = cp.deepcopy(self.state)
 
             # extract and save state scaling
-
 
             # Extract parameters like conv. tol. and damping param. from ITERATION keyword in DATAASSIM
             self._ext_iter_param()
@@ -327,29 +338,33 @@ class gnenrmlMixIn(Ensemble):
             # define the list of states
             self.list_states = list(self.state.keys())
             # define the list of datatypes
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
+                self.obs_data, self.assim_index)
             # Get the perturbed observations and observation scaling
             self._ext_obs()
             # Get state scaling and svd of scaled prior
             self._ext_state()
             self.current_state = cp.deepcopy(self.state)
-            self.lam = 0 # ensure that the updates does not invoke the LM inflation of the Hessian.
+            # ensure that the updates does not invoke the LM inflation of the Hessian.
+            self.lam = 0
 
     def _ext_obs(self):
 
         self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                                   self.list_datatypes)
+                                                       self.list_datatypes)
 
         # Generate the data auto-covariance matrix
         if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
             if hasattr(self, 'cov_data'):  # cd matrix has been imported
                 tmp_E = np.dot(cholesky(self.cov_data).T,
-                    np.random.randn(self.cov_data.shape[0], self.ne))
+                               np.random.randn(self.cov_data.shape[0], self.ne))
             else:
-                tmp_E = at.extract_tot_empirical_cov(self.datavar, self.assim_index, self.list_datatypes, self.ne)
+                tmp_E = at.extract_tot_empirical_cov(
+                    self.datavar, self.assim_index, self.list_datatypes, self.ne)
             # self.E = (tmp_E - tmp_E.mean(1)[:,np.newaxis])/np.sqrt(self.ne - 1)/
             if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                tmp_E = at.screen_data(tmp_E, self.aug_pred_data, self.obs_data_vector, self.iteration)
+                tmp_E = at.screen_data(tmp_E, self.aug_pred_data,
+                                       self.obs_data_vector, self.iteration)
             self.E = tmp_E
             self.real_obs_data = self.obs_data_vector[:, np.newaxis] - tmp_E
 
@@ -359,10 +374,12 @@ class gnenrmlMixIn(Ensemble):
             self.scale_data = np.sqrt(self.cov_data)
         else:
             if not hasattr(self, 'cov_data'):  # if cd is not loaded
-                self.cov_data = at.gen_covdata(self.datavar, self.assim_index, self.list_datatypes)
+                self.cov_data = at.gen_covdata(
+                    self.datavar, self.assim_index, self.list_datatypes)
             # data screening
             if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                self.cov_data = at.screen_data(self.cov_data, self.aug_pred_data, self.obs_data_vector, self.iteration)
+                self.cov_data = at.screen_data(
+                    self.cov_data, self.aug_pred_data, self.obs_data_vector, self.iteration)
 
             init_en = Cholesky()  # Initialize GeoStat class for generating realizations
             self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
@@ -370,10 +387,11 @@ class gnenrmlMixIn(Ensemble):
 
     def _ext_state(self):
         # get vector of scaling
-        self.state_scaling = at.calc_scaling(self.prior_state, self.list_states, self.prior_info)
+        self.state_scaling = at.calc_scaling(
+            self.prior_state, self.list_states, self.prior_info)
 
-        delta_scaled_prior = self.state_scaling[:,None] * \
-                             np.dot(at.aug_state(self.prior_state, self.list_states),self.proj)
+        delta_scaled_prior = self.state_scaling[:, None] * \
+            np.dot(at.aug_state(self.prior_state, self.list_states), self.proj)
 
         u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
 
@@ -386,8 +404,10 @@ class gnenrmlMixIn(Ensemble):
             if energy / sum(s_d) >= self.trunc_energy:
                 trunc_index = c  # take the index where all energy is preserved
                 break
-        u_d, s_d, v_d = u_d[:, :trunc_index + 1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
-        self.Am = np.dot(u_d,np.eye(trunc_index+1)*((s_d**(-1))[:,None])) # notation from paper
+        u_d, s_d, v_d = u_d[:, :trunc_index +
+                            1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
+        self.Am = np.dot(u_d, np.eye(trunc_index+1) *
+                         ((s_d**(-1))[:, None]))  # notation from paper
 
     def calc_analysis(self):
         """
@@ -397,11 +417,12 @@ class gnenrmlMixIn(Ensemble):
         """
 
         # reformat predicted data
-        _,self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                                   self.list_datatypes)
+        _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                     self.list_datatypes)
 
-        if self.iteration == 1: # first iteration
-            data_misfit = at.calc_objectivefun(self.real_obs_data,self.aug_pred_data,self.cov_data)
+        if self.iteration == 1:  # first iteration
+            data_misfit = at.calc_objectivefun(
+                self.real_obs_data, self.aug_pred_data, self.cov_data)
 
             # Store the (mean) data misfit (also for conv. check)
             self.data_misfit = np.mean(data_misfit)
@@ -414,27 +435,30 @@ class gnenrmlMixIn(Ensemble):
         # Mean pred_data and perturbation matrix with scaling
         if len(self.scale_data.shape) == 1:
             self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                   np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+                                        np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
         else:
-            self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+            self.pert_preddata = solve(
+                self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
         aug_state = at.aug_state(self.current_state, self.list_states)
 
-        self.update() # run analysis
-        if hasattr(self,'step'):
+        self.update()  # run analysis
+        if hasattr(self, 'step'):
             aug_state_upd = aug_state + self.gamma*self.step
-        if hasattr(self,'w_step'):
+        if hasattr(self, 'w_step'):
             self.W = self.current_W + self.gamma*self.w_step
             aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-            aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
-        if hasattr(self,'sqrt_w_step'): # if we do a sqrt update
+            aug_state_upd = np.dot(aug_prior_state, (np.eye(
+                self.ne) + self.W / np.sqrt(self.ne - 1)))
+        if hasattr(self, 'sqrt_w_step'):  # if we do a sqrt update
             self.w = self.current_w + self.gamma*self.sqrt_w_step
             new_mean_state = self.mean_prior + np.dot(self.X, self.w)
             u, sigma, v = np.linalg.svd(self.C_w, full_matrices=True)
             sigma_inv_sqrt = np.diag([el_s ** (-1 / 2) for el_s in sigma])
             C_w_inv_sqrt = np.dot(np.dot(u, sigma_inv_sqrt), v.T)
             self.W = C_w_inv_sqrt * np.sqrt(self.ne - 1)
-            aug_state_upd = np.tile(new_mean_state, (self.ne, 1)).T + np.dot(self.X, self.W)
+            aug_state_upd = np.tile(new_mean_state, (self.ne, 1)
+                                    ).T + np.dot(self.X, self.W)
 
         # Extract updated state variables from aug_update
         self.state = at.update_state(aug_state_upd, self.state, self.list_states)
@@ -490,7 +514,7 @@ class gnenrmlMixIn(Ensemble):
         # mat_obs = np.dot(obs_data_vector.reshape((len(obs_data_vector),1)), np.ones((1, self.ne))) # use the perturbed
         # data instead.
         mat_obs = self.real_obs_data
-        data_misfit = at.calc_objectivefun(mat_obs, pred_data,self.cov_data)
+        data_misfit = at.calc_objectivefun(mat_obs, pred_data, self.cov_data)
 
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
@@ -530,20 +554,21 @@ class gnenrmlMixIn(Ensemble):
             ###############################################
             ##### update Lambda step-size values ##########
             ###############################################
-            if self.data_misfit < self.prev_data_misfit and self.data_misfit_std < self.prev_data_misfit_std:  # If reduction in mean data misfit, reduce damping param
+            # If reduction in mean data misfit, reduce damping param
+            if self.data_misfit < self.prev_data_misfit and self.data_misfit_std < self.prev_data_misfit_std:
                 # Reduce damping parameter (divide calculations for ANALYSISDEBUG purpose)
                 self.gamma = self.gamma + (self.gamma_max - self.gamma) * 2 ** (
-                            -(self.iteration) / (self.gamma_factor - 1))
+                    -(self.iteration) / (self.gamma_factor - 1))
                 success = True
                 self.current_state = cp.deepcopy(self.state)
-                if hasattr(self,'W'):
+                if hasattr(self, 'W'):
                     self.current_W = cp.deepcopy(self.W)
 
             elif self.data_misfit < self.prev_data_misfit and self.data_misfit_std >= self.prev_data_misfit_std:
                 # accept itaration, but keep lam the same
                 success = True
                 self.current_state = cp.deepcopy(self.state)
-                if hasattr(self,'W'):
+                if hasattr(self, 'W'):
                     self.current_W = cp.deepcopy(self.W)
 
             else:  # Reject iteration, and increase lam
@@ -595,18 +620,23 @@ class gnenrmlMixIn(Ensemble):
                 self.gamma_factor = self.keys_da['iteration'][i][1]
 
         if 'energy' in self.keys_da:
-                self.trunc_energy = self.keys_da['energy'] # initial energy (Remember to extract this)
-                if self.trunc_energy > 1: # ensure that it is given as percentage
-                    self.trunc_energy /= 100.
+            # initial energy (Remember to extract this)
+            self.trunc_energy = self.keys_da['energy']
+            if self.trunc_energy > 1:  # ensure that it is given as percentage
+                self.trunc_energy /= 100.
 
-class gnenrml_approx(gnenrmlMixIn,approx_update):
+
+class gnenrml_approx(gnenrmlMixIn, approx_update):
     pass
+
 
 class gnenrml_full(gnenrmlMixIn, full_update):
-   pass
-
-class gnenrml_subspace(gnenrmlMixIn,subspace_update):
     pass
+
+
+class gnenrml_subspace(gnenrmlMixIn, subspace_update):
+    pass
+
 
 class gnenrml_margis(gnenrmlMixIn, margIS_update):
     '''
@@ -616,7 +646,7 @@ class gnenrml_margis(gnenrmlMixIn, margIS_update):
     pass
 
 
-class co_lm_enrml(lmenrmlMixIn,approx_update):
+class co_lm_enrml(lmenrmlMixIn, approx_update):
     """
     This is the implementation of the approximative LM-EnRML algorithm as described in [1].
 
@@ -657,7 +687,7 @@ class co_lm_enrml(lmenrmlMixIn,approx_update):
         -------
         success: bool
             True if data mismatch is decreasing, False if increasing
-        
+
         References
         ----------  
         [1] Chen Y. & Oliver D.S. 2013, Levenberg-Marquardt Forms of the Iterative Ensemble Smoother for Efficient
@@ -673,7 +703,8 @@ class co_lm_enrml(lmenrmlMixIn,approx_update):
         if not hasattr(self, 'list_datatypes'):
             # Get list of data types to be assimilated and of the free states. Do this once, because listing keys from a
             # Python dictionary just when needed (in different places) may not yield the same list!
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
+                self.obs_data, self.assim_index)
             list_datatypes = self.list_datatypes
             self.list_states = list(self.state.keys())
             list_states = self.list_states
@@ -683,19 +714,21 @@ class co_lm_enrml(lmenrmlMixIn,approx_update):
             # Generate the realizations of the observed data once
             # Augment observed and predicted data
             self.obs_data_vector, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                                   self.list_datatypes)
+                                                                            self.list_datatypes)
             obs_data_vector = self.obs_data_vector
 
             # Generate the data auto-covariance matrix
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
                 if hasattr(self, 'cov_data'):  # cd matrix has been imported
                     tmp_E = np.dot(cholesky(self.cov_data).T,
-                        np.random.randn(self.cov_data.shape[0], self.ne))
+                                   np.random.randn(self.cov_data.shape[0], self.ne))
                 else:
-                    tmp_E = at.extract_tot_empirical_cov(self.datavar, self.assim_index, self.list_datatypes, self.ne)
+                    tmp_E = at.extract_tot_empirical_cov(
+                        self.datavar, self.assim_index, self.list_datatypes, self.ne)
                 # self.E = (tmp_E - tmp_E.mean(1)[:,np.newaxis])/np.sqrt(self.ne - 1)/
                 if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                    tmp_E = at.screen_data(tmp_E, self.aug_pred_data, obs_data_vector, self.iteration)
+                    tmp_E = at.screen_data(tmp_E, self.aug_pred_data,
+                                           obs_data_vector, self.iteration)
                 self.E = tmp_E
                 self.real_obs_data = obs_data_vector[:, np.newaxis] - tmp_E
 
@@ -705,20 +738,24 @@ class co_lm_enrml(lmenrmlMixIn,approx_update):
                 self.scale_data = np.sqrt(self.cov_data)
             else:
                 if not hasattr(self, 'cov_data'):  # if cd is not loaded
-                    self.cov_data = at.gen_covdata(self.datavar, self.assim_index, self.list_datatypes)
+                    self.cov_data = at.gen_covdata(
+                        self.datavar, self.assim_index, self.list_datatypes)
                 # data screening
                 if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                    self.cov_data = at.screen_data(self.cov_data, self.aug_pred_data, obs_data_vector, self.iteration)
+                    self.cov_data = at.screen_data(
+                        self.cov_data, self.aug_pred_data, obs_data_vector, self.iteration)
 
                 init_en = Cholesky()  # Initialize GeoStat class for generating realizations
                 self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
                                                                        return_chol=True)
 
-            self.datavar = at.update_datavar(self.cov_data, self.datavar, self.assim_index, self.list_datatypes)
+            self.datavar = at.update_datavar(
+                self.cov_data, self.datavar, self.assim_index, self.list_datatypes)
             self.current_state = cp.deepcopy(self.state)
 
             # Calc. misfit for the initial iteration
-            data_misfit = at.calc_objectivefun(self.real_obs_data,self.aug_pred_data,self.cov_data)
+            data_misfit = at.calc_objectivefun(
+                self.real_obs_data, self.aug_pred_data, self.cov_data)
             # Store the (mean) data misfit (also for conv. check)
             self.data_misfit = np.mean(data_misfit)
             self.prior_data_misfit = np.mean(data_misfit)
@@ -728,38 +765,41 @@ class co_lm_enrml(lmenrmlMixIn,approx_update):
                 self.lam = 0.5 * self.prior_data_misfit
 
         else:
-            _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, assim_index, self.list_datatypes)
-
+            _, self.aug_pred_data = at.aug_obs_pred_data(
+                self.obs_data, self.pred_data, assim_index, self.list_datatypes)
 
         # Mean pred_data and perturbation matrix with scaling
         mean_preddata = np.mean(self.aug_pred_data, 1)
         if len(self.scale_data.shape) == 1:
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
                 pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1), np.ones((1, self.ne))) * (
-                        self.aug_pred_data - np.dot(mean_preddata[:, None], np.ones((1, self.ne))))
+                    self.aug_pred_data - np.dot(mean_preddata[:, None], np.ones((1, self.ne))))
             else:
                 pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1), np.ones((1, self.ne))) * (
-                        self.aug_pred_data - np.dot(mean_preddata[:, None], np.ones((1, self.ne)))) / \
-                                (np.sqrt(self.ne - 1))
+                    self.aug_pred_data - np.dot(mean_preddata[:, None], np.ones((1, self.ne)))) / \
+                    (np.sqrt(self.ne - 1))
         else:
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
-                pert_preddata = solve(self.scale_data, self.aug_pred_data - np.dot(mean_preddata[:, None], np.ones((1, self.ne))))
+                pert_preddata = solve(self.scale_data, self.aug_pred_data -
+                                      np.dot(mean_preddata[:, None], np.ones((1, self.ne))))
             else:
                 pert_preddata = solve(self.scale_data, self.aug_pred_data - np.dot(mean_preddata[:, None], np.ones((1, self.ne)))) / \
-                                (np.sqrt(self.ne - 1))
+                    (np.sqrt(self.ne - 1))
         self.pert_preddata = pert_preddata
 
         self.update()
-        if hasattr(self,'step'):
+        if hasattr(self, 'step'):
             aug_state_upd = aug_state + self.step
-        if hasattr(self,'w_step'):
+        if hasattr(self, 'w_step'):
             self.W = self.current_W - self.w_step
             aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-            aug_state_upd = np.dot(aug_prior_state, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+            aug_state_upd = np.dot(aug_prior_state, (np.eye(
+                self.ne) + self.W / np.sqrt(self.ne - 1)))
 
         # Extract updated state variables from aug_update
         self.state = at.update_state(aug_state_upd, self.state, self.list_states)
         self.state = at.limits(self.state, self.prior_info)
+
 
 class gn_enrml(lmenrmlMixIn):
     """
@@ -807,7 +847,8 @@ class gn_enrml(lmenrmlMixIn):
         if not hasattr(self, 'list_datatypes'):
             # Get list of data types to be assimilated and of the free states. Do this once, because listing keys from a
             # Python dictionary just when needed (in different places) may not yield the same list!
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, assim_index)
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
+                self.obs_data, assim_index)
             list_datatypes = self.list_datatypes
             self.list_states = list(self.state.keys())
             list_states = self.list_states
@@ -821,9 +862,11 @@ class gn_enrml(lmenrmlMixIn):
 
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
                 if hasattr(self, 'cov_data'):  # cd matrix has been imported
-                    tmp_E = np.dot(cholesky(self.cov_data).T, np.random.randn(self.cov_data.shape[0], self.ne))
+                    tmp_E = np.dot(cholesky(self.cov_data).T, np.random.randn(
+                        self.cov_data.shape[0], self.ne))
                 else:
-                    tmp_E = at.extract_tot_empirical_cov(self.datavar, assim_index, self.list_datatypes, self.ne)
+                    tmp_E = at.extract_tot_empirical_cov(
+                        self.datavar, assim_index, self.list_datatypes, self.ne)
                 # self.E = (tmp_E - tmp_E.mean(1)[:,np.newaxis])/np.sqrt(self.ne - 1)/
                 self.real_obs_data = obs_data_vector[:, np.newaxis] - tmp_E
 
@@ -833,28 +876,33 @@ class gn_enrml(lmenrmlMixIn):
                 self.scale_data = np.sqrt(self.cov_data)
             else:
                 if not hasattr(self, 'cov_data'):  # if cd is not loaded
-                    self.cov_data = at.gen_covdata(self.datavar, assim_index, self.list_datatypes)
+                    self.cov_data = at.gen_covdata(
+                        self.datavar, assim_index, self.list_datatypes)
                 # data screening
                 if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                    self.cov_data = at.screen_data(self.cov_data, pred_data, obs_data_vector, self.iteration)
+                    self.cov_data = at.screen_data(
+                        self.cov_data, pred_data, obs_data_vector, self.iteration)
 
                 init_en = Cholesky()  # Initialize GeoStat class for generating realizations
                 self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
                                                                        return_chol=True)
 
-            self.datavar = at.update_datavar(self.cov_data, self.datavar, assim_index, self.list_datatypes)
+            self.datavar = at.update_datavar(
+                self.cov_data, self.datavar, assim_index, self.list_datatypes)
             cov_data = self.cov_data
             obs_data = self.real_obs_data
             #
             self.current_state = cp.deepcopy(self.state)
             #
-            self.aug_prior = cp.deepcopy(at.aug_state(self.current_state, self.list_states))
+            self.aug_prior = cp.deepcopy(at.aug_state(
+                self.current_state, self.list_states))
             # self.mean_prior = aug_prior.mean(axis=1)
             # self.X = (aug_prior - np.dot(np.resize(self.mean_prior, (len(self.mean_prior), 1)),
             #                                                  np.ones((1, self.ne))))
             self.W = np.zeros((self.ne, self.ne))
 
-            self.proj = (np.eye(self.ne) - (1 / self.ne) * np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
+            self.proj = (np.eye(self.ne) - (1 / self.ne) *
+                         np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
             self.E = np.dot(obs_data, self.proj)
 
             # Calc. misfit for the initial iteration
@@ -881,7 +929,8 @@ class gn_enrml(lmenrmlMixIn):
             list_states = self.list_states
             cov_data = self.cov_data
             obs_data_vector = self.obs_data_vector
-            _, pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, assim_index, self.list_datatypes)
+            _, pred_data = at.aug_obs_pred_data(
+                self.obs_data, self.pred_data, assim_index, self.list_datatypes)
             obs_data = self.real_obs_data
 
         if len(self.scale_data.shape) == 1:
@@ -894,7 +943,7 @@ class gn_enrml(lmenrmlMixIn):
         S = lu_solve(LU, Y.T).T
         if len(self.scale_data.shape) == 1:
             scaled_misfit = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                           np.ones((1, self.ne))) * (obs_data - pred_data)
+                                   np.ones((1, self.ne))) * (obs_data - pred_data)
         else:
             scaled_misfit = solve(self.scale_data, (obs_data - pred_data))
 
@@ -906,7 +955,7 @@ class gn_enrml(lmenrmlMixIn):
         ps_inv = np.diag([el_s ** (-1) for el_s in s])
         if len(self.scale_data.shape) == 1:
             X = np.dot(ps_inv, np.dot(u.T, np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                                  np.ones((1, self.ne))) *self.E))
+                                                  np.ones((1, self.ne))) * self.E))
         else:
             X = np.dot(ps_inv, np.dot(u.T, solve(self.scale_data, self.E)))
         Lam, z = np.linalg.eig(np.dot(X, X.T))
@@ -914,35 +963,35 @@ class gn_enrml(lmenrmlMixIn):
         X2 = np.dot(u, np.dot(ps_inv.T, z))
 
         X3_m = np.dot(S.T, X2)
-        #X3_old = np.dot(X2, np.linalg.solve(np.eye(len(Lam)) + np.diag(Lam), X2.T))
-        step_m = np.dot(np.dot(X3_m, inv(np.eye(len(Lam)) + np.diag(Lam))), np.dot(X3_m.T, self.W))
+        # X3_old = np.dot(X2, np.linalg.solve(np.eye(len(Lam)) + np.diag(Lam), X2.T))
+        step_m = np.dot(np.dot(X3_m, inv(np.eye(len(Lam)) + np.diag(Lam))),
+                        np.dot(X3_m.T, self.W))
 
         if 'localization' in self.keys_da:
             if self.keys_da['localization'][1][0] == 'autoadaloc':
-                loc_step_d = np.dot(np.linalg.pinv(self.aug_prior),self.localization.auto_ada_loc(self.aug_prior,
-                                                                         np.dot(np.dot(S.T,X2),
-                                                                                np.dot(inv(
-                                                                                    np.eye(len(Lam)) + np.diag(Lam)),
-                                                                                       np.dot(X2.T, scaled_misfit))),
-                                                                         self.list_states,
-                                                           **{'prior_info': self.prior_info}))
+                loc_step_d = np.dot(np.linalg.pinv(self.aug_prior), self.localization.auto_ada_loc(self.aug_prior,
+                                                                                                   np.dot(np.dot(S.T, X2),
+                                                                                                          np.dot(inv(
+                                                                                                              np.eye(len(Lam)) + np.diag(Lam)),
+                                                                                                       np.dot(X2.T, scaled_misfit))),
+                                                                                                   self.list_states,
+                                                                                                   **{'prior_info': self.prior_info}))
                 self.step = self.lam * (self.W - (step_m + loc_step_d))
         else:
-            step_d = np.dot(np.linalg.inv(omega).T,  np.dot(np.dot(Y.T,X2),
-                                                                   np.dot(inv(np.eye(len(Lam)) + np.diag(Lam)),
-                                                                          np.dot(X2.T,scaled_misfit))))
+            step_d = np.dot(np.linalg.inv(omega).T,  np.dot(np.dot(Y.T, X2),
+                                                            np.dot(inv(np.eye(len(Lam)) + np.diag(Lam)),
+                                                                   np.dot(X2.T, scaled_misfit))))
             self.step = self.lam * (self.W - (step_m + step_d))
-
 
         self.W -= self.step
 
-        aug_state_upd = np.dot(self.aug_prior, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+        aug_state_upd = np.dot(self.aug_prior, (np.eye(
+            self.ne) + self.W / np.sqrt(self.ne - 1)))
 
         # Extract updated state variables from aug_update
         self.state = at.update_state(aug_state_upd, self.state, self.list_states)
 
         self.state = at.limits(self.state, self.prior_info)
-
 
     def check_convergence(self):
         """
@@ -1019,14 +1068,15 @@ class gn_enrml(lmenrmlMixIn):
                                          np.dot(np.expand_dims(self.cov_data ** (-1), axis=1),
                                                 np.ones((1, self.ne))) * (pred_data - mat_obs)))
         else:
-            data_misfit = np.diag(np.dot((pred_data - mat_obs).T, solve(self.cov_data, (pred_data - mat_obs))))
+            data_misfit = np.diag(np.dot((pred_data - mat_obs).T,
+                                  solve(self.cov_data, (pred_data - mat_obs))))
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
 
         # # Calc. mean data misfit for convergence check, using the updated state variable
         # self.data_misfit = np.dot((mean_preddata - obs_data_vector).T,
         #                      solve(cov_data, (mean_preddata - obs_data_vector)))
-        #if self.data_misfit > self.prev_data_misfit:
+        # if self.data_misfit > self.prev_data_misfit:
         #    print(f'\n\nMisfit increased from {self.prev_data_misfit:.1f} to {self.data_misfit:.1f}. Exiting')
         #    self.logger.info(f'\n\nMisfit increased from {self.prev_data_misfit:.1f} to {self.data_misfit:.1f}. Exiting')
 
@@ -1034,7 +1084,7 @@ class gn_enrml(lmenrmlMixIn):
         if abs(1 - (self.data_misfit / self.prev_data_misfit)) < self.data_misfit_tol \
                 or np.any(abs(np.mean(self.step, 1)) < self.step_tol) \
                 or self.lam >= self.lam_max:
-                # or self.data_misfit > self.prev_data_misfit:
+            # or self.data_misfit > self.prev_data_misfit:
             # Logical variables for conv. criteria
             why_stop = {'data_misfit_stop': 1 - (self.data_misfit / self.prev_data_misfit) < self.data_misfit_tol,
                         'data_misfit': self.data_misfit,
@@ -1047,10 +1097,10 @@ class gn_enrml(lmenrmlMixIn):
             if self.data_misfit >= self.prev_data_misfit:
                 success = False
                 self.logger.info(f'Iterations have converged after {self.iteration} iterations. Objective function reduced '
-                                     f'from {self.prior_data_misfit:0.1f} to {self.prev_data_misfit:0.1f}')
+                                 f'from {self.prior_data_misfit:0.1f} to {self.prev_data_misfit:0.1f}')
             else:
                 self.logger.info(f'Iterations have converged after {self.iteration} iterations. Objective function reduced '
-                    f'from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}')
+                                 f'from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}')
 
             # Return conv = True, why_stop var.
             return True, success, why_stop
@@ -1070,7 +1120,8 @@ class gn_enrml(lmenrmlMixIn):
             ###############################################
             if self.data_misfit < self.prev_data_misfit and self.data_misfit_std < self.prev_data_misfit_std:
                 # If reduction in mean data misfit, increase step length
-                self.lam = self.lam + (self.lam_max - self.lam) * 2 ** (-(self.iteration) / (self.gamma - 1))
+                self.lam = self.lam + (self.lam_max - self.lam) * \
+                    2 ** (-(self.iteration) / (self.gamma - 1))
                 success = True
                 self.current_state = deepcopy(self.state)
             elif self.data_misfit < self.prev_data_misfit and self.data_misfit_std >= self.prev_data_misfit_std:

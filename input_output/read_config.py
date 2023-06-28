@@ -2,7 +2,8 @@
 from misc import read_input_csv as ricsv
 from copy import deepcopy
 from input_output.organize import Organize_input
-import tomli, tomli_w
+import tomli
+import tomli_w
 import yaml
 from yaml.loader import FullLoader
 import numpy as np
@@ -40,7 +41,7 @@ def read_yaml(init_file):
     def ndarray_constructor(loader, node):
         array = loader.construct_sequence(node)
         return np.array(array)
-        
+
     # Add constructor to yaml with tag !ndarray
     yaml.add_constructor('!ndarray', ndarray_constructor)
 
@@ -63,7 +64,7 @@ def read_yaml(init_file):
         raise KeyError
 
     # Organize keywords
-    org = Organize_input(keys_pr,keys_fwd)
+    org = Organize_input(keys_pr, keys_fwd)
     org.organize()
 
     return org.get_keys_pr(), org.get_keys_fwd()
@@ -276,11 +277,13 @@ def parse_keywords(lines):
                             [[float(x) for x in col.split()] for col in lines[i][1:]]
                 except:  # Keyword contains string(s), not floats
                     if len(lines[i][1:]) == 1:  # If 1D list
-                        if len(lines[i][1:][0].split('\t')) == 1:  # If it is a scalar store as single input
+                        # If it is a scalar store as single input
+                        if len(lines[i][1:][0].split('\t')) == 1:
                             keys[lines[i][0].strip().lower()] = lines[i][1:][0].strip().lower()
                         else:  # Store as 1D list
                             keys[lines[i][0].strip().lower()] = \
-                                [x.rstrip('\n').lower() for x in lines[i][1:][0].split('\t') if x != '']
+                                [x.rstrip('\n').lower()
+                                 for x in lines[i][1:][0].split('\t') if x != '']
                     else:  # It is a 2D list
                         # Check each row in 2D list. If it is single column (i.e., one string per row),
                         # we make it a 1D list of strings; if not, we make it a 2D list of strings.
@@ -305,17 +308,20 @@ def parse_keywords(lines):
         if isinstance(keys[i], list):  # Check if key is a list
             if isinstance(keys[i][0], list):  # Check if it is a 2D list
                 for j in range(len(keys[i])):  # Loop over all sublists
-                    if all(isinstance(x, str) for x in keys[i][j]):  # Check sublist for strings
+                    # Check sublist for strings
+                    if all(isinstance(x, str) for x in keys[i][j]):
                         for k in range(len(keys[i][j])):  # Loop over enteries in sublist
                             try:  # Try to make float
                                 keys[i][j][k] = float(keys[i][j][k])  # Scalar
                             except:
                                 try:  # 1D array
-                                    keys[i][j][k] = [float(x) for x in keys[i][j][k].split()]
+                                    keys[i][j][k] = [float(x)
+                                                     for x in keys[i][j][k].split()]
                                 except:  # If it is actually a string, pass over
                                     pass
             else:  # It is a 1D list
-                if all(isinstance(x, str) for x in keys[i]):  # Check if list only contains strings
+                # Check if list only contains strings
+                if all(isinstance(x, str) for x in keys[i]):
                     for j in range(len(keys[i])):  # Loop over all entries in list
                         try:  # Try to make float
                             keys[i][j] = float(keys[i][j])
@@ -349,7 +355,8 @@ def check_mand_keywords_da(keys_da):
     assert 'datavar' in keys_da, 'DATAVAR not in DATAASSIM!'
     assert 'obsname' in keys_da, 'OBSNAME not in DATAASSIM!'
     if 'importstaticvar' not in keys_da:
-        assert filter(list(keys_da.keys()), 'prior_*') != [], 'No PRIOR_<STATICVAR> in DATAASSIM'
+        assert filter(list(keys_da.keys()),
+                      'prior_*') != [], 'No PRIOR_<STATICVAR> in DATAASSIM'
     assert 'energy' in keys_da, 'ENERGY not in DATAASSIM!'
 
 

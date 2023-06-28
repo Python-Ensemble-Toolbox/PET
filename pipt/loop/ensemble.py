@@ -19,17 +19,19 @@ from pipt.misc_tools import cov_regularization
 from pipt.geostat.decomp import Cholesky
 import pipt.misc_tools.analysis_tools as at
 
+
 class Ensemble(PETEnsemble):
     """
     Class for organizing/initializing misc. variables and simulator for an
     ensemble-based inversion run. Inherits the PET ensemble structure
     """
-    def __init__(self,keys_da,keys_en,sim):
+
+    def __init__(self, keys_da, keys_en, sim):
 
         # do the initiallization of the PETensemble
-        super(Ensemble,self).__init__(keys_da,sim)
+        super(Ensemble, self).__init__(keys_da, sim)
 
-        #set logger
+        # set logger
         self.logger = logging.getLogger('PET.PIPT')
 
         # write initial information
@@ -41,7 +43,8 @@ class Ensemble(PETEnsemble):
         self.keys_en = keys_en
 
         if self.restart is False:
-            self.prediction = None  # Init in _init_prediction_output (used in run_prediction)
+            # Init in _init_prediction_output (used in run_prediction)
+            self.prediction = None
             self.temp_state = None  # temporary state saving
             self.cov_prior = None  # Prior cov. matrix
             self.sparse_info = None  # Init in _org_sparse_representation
@@ -57,7 +60,8 @@ class Ensemble(PETEnsemble):
             self._org_data_var()
 
             # define projection for centring and scaling
-            self.proj = (np.eye(self.ne) - (1 / self.ne) * np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
+            self.proj = (np.eye(self.ne) - (1 / self.ne) *
+                         np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
 
             # If we have dynamic state variables, we allocate keys for them in 'state'. Since we do not know the size
             #  of the arrays of the dynamic variables, we only allocate an NE list to be filled in later (in
@@ -81,12 +85,14 @@ class Ensemble(PETEnsemble):
                                                                     self.ne)
             # Initialize local analysis
             if 'localanalysis' in self.keys_da:
-                self.local_analysis = at.init_local_analysis(init=self.keys_da['localanalysis'], state=self.state.keys())
+                self.local_analysis = at.init_local_analysis(
+                    init=self.keys_da['localanalysis'], state=self.state.keys())
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_en['datatype']}
                               for _ in self.obs_data]
 
             self.cell_index = None  # default value for extracting states
+
     def check_assimindex_sequential(self):
         """
         Check if assim. indices is given as a 2D list as is needed in sequential updating. If not, make it a 2D list
@@ -103,6 +109,7 @@ class Ensemble(PETEnsemble):
                 assimindex_temp[i] = [self.keys_da['assimindex'][i]]
 
             self.keys_da['assimindex'] = assimindex_temp
+
     def check_assimindex_simultaneous(self):
         """
         Check if assim. indices is given as a 1D list as is needed in simultaneous updating. If not, make it a 2D list
@@ -118,7 +125,8 @@ class Ensemble(PETEnsemble):
 
         # If ASSIMINDEX is a 2D list, we reshape it to a 2D list with one row
         elif isinstance(self.keys_da['assimindex'][0], list):
-            self.keys_da['assimindex'] = [[item for sublist in self.keys_da['assimindex'] for item in sublist]]
+            self.keys_da['assimindex'] = [
+                [item for sublist in self.keys_da['assimindex'] for item in sublist]]
 
     def _org_obs_data(self):
         """
@@ -198,7 +206,8 @@ class Ensemble(PETEnsemble):
         # Check if a csv file has been included in TRUEDATA. If so, we read it and make a 2D list, which we can use
         # in the below when assigning data to obs_data dictionary
         if isinstance(self.keys_da['truedata'], str) and self.keys_da['truedata'].endswith('.csv'):
-            truedata = rcsv.read_data_csv(self.keys_da['truedata'], self.keys_da['datatype'], self.keys_da['truedataindex'])
+            truedata = rcsv.read_data_csv(
+                self.keys_da['truedata'], self.keys_da['datatype'], self.keys_da['truedataindex'])
 
         # # Check if assimindex is given as a csv file. If so, we read and make a potential 2D list (if sequential).
         # if isinstance(self.keys_da['assimindex'], str) and self.keys_da['assimindex'].endswith('.csv'):
@@ -220,8 +229,10 @@ class Ensemble(PETEnsemble):
         # NOTE3: If CSV file has been included in TRUEDATA, we read the data from this file
         vintage = 0
         for i in range(len(self.obs_data)):  # TRUEDATAINDEX
-            self.obs_data[i] = {}  # Init. dict. with datatypes (do inside loop to avoid copy of same entry)
-            if 'unif_in' in self.keys_da and self.keys_da['unif_in'] == 'yes':  # Make unified inputs
+            # Init. dict. with datatypes (do inside loop to avoid copy of same entry)
+            self.obs_data[i] = {}
+            # Make unified inputs
+            if 'unif_in' in self.keys_da and self.keys_da['unif_in'] == 'yes':
                 if isinstance(truedata[i][0], str) and truedata[i][0].endswith('.npz'):
                     load_data = np.load(truedata[i][0])  # Load the .npz file
                     data_array = load_data[load_data.files[0]]
@@ -235,7 +246,8 @@ class Ensemble(PETEnsemble):
 
                     # Save array in obs_data. If it is an array with single value (not list), then we convert it to a
                     # list with one entry.
-                    self.obs_data[i][self.keys_da['datatype'][0]] = np.array([data_array[()]]) if data_array.shape == () else data_array
+                    self.obs_data[i][self.keys_da['datatype'][0]] = np.array(
+                        [data_array[()]]) if data_array.shape == () else data_array
 
                     # Entry is N/A, i.e., no data given
                 elif isinstance(truedata[i][0], str) and not truedata[i][0].endswith('.npz') \
@@ -245,11 +257,13 @@ class Ensemble(PETEnsemble):
                 # Unknown string entry
                 elif isinstance(truedata[i][0], str) and not truedata[i][0].endswith('.npz') \
                         and not truedata[i][0].lower() == 'n/a':
-                    print('\n\033[1;31mERROR: Cannot load observed data file! Maybe it is not a .npz file?\033[1;m')
+                    print(
+                        '\n\033[1;31mERROR: Cannot load observed data file! Maybe it is not a .npz file?\033[1;m')
                     sys.exit(1)
                 # Entry is a numerical value
                 elif not isinstance(truedata[i][0], str):  # Some numerical value or None
-                    self.obs_data[i][self.keys_da['datatype'][0]] = np.array(truedata[i][:])  # no need to make this into a list
+                    self.obs_data[i][self.keys_da['datatype'][0]] = np.array(
+                        truedata[i][:])  # no need to make this into a list
             else:
                 for j in range(len(self.keys_da['datatype'])):  # DATATYPE
                     # Load a Numpy npz file
@@ -277,17 +291,21 @@ class Ensemble(PETEnsemble):
                     # Unknown string entry
                     elif isinstance(truedata[i][j], str) and not truedata[i][j].endswith('.npz') \
                             and not truedata[i][j].lower() == 'n/a':
-                        print('\n\033[1;31mERROR: Cannot load observed data file! Maybe it is not a .npz file?\033[1;m')
+                        print(
+                            '\n\033[1;31mERROR: Cannot load observed data file! Maybe it is not a .npz file?\033[1;m')
                         sys.exit(1)
 
                     # Entry is a numerical value
-                    elif not isinstance(truedata[i][j], str):  # Some numerical value or None
-                        self.obs_data[i][self.keys_da['datatype'][j]] = np.array([truedata[i][j]])
+                    # Some numerical value or None
+                    elif not isinstance(truedata[i][j], str):
+                        self.obs_data[i][self.keys_da['datatype']
+                                         [j]] = np.array([truedata[i][j]])
 
                     # Scale data if required (currently only one group of data can be scaled)
                     if 'scale' in self.keys_da and self.keys_da['scale'][0] in self.keys_da['datatype'][j] and \
                             self.obs_data[i][self.keys_da['datatype'][j]] is not None:
-                        self.obs_data[i][self.keys_da['datatype'][j]] *= self.keys_da['scale'][1]
+                        self.obs_data[i][self.keys_da['datatype']
+                                         [j]] *= self.keys_da['scale'][1]
 
     def _org_data_var(self):
         """
@@ -328,7 +346,8 @@ class Ensemble(PETEnsemble):
         if len(true_prim) == 1:
             # More than one DATATYPE, but only one entry in DATAVAR
             if len(self.keys_da['datavar']) == 2 and len(datatype) > 1:
-                datavar = [self.keys_da['datavar'] * len(datatype)]  # Copy list entry no. data type times
+                # Copy list entry no. data type times
+                datavar = [self.keys_da['datavar'] * len(datatype)]
 
             # One DATATYPE
             else:
@@ -338,11 +357,12 @@ class Ensemble(PETEnsemble):
         else:
             # More than one DATATYPE, but only one entry in DATAVAR
             if not isinstance(self.keys_da['datavar'][0], list) and len(self.keys_da['datavar']) == 2 and \
-                            len(datatype) > 1:
+                    len(datatype) > 1:
                 # Need to make a list with entries equal to 2*no. data types (since there are 2 entries in DATAVAR
                 # for one data type). Then we copy this list as many times as we have TRUEDATAINDEX (i.e.,
                 # we get a 2D list)
-                datavar_temp = self.keys_da['datavar'] * len(datatype)  # Copy list entry no. data types times
+                # Copy list entry no. data types times
+                datavar_temp = self.keys_da['datavar'] * len(datatype)
                 datavar = [None] * len(true_prim)  # Init.
                 for i in range(len(true_prim)):
                     datavar[i] = deepcopy(datavar_temp)
@@ -362,7 +382,7 @@ class Ensemble(PETEnsemble):
         # Check if a csv file has been included in DATAVAR. If so datavar will be redefined and variance info will be
         #  extracted from the csv file
         if isinstance(self.keys_da['datavar'], str) and self.keys_da['datavar'].endswith('.csv'):
-            datavar = rcsv.read_var_csv(self.keys_da['datavar'],datatype, true_prim)
+            datavar = rcsv.read_var_csv(self.keys_da['datavar'], datatype, true_prim)
 
         # Initialize datavar output
         self.datavar = [None] * len(true_prim)
@@ -372,14 +392,18 @@ class Ensemble(PETEnsemble):
         # TODO: Implement loading of data variance from .npz file
         vintage = 0
         for i in range(len(self.obs_data)):  # TRUEDATAINDEX
-            self.datavar[i] = {}  # Init. dict. with datatypes (do inside loop to avoid copy of same entry)
+            # Init. dict. with datatypes (do inside loop to avoid copy of same entry)
+            self.datavar[i] = {}
             for j in range(len(datatype)):  # DATATYPE
                 # ABS
-                if datavar[i][2*j] == 'abs' and self.obs_data[i][datatype[j]] is not None:  # Absolute var.
-                    self.datavar[i][datatype[j]] = datavar[i][2*j+1]*np.ones(len(self.obs_data[i][datatype[j]]))
+                # Absolute var.
+                if datavar[i][2*j] == 'abs' and self.obs_data[i][datatype[j]] is not None:
+                    self.datavar[i][datatype[j]] = datavar[i][2*j+1] * \
+                        np.ones(len(self.obs_data[i][datatype[j]]))
 
                 # REL
-                elif datavar[i][2*j] == 'rel' and self.obs_data[i][datatype[j]] is not None:  # Rel. var.
+                # Rel. var.
+                elif datavar[i][2*j] == 'rel' and self.obs_data[i][datatype[j]] is not None:
                     # Rel. var WITH a min. variance tolerance
                     if isinstance(datavar[i][2*j+1], list):
                         self.datavar[i][datatype[j]] = (datavar[i][2*j+1][0] * 0.01 *
@@ -388,12 +412,14 @@ class Ensemble(PETEnsemble):
                         self.datavar[i][datatype[j]][ind_tol] = datavar[i][2*j+1][1] ** 2
 
                     else:  # Single. rel. var input
-                        self.datavar[i][datatype[j]] = (datavar[i][2*j+1] * 0.01 * self.obs_data[i][datatype[j]]) ** 2
+                        self.datavar[i][datatype[j]] = (
+                            datavar[i][2*j+1] * 0.01 * self.obs_data[i][datatype[j]]) ** 2
                 # EMP
                 elif datavar[i][2*j] == 'emp' and datavar[i][2*j+1].endswith('.npz') and \
                         self.obs_data[i][datatype[j]] is not None:  # Empirical var.
                     load_data = np.load(datavar[i][2*j+1])  # load the numpy savez file
-                    self.datavar[i][datatype[j]] = load_data[load_data.files[0]]  # store in datavar
+                    # store in datavar
+                    self.datavar[i][datatype[j]] = load_data[load_data.files[0]]
 
                 # LOAD
                 elif datavar[i][2*j] == 'load' and datavar[i][2*j+1].endswith('.npz') and \
@@ -404,11 +430,13 @@ class Ensemble(PETEnsemble):
 
                 # CD the full covariance matrix is given in its correct format. Hence, load once and set as CD
                 elif datavar[i][2 * j] == 'cd' and datavar[i][2 * j + 1].endswith('.npz') and \
-                     self.obs_data[i][datatype[j]] is not None:
-                    if not hasattr(self, 'cov_data'): # check to populate once
-                        load_data = np.load(datavar[i][2 * j + 1])  # load the numpy savez file
+                        self.obs_data[i][datatype[j]] is not None:
+                    if not hasattr(self, 'cov_data'):  # check to populate once
+                        # load the numpy savez file
+                        load_data = np.load(datavar[i][2 * j + 1])
                         self.cov_data = load_data[load_data.files[0]]
-                    self.datavar[i][datatype[j]] = self.cov_data[i*j, i*j]  # store the variance
+                    # store the variance
+                    self.datavar[i][datatype[j]] = self.cov_data[i*j, i*j]
 
                 elif self.obs_data[i][datatype[j]] is None:  # No observed data
                     self.datavar[i][datatype[j]] = None  # Set None type here also
@@ -429,7 +457,8 @@ class Ensemble(PETEnsemble):
         self.sparse_info = {}
         parsed_info = self.keys_da['compress']
         dim = [int(elem) for elem in parsed_info[0][1]]
-        self.sparse_info['dim'] = [dim[2], dim[1], dim[0]]  # flip to align with flow / eclipse
+        # flip to align with flow / eclipse
+        self.sparse_info['dim'] = [dim[2], dim[1], dim[0]]
         self.sparse_info['mask'] = []
         for vint in range(1, len(parsed_info[1])):
             if not os.path.exists(parsed_info[1][vint]):
@@ -452,17 +481,19 @@ class Ensemble(PETEnsemble):
 
     def _ext_obs(self):
         self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                                   self.list_datatypes)
+                                                       self.list_datatypes)
         # Generate the data auto-covariance matrix
         if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
             if hasattr(self, 'cov_data'):  # cd matrix has been imported
                 tmp_E = np.dot(cholesky(self.cov_data).T,
-                    np.random.randn(self.cov_data.shape[0], self.ne))
+                               np.random.randn(self.cov_data.shape[0], self.ne))
             else:
-                tmp_E = at.extract_tot_empirical_cov(self.datavar, self.assim_index, self.list_datatypes, self.ne)
+                tmp_E = at.extract_tot_empirical_cov(
+                    self.datavar, self.assim_index, self.list_datatypes, self.ne)
             # self.E = (tmp_E - tmp_E.mean(1)[:,np.newaxis])/np.sqrt(self.ne - 1)/
             if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                tmp_E = at.screen_data(tmp_E, self.aug_pred_data, self.obs_data_vector, self.iteration)
+                tmp_E = at.screen_data(tmp_E, self.aug_pred_data,
+                                       self.obs_data_vector, self.iteration)
             self.E = tmp_E
             self.real_obs_data = self.obs_data_vector[:, np.newaxis] - tmp_E
 
@@ -472,10 +503,12 @@ class Ensemble(PETEnsemble):
             self.scale_data = np.sqrt(self.cov_data)
         else:
             if not hasattr(self, 'cov_data'):  # if cd is not loaded
-                self.cov_data = at.gen_covdata(self.datavar, self.assim_index, self.list_datatypes)
+                self.cov_data = at.gen_covdata(
+                    self.datavar, self.assim_index, self.list_datatypes)
             # data screening
             if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                self.cov_data = at.screen_data(self.cov_data, self.aug_pred_data, self.obs_data_vector, self.iteration)
+                self.cov_data = at.screen_data(
+                    self.cov_data, self.aug_pred_data, self.obs_data_vector, self.iteration)
 
             init_en = Cholesky()  # Initialize GeoStat class for generating realizations
             self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
@@ -483,10 +516,11 @@ class Ensemble(PETEnsemble):
 
     def _ext_state(self):
         # get vector of scaling
-        self.state_scaling = at.calc_scaling(self.prior_state, self.list_states, self.prior_info)
+        self.state_scaling = at.calc_scaling(
+            self.prior_state, self.list_states, self.prior_info)
 
-        delta_scaled_prior = self.state_scaling[:,None] * \
-                             np.dot(at.aug_state(self.prior_state, self.list_states),self.proj)
+        delta_scaled_prior = self.state_scaling[:, None] * \
+            np.dot(at.aug_state(self.prior_state, self.list_states), self.proj)
 
         u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
 
@@ -499,8 +533,11 @@ class Ensemble(PETEnsemble):
             if energy / sum(s_d) >= self.trunc_energy:
                 trunc_index = c  # take the index where all energy is preserved
                 break
-        u_d, s_d, v_d = u_d[:, :trunc_index + 1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
-        self.Am = np.dot(u_d,np.eye(trunc_index+1)*((s_d**(-1))[:,None])) # notation from paper
+        u_d, s_d, v_d = u_d[:, :trunc_index +
+                            1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
+        self.Am = np.dot(u_d, np.eye(trunc_index+1) *
+                         ((s_d**(-1))[:, None]))  # notation from paper
+
     def save_temp_state_assim(self, ind_save):
         """
         Method to save the state variable during the assimilation. It is stored in a list with length = tot. no.
@@ -513,7 +550,8 @@ class Ensemble(PETEnsemble):
         """
         # Init. temp. save
         if ind_save == 0:
-            self.temp_state = [None]*(len(self.get_list_assim_steps()) + 1)  # +1 due to init. ensemble
+            # +1 due to init. ensemble
+            self.temp_state = [None]*(len(self.get_list_assim_steps()) + 1)
 
         # Save the state
         self.temp_state[ind_save] = deepcopy(self.state)
@@ -554,7 +592,8 @@ class Ensemble(PETEnsemble):
         """
         # Initial save
         if ind_save == 0:
-            self.temp_state = [None] * (int(self.tot_assim) + 1)  # +1 due to init. ensemble
+            # +1 due to init. ensemble
+            self.temp_state = [None] * (int(self.tot_assim) + 1)
 
         # Save state
         self.temp_state[ind_save] = deepcopy(self.state)
@@ -575,7 +614,8 @@ class Ensemble(PETEnsemble):
         """
         # Initial save
         if ind_save == 0:
-            self.temp_state = [None] * (int(self.tot_assim) + 1)  # +1 due to init. ensemble
+            # +1 due to init. ensemble
+            self.temp_state = [None] * (int(self.tot_assim) + 1)
 
         # Save state
         self.temp_state[ind_save] = deepcopy(self.state)
@@ -611,9 +651,11 @@ class Ensemble(PETEnsemble):
                     if data_array is not None and \
                             vintage < len(self.sparse_info['mask']) and \
                             len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
-                        data_array, wdec_rec = self.sparse_data[vintage].compress(data_array)  # compress
+                        data_array, wdec_rec = self.sparse_data[vintage].compress(
+                            data_array)  # compress
                         self.obs_data[i][j] = data_array  # save array in obs_data
-                        rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the data
+                        rec = self.sparse_data[vintage].reconstruct(
+                            wdec_rec)  # reconstruct the data
                         s = 'truedata_rec_' + str(vintage) + '.npz'
                         np.savez(s, rec)  # save reconstructed data
                         est_noise = np.power(self.sparse_data[vintage].est_noise, 2)
@@ -625,9 +667,11 @@ class Ensemble(PETEnsemble):
                         self.data_rec.append([])
                         for m in range(self.pred_data[i][j].shape[1]):
                             data_array = data_sim[:, m]
-                            data_array, wdec_rec = self.sparse_data[vintage].compress(data_array)  # compress
+                            data_array, wdec_rec = self.sparse_data[vintage].compress(
+                                data_array)  # compress
                             self.pred_data[i][j][:, m] = data_array
-                            rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the data
+                            rec = self.sparse_data[vintage].reconstruct(
+                                wdec_rec)  # reconstruct the data
                             self.data_rec[vintage].append(rec)
 
                         # Go to next vintage
@@ -646,7 +690,8 @@ class Ensemble(PETEnsemble):
         elif aug_coeff is None:
 
             data_array, wdec_rec = self.sparse_data[vintage].compress(data)
-            rec = self.sparse_data[vintage].reconstruct(wdec_rec)  # reconstruct the simulated data
+            rec = self.sparse_data[vintage].reconstruct(
+                wdec_rec)  # reconstruct the simulated data
             if len(self.data_rec) == vintage:
                 self.data_rec.append([])
             self.data_rec[vintage].append(rec)
@@ -654,12 +699,14 @@ class Ensemble(PETEnsemble):
         elif not aug_coeff:
 
             options = copy(self.sparse_info)
-            options['mask'] = options['mask'][vintage]  # find the correct mask for the vintage
+            # find the correct mask for the vintage
+            options['mask'] = options['mask'][vintage]
             if type(options['min_noise']) == list:
                 if 0 <= vintage < len(options['min_noise']):
                     options['min_noise'] = options['min_noise'][vintage]
                 else:
-                    print('Error: min_noise must either be scalar or list with one number for each vintage')
+                    print(
+                        'Error: min_noise must either be scalar or list with one number for each vintage')
                     sys.exit(1)
             x = wt.SparseRepresentation(options)
             data_array, wdec_rec = x.compress(data, self.sparse_info['th_mult'])
@@ -676,7 +723,6 @@ class Ensemble(PETEnsemble):
             data_array = data  # just return the same as input
 
         return data_array
-
 
     def local_analysis_update(self):
         '''
@@ -699,7 +745,8 @@ class Ensemble(PETEnsemble):
             if 'localization' in self.keys_da:
                 self.localization.loc_info['field'] = self.state_scaling.shape
             del self.cov_data
-            np.random.set_state(self.data_random_state)  # reset the random state for consistency
+            # reset the random state for consistency
+            np.random.set_state(self.data_random_state)
             self._ext_obs()  # get the data that's in the list of data.
             _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
                                                          self.list_datatypes)
@@ -708,7 +755,8 @@ class Ensemble(PETEnsemble):
                 self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
                                             np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
             else:
-                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+                self.pert_preddata = solve(
+                    self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
             aug_state = at.aug_state(self.current_state, self.list_states)
             self.update()
@@ -725,34 +773,41 @@ class Ensemble(PETEnsemble):
             for k in range(field_size[0]):
                 for j in range(field_size[1]):
                     for i in range(field_size[2]):
-                        current_data_list = list(self.local_analysis['update_mask'][state][k][j][i])
+                        current_data_list = list(
+                            self.local_analysis['update_mask'][state][k][j][i])
                         current_data_list.sort()  # ensure consistent ordering of data
                         if len(current_data_list):
                             # if non-unique data for assimilation index, get the relevant data.
                             if self.local_analysis['unique'] == False:
                                 orig_assim_index = deepcopy(self.assim_index)
-                                assim_index_data_list = set([el.split('_')[0] for el in current_data_list])
-                                current_assim_index = [int(el.split('_')[1]) for el in current_data_list]
+                                assim_index_data_list = set(
+                                    [el.split('_')[0] for el in current_data_list])
+                                current_assim_index = [
+                                    int(el.split('_')[1]) for el in current_data_list]
                                 current_data_list = list(assim_index_data_list)
                                 self.assim_index[1] = current_assim_index
                             self.list_datatypes = deepcopy(current_data_list)
                             del self.cov_data
-                            np.random.set_state(self.data_random_state)  # reset the random state for consistency
+                            # reset the random state for consistency
+                            np.random.set_state(self.data_random_state)
                             self._ext_obs()
                             _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data,
                                                                          self.assim_index,
                                                                          self.list_datatypes)
                             # get parameter indexes
-                            full_cell_index = np.ravel_multi_index(np.array([[k], [j], [i]]), tuple(field_size))
+                            full_cell_index = np.ravel_multi_index(
+                                np.array([[k], [j], [i]]), tuple(field_size))
                             # count active values
-                            self.cell_index = [sum(param_position.flatten()[:el]) for el in full_cell_index]
+                            self.cell_index = [sum(param_position.flatten()[:el])
+                                               for el in full_cell_index]
                             if 'localization' in self.keys_da:
-                                self.localization.loc_info['field'] = (len(self.cell_index),)
+                                self.localization.loc_info['field'] = (
+                                    len(self.cell_index),)
                                 self.localization.loc_info['distance'] = cov_regularization._calc_distance(
-                                                                                self.local_analysis['data_position'],
-                                                                                self.local_analysis['unique'],
-                                                                                current_data_list,self.assim_index,
-                                                                                self.obs_data,self.pred_data,[(k,j,i)])
+                                    self.local_analysis['data_position'],
+                                    self.local_analysis['unique'],
+                                    current_data_list, self.assim_index,
+                                    self.obs_data, self.pred_data, [(k, j, i)])
                             # Set relevant state scaling
                             self.state_scaling = orig_state_scaling[self.cell_index]
 
@@ -762,18 +817,21 @@ class Ensemble(PETEnsemble):
                                                             np.ones((1, self.ne))) * np.dot(self.aug_pred_data,
                                                                                             self.proj)
                             else:
-                                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
+                                self.pert_preddata = solve(
+                                    self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
-                            aug_state = at.aug_state(self.current_state, self.list_states, self.cell_index)
+                            aug_state = at.aug_state(
+                                self.current_state, self.list_states, self.cell_index)
                             self.update()
                             if hasattr(self, 'step'):
                                 aug_state_upd = aug_state + self.step
-                            self.state = at.update_state(aug_state_upd, self.state, self.list_states, self.cell_index)
+                            self.state = at.update_state(
+                                aug_state_upd, self.state, self.list_states, self.cell_index)
 
                             if self.local_analysis['unique'] == False:
-                                #reset assim index
+                                # reset assim index
                                 self.assim_index = deepcopy(orig_assim_index)
-                            if hasattr(self,'localization') and 'distance' in self.localization.loc_info: #reset
+                            if hasattr(self, 'localization') and 'distance' in self.localization.loc_info:  # reset
                                 del self.localization.loc_info['distance']
 
         self.list_datatypes = deepcopy(orig_list_data)  # reset to original list
@@ -782,4 +840,3 @@ class Ensemble(PETEnsemble):
         self.real_obs_data = deepcopy(orig_real_obs_data)
         self.obs_data_vector = deepcopy(orig_data_vector)
         self.cell_index = None
-

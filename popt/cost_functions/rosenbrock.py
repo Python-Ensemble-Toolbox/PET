@@ -1,5 +1,6 @@
 """Rosenbrock objective function."""
 
+
 def rosenbrock(state, *args):
     """
     Rosenbrock with negative sign (since we want to find the minimum)

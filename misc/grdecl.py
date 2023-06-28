@@ -78,6 +78,7 @@ log.addHandler(logging.NullHandler())
 
 class GrdEclError (Exception):
     """Exception thrown if invalid syntax is encountered."""
+
     def __init__(self, path, pos, message):
         line, column = pos
         # include the filename if any was specified. only print the name,
@@ -367,6 +368,7 @@ class _Lexer (object):
 
 class _FileMapPair (object):  # pylint: disable=too-few-public-methods
     """An open file with an associated memory-mapping"""
+
     def __init__(self, path):
         """Open file and mapping from a path specification"""
 
@@ -401,6 +403,7 @@ class _FileMapPair (object):  # pylint: disable=too-few-public-methods
 
 class _OwningLexer (_Lexer):
     """Lexer that owns exclusively the underlaying memory map"""
+
     def __init__(self, path):
         # first attempt to open the file and map it; if this is successful,
         # then create a lexer using the memory-map (and keep the file object
@@ -469,6 +472,7 @@ class _Parser (object):
     """Read sections usually exported by Petrel from an Eclipse cornerpoint grid
     file.
     """
+
     def __init__(self, filename, mem):
         super(_Parser, self).__init__()
 
@@ -708,7 +712,7 @@ class _Parser (object):
         if num_read > num_zcorn:
             raise GrdEclError(self.lex.path, self.lex.pos(),
                               "Expected {0:d} numbers, but got {1:d}".format(
-                                   num_zcorn, num_read))
+                num_zcorn, num_read))
 
         # reformat the data into a natural kji/bfr hypercube
         self.section['ZCORN'] = numpy.reshape(
@@ -740,7 +744,7 @@ class _Parser (object):
         if num_read > num_cells:
             raise GrdEclError(self.lex.path, self.lex.pos(),
                               "Expected {0:d} numbers, but got {1:d}".format(
-                                   num_cells, num_read))
+                num_cells, num_read))
 
         # if not all cells were specified, the rest should be marked as
         # inactive
@@ -763,7 +767,7 @@ class _Parser (object):
         if 'DIMENS' not in self.section:
             raise GrdEclError(self.lex.path, self.lex.pos(),
                               "{0} section must come after SPECGRID".format(
-                                   kw))
+                kw))
 
         # check if this keyword is registered with a known type
         typ = _kw_dtype(kw)
@@ -792,7 +796,7 @@ class _Parser (object):
         if num_read > num_cells:
             raise GrdEclError(self.lex.path, self.lex.pos(),
                               "Expected {0:d} numbers, but got {1:d}".format(
-                                   num_cells, num_read))
+                num_cells, num_read))
 
         # reformat the data into a natural kji/bfr hypercube
         data = numpy.reshape(data, (self.nk, self.nj, self.ni))
@@ -1435,7 +1439,7 @@ def read(filename):
             # actnum is special because we need it to set the mask
             grid['ACTNUM'] = _read_section('ACTNUM', dims, numpy.int32,
                                            mem, section_index).astype(
-                                                 numpy.bool)
+                numpy.bool)
             mask = numpy.logical_not(grid['ACTNUM'])
 
             # zcorn is special because it has a different format (and
@@ -1501,19 +1505,19 @@ def _read_multi(wrapper_name, mem):
     log.info("Reading cell activeness from \"%s\"", act_name)
     actnum = numpy.reshape(numpy.loadtxt(
         act_name, dtype=numpy.bool, skiprows=1, comments='/'),
-                            (nk, nj, ni))
+        (nk, nj, ni))
 
     coord_name = '{0}_coord.grdecl'.format(stem)
     log.info("Reading pillar coordinates from \"%s\"", coord_name)
     coord = numpy.reshape(numpy.loadtxt(
         coord_name, dtype=numpy.float, skiprows=1, comments='/'),
-                           (nj + 1, ni + 1, 2, 3))
+        (nj + 1, ni + 1, 2, 3))
 
     zcorn_name = '{0}_zcorn.grdecl'.format(stem)
     log.info("Reading corner depths from \"%s\"", zcorn_name)
     zcorn = numpy.reshape(numpy.loadtxt(
         zcorn_name, dtype=numpy.float, skiprows=1, comments='/'),
-                           (nk, 2, nj, 2, ni, 2))
+        (nk, 2, nj, 2, ni, 2))
 
     # create the embryonic grid containing at least the format
     grid = {'DIMENS': [ni, nj, nk],
@@ -1699,6 +1703,7 @@ def _write_multi(path, base, grid, lookup, dialect):
                 enc('\n{0:<8s}\n\'{1:s}_{2:s}.grdecl\'\n{3:s}\n'.format(
                     lookup('INCLUDE'), base, kw.lower(), lookup('/'))))
 
+
 def _write_single(path, base, grid, lookup, dialect):
     """
     :param path:     Path to all files that are generated
@@ -1724,12 +1729,9 @@ def _write_single(path, base, grid, lookup, dialect):
         else:
             assert False
 
-
         log.info('Grid size is %d x %d x %d', *dimens)
         log.info('Writing keyword DIMENS')
         _write_dimens_ext(fileobj, dimens, lookup)
-
-
 
         # start with all the predefined leading keywords, and then write the
         # rest of them in alphabetical order

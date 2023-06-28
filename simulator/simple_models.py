@@ -123,7 +123,8 @@ class nonlin_onedimmodel:
             for dat in self.all_data_types:
                 tmp_val = []
                 for para in inv_param:
-                    tmp_val.append((7 / 12) * (state[para] ** 3) - (7 / 2) * (state[para] ** 2) + 8 * state[para])
+                    tmp_val.append(
+                        (7 / 12) * (state[para] ** 3) - (7 / 2) * (state[para] ** 2) + 8 * state[para])
                 self.pred_data[prim_ind][dat] = np.array(tmp_val)
 
         return self.pred_data
@@ -423,7 +424,8 @@ class sevenmountains:
         # Search for .resp file
         if isinstance(current_run, list):
             for i in range(len(current_run)):  # Check all En_ folders
-                for file in os.listdir('En_' + str(current_run[i])):  # Search with a specific En_folder
+                # Search with a specific En_folder
+                for file in os.listdir('En_' + str(current_run[i])):
                     if file == 'pred_data.npz':  # If there is a output .npz file
                         member = current_run[i]
         else:
@@ -452,4 +454,3 @@ class noSimulation:
         # run simulator. Called from the main function using p_map from p_tqdm package.
         # Return pred_data if run is successfull, False if run failed.
         return [state]
-
