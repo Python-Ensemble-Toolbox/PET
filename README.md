@@ -2,8 +2,8 @@
 <img src="https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png" width="300">
 </h1><br>
 
-PET is a toolbox for ensemble based Data-Assimilation developed and maintained
-by the data assimilation and optimization group
+PET is a toolbox for ensemble-based Data Assimilation and Optimisation.
+It is developed and maintained by the eponymous group
 at NORCE Norwegian Research Centre AS.
 
 [![CI status](https://github.com/Python-Ensemble-Toolbox/PET/actions/workflows/tests.yml/badge.svg)](https://github.com/Python-Ensemble-Toolbox/PET/actions/workflows/tests.yml)
