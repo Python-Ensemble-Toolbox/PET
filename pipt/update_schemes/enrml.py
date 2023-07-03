@@ -227,6 +227,9 @@ class lmenrmlMixIn(Ensemble):
                 # Increase damping parameter (divide calculations for ANALYSISDEBUG purpose)
                 self.lam = self.lam * self.gamma
                 success = False
+                # Reset the objective function
+                self.data_misfit = self.prev_data_misfit
+                self.data_misfit_std = self.prev_data_misfit_std
 
             if success:
                 self.logger.info(f'Successfull iteration number {self.iteration}! Objective function reduced from '
