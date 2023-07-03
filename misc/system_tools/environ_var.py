@@ -266,7 +266,10 @@ class OPMRunEnvironment:
         """
         self.filename = filename
         self.suffix = suffix
-        self.mstring = matchstring
+        if type(matchstring) != list:
+            self.mstring = list(matchstring)
+        else:
+            self.mstring = matchstring
 
     def __enter__(self):
         """
@@ -312,7 +315,7 @@ class OPMRunEnvironment:
 
         with open(self.filename + '.' + self.suffix, 'r') as fid:
             for line in fid:
-                if re.search(self.mstring, line):
+                if any([re.search(elem, line) for elem in self.mstring]):
                     # TODO: not do time.sleep()
                     # time.sleep(0.1)
                     member = True

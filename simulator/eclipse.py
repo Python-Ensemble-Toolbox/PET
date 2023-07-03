@@ -885,6 +885,9 @@ class eclipse:
                 if whichResponse.upper() in ['FOPT', 'FWPT', 'FGPT', 'FWIT', 'FGIT']:
                     if ext_data_info is not None:
                         yFlow = self.ecl_case.summary_data(whichResponse, time)
+                elif whichResponse.upper() in ['PERMX', 'PERMY', 'PERMZ', 'PORO', 'NTG', 'SATNUM',
+                                               'MULTNUM', 'OPERNUM']:
+                    yFlow = np.array([self.ecl_case.cell_data(whichResponse).flatten()[time]]) # assume that time is the index
                 else:
                     yFlow = self.ecl_case.cell_data(whichResponse, time).flatten()
                     if yFlow is None:

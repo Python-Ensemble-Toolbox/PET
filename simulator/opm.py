@@ -39,7 +39,7 @@ class flow(eclipse):
 
         success = True
         try:
-            with OPMRunEnvironment(filename, 'PRT', 'End of simulation'):
+            with OPMRunEnvironment(filename, 'PRT', ['End of simulation', 'NOSIM']):
                 com = []
                 if self.options['mpi']:
                     com.extend(self.options['mpi'].split())
