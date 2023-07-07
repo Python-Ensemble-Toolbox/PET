@@ -277,6 +277,7 @@ class eclipse:
         os.mkdir('En_' + str(member_i))
         folder = 'En_' + str(member_i) + os.sep
 
+        state['member'] = member_i
         # If the run is upscaled, run the upscaling procedure
         if self.upscale is not None:
             if hasattr(self, 'level'):  # if this is a multilevel run, we must set the level
