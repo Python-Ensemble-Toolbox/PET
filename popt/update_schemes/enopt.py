@@ -14,6 +14,7 @@ from scipy import stats
 from popt.misc_tools import optim_tools as ot, basic_tools as bt
 from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as PETEnsemble
+import popt.update_schemes.optimizers as opt
 
 
 class EnOpt(PETEnsemble):
@@ -28,7 +29,7 @@ class EnOpt(PETEnsemble):
     R is a smoothing matrix (e.g., covariance matrix for x), and S is the ensemble gradient (or sensitivity).
     """
 
-    def __init__(self, keys_opt, keys_en, sim, obj_func):
+    def __init__(self, keys_opt, keys_en, sim, obj_func, optimizer='GA'):
 
         # init PETEnsemble
         super(EnOpt, self).__init__(keys_en, sim)
@@ -63,6 +64,12 @@ class EnOpt(PETEnsemble):
         self.sens_matrix = None
         self.cov_sens_matrix = None
 
+        # Initialize optimizer
+        if optimizer == 'GA':
+            self.optimizer = opt.GradientAscent(self.alpha, self.beta)
+        elif optimizer == 'Adam':
+            self.optimizer = opt.Adam(self.alpha)
+
     def calc_update(self, iteration, logger=None):
         """
         Update using steepest ascent method with ensemble gradients
@@ -81,7 +88,7 @@ class EnOpt(PETEnsemble):
         improvement = False
         success = False
         self.alpha_iter = 0
-        alpha = self.alpha
+        #alpha = self.alpha
         beta = self.beta
         
         while improvement is False:
@@ -90,10 +97,12 @@ class EnOpt(PETEnsemble):
             aug_state = ot.aug_optim_state(current_state, list_states)
 
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
-            new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, np.inf) + beta * self.step
+            #new_step = alpha * self.sens_matrix / la.norm(self.sens_matrix, np.inf) + beta * self.step
+            search_direction = self.sens_matrix / la.norm(self.sens_matrix, np.inf)
+            aug_state_upd    = self.optimizer.apply_update(aug_state, search_direction, iter=iteration)
 
             # Calculate updated state
-            aug_state_upd = aug_state + np.squeeze(new_step)
+            #aug_state_upd = aug_state + np.squeeze(new_step)
 
             # Make sure update is within bounds
             if self.upper_bound and self.lower_bound:
@@ -113,10 +122,11 @@ class EnOpt(PETEnsemble):
                 # Iteration was a success
                 improvement = True
                 success = True
+                self.optimizer.restore_parameters()
 
                 # Update objective function values and step
                 self.obj_func_values = new_func_values
-                self.step = new_step
+                #self.step = new_step
                 
                 # Update covariance (currently we don't apply backtracking for alpha_cov)
                 self.cov_step = self.alpha_cov * self.cov_sens_matrix / la.norm(self.cov_sens_matrix, np.inf) + beta * self.cov_step
@@ -126,7 +136,7 @@ class EnOpt(PETEnsemble):
                 # Write logging info
                 if logger is not None:
                     info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
-                        format(iteration, self.alpha_iter, np.mean(self.obj_func_values), alpha, self.cov[0, 0])
+                        format(iteration, self.alpha_iter, np.mean(self.obj_func_values), self.optimizer._step_size, self.cov[0, 0])
                     logger.info(info_str_iter)
 
             else:
@@ -134,8 +144,9 @@ class EnOpt(PETEnsemble):
                 # If we do not have a reduction in the objective function, we reduce the step limiter
                 if self.alpha_iter < self.alpha_iter_max:
                     # Decrease alpha
-                    alpha /= 2
-                    beta /= 2
+                    #alpha /= 2
+                    #beta /= 2
+                    self.optimizer.apply_backtracking()
                     self.alpha_iter += 1
                 else:
                     success = False
@@ -335,6 +346,7 @@ class EnOpt(PETEnsemble):
                 mean = self.state[statename]
                 cov = cov_blocks[i]
                 if ['nesterov'] in self.keys_opt['enopt']:
+                    print('In NAG mode!')
                     if not isinstance(self.step, int):
                         stop = start + len(self.state[statename])
                         mean += self.beta * self.step[start:stop]
@@ -385,11 +397,15 @@ class EnOpt(PETEnsemble):
                 else:
                     print(f'Cannot save {save_typ}!\n\n')
 
-             # Save the variables
+            # Save the variables
             if 'debug_save_folder' in self.keys_opt:
                 folder = self.keys_opt['debug_save_folder']
             else:
                 folder = './'
+            
+            #Make folder (if it does not exist) 
+            if not os.path.exists(folder):
+                os.mkdir(folder)
 
             # Save the variables
             np.savez(folder + '/debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
