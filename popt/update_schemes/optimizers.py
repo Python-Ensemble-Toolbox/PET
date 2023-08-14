@@ -29,8 +29,8 @@ class GradientAscent:
         velocity : 1-D array_like
             Current velocity of the optimization process.
 
-        old_velocity : 1-D array_like
-            Velocity before the last update.
+        temp_velocity : 1-D array_like
+            Temporary velocity
 
         _step_size : float
             Private attribute for temporarily modifying step size.
@@ -43,9 +43,6 @@ class GradientAscent:
         apply_update(control, gradient, **kwargs):
             Apply a gradient update to the control parameter.
 
-        _revert_update():
-            Revert the update made to the velocity.
-
         apply_backtracking():
             Apply backtracking by reducing step size and momentum temporarily.
 
@@ -57,9 +54,9 @@ class GradientAscent:
         self.momentum  = momentum
         self.velocity  = 0
 
-        self.old_velocity = 0
-        self._step_size   = step_size
-        self._momentum    = momentum
+        self.temp_velocity = 0
+        self._step_size    = step_size
+        self._momentum     = momentum
     
     def apply_update(self, control, gradient, **kwargs):
         """
@@ -81,26 +78,18 @@ class GradientAscent:
             1-D array_like (same shape as control). 
             The new value of the control parameter after the update.
         """
-        self.old_velocity = self.velocity
         alpha = self._step_size
         beta  = self._momentum
 
         #apply update
-        self.velocity = beta*self.velocity + alpha*gradient
-        new_control   = control + self.velocity
+        self.temp_velocity = beta*self.velocity + alpha*gradient
+        new_control   = control + self.temp_velocity
         return new_control
-    
-    def _revert_update(self):
-        """
-        Revert the update made to the velocity.
-        """
-        self.velocity = self.old_velocity
     
     def apply_backtracking(self):
         """
         Apply backtracking by reducing step size and momentum temporarily.
         """
-        self._revert_update()
         self._step_size = 0.5*self._step_size
         self._momentum  = 0.5*self._momentum
     
@@ -108,8 +97,13 @@ class GradientAscent:
         """
         Restore the original step size and momentum value.
         """
+        self.velocity   = self.temp_velocity
         self._step_size = self.step_size
         self._momentum  = self.momentum
+    
+    def get_momentum_for_nesterov(self):
+        return self.momentum*self.velocity
+        
 
 
 class Adam:
@@ -160,19 +154,16 @@ class Adam:
             _step_size : float
                 Private attribute for temporarily modifying step size.
 
-            old_vel1 : 1-D array_like
-                First moment estimate before the last update.
+            temp_vel1 : 1-D array_like
+                Temporary first moment estimate.
 
-            old_vel2 : 1-D array_like
-                Second moment estimate before the last update.
+            temp_vel2 : 1-D array_like
+                Temporary Second moment estimate.
 
         Methods
         -------------------------------------------------------------------------------------
             apply_update(control, gradient, **kwargs):
                 Apply an Adam update to the control parameter.
-
-            _revert_update():
-                Revert the update made to the first and second moment estimates.
 
             apply_backtracking():
                 Apply backtracking by reducing step size temporarily.
@@ -194,8 +185,8 @@ class Adam:
         self.eps   = 1e-7
 
         self._step_size = step_size
-        self.old_vel1 = 0
-        self.old_vel2 = 0
+        self.temp_vel1 = 0
+        self.temp_vel2 = 0
 
 
     def apply_update(self, control, gradient, **kwargs):
@@ -223,33 +214,24 @@ class Adam:
         beta1 = self.beta1
         beta2 = self.beta2
 
-        self.old_vel1 = self.vel1
-        self.old_vel2 = self.vel2
-
-        self.vel1 = beta1*self.vel1 + (1-beta1)*gradient
-        self.vel2 = beta2*self.vel2 + (1-beta2)*gradient**2
-        vel1_hat  = self.vel1/(1-beta1**iter)
-        vel2_hat  = self.vel2/(1-beta2**iter)
+        self.temp_vel1 = beta1*self.vel1 + (1-beta1)*gradient
+        self.temp_vel2 = beta2*self.vel2 + (1-beta2)*gradient**2
+        vel1_hat  = self.temp_vel1/(1-beta1**iter)
+        vel2_hat  = self.temp_vel2/(1-beta2**iter)
 
         new_control = control + alpha*vel1_hat/(np.sqrt(vel2_hat)+self.eps)
         return new_control
-
-    def _revert_update(self):
-        """
-        Revert the update made to the first and second moment estimates.
-        """
-        self.vel1 = self.old_vel1
-        self.vel2 = self.old_vel2
 
     def apply_backtracking(self):
         """
         Apply backtracking by reducing step size temporarily.
         """
-        self._revert_update()
         self._step_size = 0.5*self._step_size
     
     def restore_parameters(self):
         """
         Restore the original step size.
         """
+        self.vel1 = self.temp_vel1
+        self.vel2 = self.temp_vel2
         self._step_size = self.step_size

@@ -338,26 +338,26 @@ class EnOpt(PETEnsemble):
         # Generate ensemble with the current state (control variable) as the mean and using the imported covariance
         # matrix
         state_en = {}
+        cov_blocks = ot.corr2BlockDiagonal(self.state, self.cov)
+        start = 0
         for i, statename in enumerate(self.state.keys()):
             mean = self.state[statename]
-            cov_blocks = ot.corr2BlockDiagonal(self.state, self.cov)
-            start = 0
-            for i, statename in enumerate(self.state.keys()):
-                mean = self.state[statename]
-                cov = cov_blocks[i]
-                if ['nesterov'] in self.keys_opt['enopt']:
-                    print('In NAG mode!')
-                    if not isinstance(self.step, int):
-                        stop = start + len(self.state[statename])
-                        mean += self.beta * self.step[start:stop]
-                        cov += self.beta * self.cov_step[start:stop, start:stop]
-                        cov = self.get_sym_pos_semidef(cov)
-                        start = start + len(self.state[statename]) 
-                temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
-                if self.upper_bound and self.lower_bound:            
-                    np.clip(temp_state_en, 0, 1, out=temp_state_en)    
+            cov = cov_blocks[i]
+            if ['nesterov'] in self.keys_opt['enopt']:
+                step = self.optimizer.get_momentum_for_nesterov()
+                if not isinstance(step, (int, float)):
+                    stop  = start + len(self.state[statename])
+                    mean  = mean + step[start:stop]
+                    cov   = cov + self.beta * self.cov_step[start:stop, start:stop]
+                    cov   = self.get_sym_pos_semidef(cov)
+                    start = start + len(self.state[statename]) 
 
-                state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en,1)]).T
+            temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
+
+            if self.upper_bound and self.lower_bound:            
+                np.clip(temp_state_en, 0, 1, out=temp_state_en)
+                
+            state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en,1)]).T
             
 
         return state_en
