@@ -356,9 +356,11 @@ class EnOpt(PETEnsemble):
 
             if self.upper_bound and self.lower_bound:            
                 np.clip(temp_state_en, 0, 1, out=temp_state_en)
-                
+
             state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en,1)]).T
             
+            if self.upper_bound and self.lower_bound:            
+                np.clip(state_en[statename], 0, 1, out=state_en[statename])
 
         return state_en
 
