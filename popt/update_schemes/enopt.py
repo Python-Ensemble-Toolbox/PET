@@ -93,7 +93,7 @@ class EnOpt(PETEnsemble):
             aug_state = ot.aug_optim_state(current_state, list_states)
 
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
-            normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-6)
+            normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-12)
             H = 1
             if self.hessian:
                 H = 1 / np.diag(self.cov_sens_matrix)
@@ -130,7 +130,7 @@ class EnOpt(PETEnsemble):
                 self.step = new_step
 
                 # Update covariance (currently we don't apply backtracking for alpha_cov)
-                normalize = np.maximum(la.norm(self.cov_sens_matrix, np.inf), 1e-6)
+                normalize = np.maximum(la.norm(self.cov_sens_matrix, np.inf), 1e-12)
                 self.cov_step = self.alpha_cov * self.cov_sens_matrix / normalize + beta * self.cov_step
                 self.cov = self.cov + self.cov_step
                 self.cov = self.get_sym_pos_semidef(self.cov)
@@ -266,7 +266,7 @@ class EnOpt(PETEnsemble):
 
             # Check if Hessian should be used
             ind_hessian = bt.index2d(enopt, 'hessian')
-            if ind_hessian is None:  # num_models does not exist
+            if ind_hessian is None:  # do not use Hessian
                 self.hessian = None
             else:  # use Hessian
                 self.hessian = True
@@ -316,6 +316,7 @@ class EnOpt(PETEnsemble):
         self.state = self._gen_state_ensemble()
         self._invert_scale_state()
         self.calc_prediction()
+        self._scale_state()
         self.num_func_eval += self.ne
         obj_func_values = self.obj_func(
             self.pred_data, self.keys_opt, self.sim.true_order)
