@@ -1495,11 +1495,16 @@ def init_local_analysis(init, state):
     local = {}
     local['cell_parameter'] = []
     local['region_parameter'] = []
+    local['vector_region_parameter'] = []
     local['unique'] = True
 
     for i, opt in enumerate(list(zip(*init))[0]):
         if opt.lower() == 'region_parameter':  # define scalar parameters valid in a region
             local['region_parameter'] = [
+                elem for elem in init[i][1].split(' ') if elem in state]
+        if opt.lower() == 'vector_region_parameter': # Sometimes it useful to define the same parameter for multiple
+                                                    # regions as a vector.
+            local['vector_region_parameter'] = [
                 elem for elem in init[i][1].split(' ') if elem in state]
         if opt.lower() == 'cell_parameter':  # define cell specific vector parameters
             local['cell_parameter'] = [
@@ -1515,14 +1520,13 @@ def init_local_analysis(init, state):
             with open(init[i][1], 'rb') as file:
                 local['data_position'] = pickle.load(file)
         if opt.lower() == 'update_mask_file':
-            with open(init['update_mask_file'][i][1], 'rb') as file:
+            with open(init[i][1], 'rb') as file:
                 local['update_mask'] = pickle.load(file)
 
-    assert 'parameter_position' in local, 'A pickle file containing the binary map of the parameters is MANDATORY'
-
-    if 'update_mask_file' in local:
+    if 'update_mask' in local:
         return local
     else:
+        assert 'parameter_position' in local, 'A pickle file containing the binary map of the parameters is MANDATORY'
         assert 'data_position' in local, 'A pickle file containing the position of the data is MANDATORY'
 
         data_name = [elem for elem in local['data_position'].keys()]
