@@ -764,6 +764,38 @@ class Ensemble(PETEnsemble):
                 aug_state_upd = aug_state + self.step
             self.state = at.update_state(aug_state_upd, self.state, self.list_states)
 
+        for state in self.local_analysis['vector_region_parameter']:
+            current_list_datatypes = deepcopy(self.list_datatypes)
+            for state_indx in range(self.state[state].shape[0]): # loop over the elements in the region
+                self.list_datatypes = [elem for elem in self.list_datatypes if
+                                       elem in self.local_analysis['update_mask'][state][state_indx]]
+                if len(self.list_datatypes):
+                    self.list_states = [deepcopy(state)]
+                    self._ext_state()  # scaling for this state
+                    if 'localization' in self.keys_da:
+                        self.localization.loc_info['field'] = self.state_scaling.shape
+                    del self.cov_data
+                    # reset the random state for consistency
+                    np.random.set_state(self.data_random_state)
+                    self._ext_obs()  # get the data that's in the list of data.
+                    _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+                                                                 self.list_datatypes)
+                    # Mean pred_data and perturbation matrix with scaling
+                    if len(self.scale_data.shape) == 1:
+                        self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
+                                                    np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+                    else:
+                        self.pert_preddata = solve(
+                            self.scale_data, np.dot(self.aug_pred_data, self.proj))
+
+                    aug_state = at.aug_state(self.current_state, self.list_states)[state_indx,:]
+                    self.update()
+                    if hasattr(self, 'step'):
+                        aug_state_upd = aug_state + self.step[state_indx,:]
+                    self.state[state][state_indx,:] = aug_state_upd
+
+                self.list_datatypes = deepcopy(current_list_datatypes)
+
         for state in self.local_analysis['cell_parameter']:
             self.list_states = [deepcopy(state)]
             self._ext_state()  # scaling for this state
