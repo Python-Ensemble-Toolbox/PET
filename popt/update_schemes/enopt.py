@@ -74,7 +74,6 @@ class EnOpt(PETEnsemble):
         """
         Update using steepest ascent method with ensemble gradients
         """
-
         # Augment the state dictionary to an array
         list_states = list(self.state.keys())
 
@@ -290,9 +289,11 @@ class EnOpt(PETEnsemble):
         # Generate ensemble of states
         self.ne = self.num_samples
         self.state = self._gen_state_ensemble()
+
         self._invert_scale_state()
-        
         self.calc_prediction()
+        self._scale_state()
+
         obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
         obj_func_values = np.array(obj_func_values)
 
