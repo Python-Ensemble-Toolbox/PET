@@ -1,15 +1,10 @@
 """Ensemble optimisation (steepest descent with ensemble gradient)."""
 # External imports
 import numpy as np
-import scipy as scipy
 import os
-
+import sys
 from numpy import linalg as la
-from copy import deepcopy
 import logging
-
-from scipy.special import polygamma, digamma
-from scipy import stats
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot, basic_tools as bt
@@ -106,12 +101,12 @@ class EnOpt(PETEnsemble):
             aug_state = ot.aug_optim_state(current_state, list_states)
 
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
-            normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-12)            
-	    search_direction = self.sens_matrix / normalize
-	    H = 1
+            normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-12)
+            search_direction = self.sens_matrix / normalize
+            H = 1
             if self.hessian:
                 H = 1 / np.diag(self.cov_sens_matrix)
-	    search_direction *= H
+            search_direction *= H
             aug_state_upd     = self.optimizer.apply_update(aug_state, search_direction, iter=iteration)
 
             # Make sure update is within bounds
