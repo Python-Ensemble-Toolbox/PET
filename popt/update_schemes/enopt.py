@@ -100,13 +100,14 @@ class EnOpt(PETEnsemble):
             # Augment state
             aug_state = ot.aug_optim_state(current_state, list_states)
 
-            # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
-            normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-12)
-            search_direction = self.sens_matrix / normalize
-            H = 1
+            # Compute the steepest ascent step
             if self.hessian:
+                search_direction = self.sens_matrix  # choose to not normalize when using Hessian
                 H = 1 / np.diag(self.cov_sens_matrix)
-            search_direction *= H
+                search_direction *= H
+            else:
+                normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-12)
+                search_direction = self.sens_matrix / normalize # scale the gradient with 2-norm (or inf-norm: np.inf)
             aug_state_upd     = self.optimizer.apply_update(aug_state, search_direction, iter=iteration)
 
             # Make sure update is within bounds
@@ -427,3 +428,5 @@ class EnOpt(PETEnsemble):
             if not os.path.exists(folder):
                 os.mkdir(folder)
 
+            # Save the variables
+            np.savez('debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
