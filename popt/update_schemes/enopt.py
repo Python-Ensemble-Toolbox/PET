@@ -1,15 +1,21 @@
 """Ensemble optimisation (steepest descent with ensemble gradient)."""
 # External imports
 import numpy as np
+import scipy as scipy
+import os
+
 from numpy import linalg as la
 from copy import deepcopy
 import logging
-import sys
+
+from scipy.special import polygamma, digamma
+from scipy import stats
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot, basic_tools as bt
 from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as PETEnsemble
+import popt.update_schemes.optimizers as opt
 
 
 class EnOpt(PETEnsemble):
@@ -24,7 +30,7 @@ class EnOpt(PETEnsemble):
     R is a smoothing matrix (e.g., covariance matrix for x), and S is the ensemble gradient (or sensitivity).
     """
 
-    def __init__(self, keys_opt, keys_en, sim, obj_func):
+    def __init__(self, keys_opt, keys_en, sim, obj_func, optimizer='GA'):
 
         # init PETEnsemble
         super(EnOpt, self).__init__(keys_en, sim)
@@ -43,6 +49,7 @@ class EnOpt(PETEnsemble):
         self.cov_step = 0  # covariance step
         self.num_samples = self.ne
         self.alpha_iter = 0  # number of backtracking steps
+        self.resamp_iter = 0
         self.num_func_eval = 0  # Total number of function evaluations
         self._ext_enopt_param()
 
@@ -59,13 +66,18 @@ class EnOpt(PETEnsemble):
         np.savez('ini_state.npz', **self.state)
         self.calc_prediction()
         self.num_func_eval += self.ne
-        self.obj_func_values = self.obj_func(
-            self.pred_data, self.keys_opt, self.sim.true_order)
+        self.obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
         self.save_analysis_debug(0)
 
         # Initialize function values and covariance
         self.sens_matrix = None
         self.cov_sens_matrix = None
+
+        # Initialize optimizer
+        if optimizer == 'GA':
+            self.optimizer = opt.GradientAscent(self.alpha, self.beta)
+        elif optimizer == 'Adam':
+            self.optimizer = opt.Adam(self.alpha)
 
     def calc_update(self, iteration, logger=None):
         """
@@ -85,22 +97,22 @@ class EnOpt(PETEnsemble):
         improvement = False
         success = False
         self.alpha_iter = 0
-        alpha = self.alpha
         beta = self.beta
+        self.resamp_iter = 0
+         
         while improvement is False:
 
             # Augment state
             aug_state = ot.aug_optim_state(current_state, list_states)
 
             # Compute the steepest ascent step. Scale the gradient with 2-norm (or inf-norm: np.inf)
-            normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-12)
-            H = 1
+            normalize = np.maximum(la.norm(self.sens_matrix, np.inf), 1e-12)            
+	    search_direction = self.sens_matrix / normalize
+	    H = 1
             if self.hessian:
                 H = 1 / np.diag(self.cov_sens_matrix)
-            new_step = alpha * H * self.sens_matrix / normalize + beta * self.step
-
-            # Calculate updated state
-            aug_state_upd = aug_state + np.squeeze(new_step)
+	    search_direction *= H
+            aug_state_upd     = self.optimizer.apply_update(aug_state, search_direction, iter=iteration)
 
             # Make sure update is within bounds
             if self.upper_bound and self.lower_bound:
@@ -116,19 +128,18 @@ class EnOpt(PETEnsemble):
             self.num_func_eval += self.ne
             new_func_values = 0
             if run_success:
-                new_func_values = self.obj_func(
-                    self.pred_data, self.keys_opt, self.sim.true_order)
+                new_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
 
             if np.mean(new_func_values) - np.mean(self.obj_func_values) > self.obj_func_tol:
 
                 # Iteration was a success
                 improvement = True
                 success = True
+                self.optimizer.restore_parameters()
 
                 # Update objective function values and step
                 self.obj_func_values = new_func_values
-                self.step = new_step
-
+           
                 # Update covariance (currently we don't apply backtracking for alpha_cov)
                 normalize = np.maximum(la.norm(self.cov_sens_matrix, np.inf), 1e-12)
                 self.cov_step = self.alpha_cov * self.cov_sens_matrix / normalize + beta * self.cov_step
@@ -138,22 +149,24 @@ class EnOpt(PETEnsemble):
                 # Write logging info
                 if logger is not None:
                     info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
-                        format(iteration, self.alpha_iter, np.mean(
-                            self.obj_func_values), alpha, self.cov[0, 0])
+                        format(iteration, self.alpha_iter, np.mean(self.obj_func_values), self.optimizer._step_size, self.cov[0, 0])
                     logger.info(info_str_iter)
 
                 # Update self.alpha in the one-dimensional case
                 if len(aug_state) == 1:
-                    self.alpha /= 2
+                    self.optimizer.step_size /= 2
 
             else:
 
                 # If we do not have a reduction in the objective function, we reduce the step limiter
                 if self.alpha_iter < self.alpha_iter_max:
                     # Decrease alpha
-                    alpha /= 2
-                    beta /= 2
+                    self.optimizer.apply_backtracking()
                     self.alpha_iter += 1
+                elif self.resamp_iter < self.resamplings and not np.mean(new_func_values) - np.mean(self.obj_func_values) > 0:
+                    self.resamp_iter += 1
+                    self.alpha_iter = 0
+                    self.calc_ensemble_sensitivity()
                 else:
                     success = False
                     break
@@ -191,6 +204,8 @@ class EnOpt(PETEnsemble):
         default_alpha_iter_max = 5
         default_num_models = 1
 
+        default_resamplings = 0
+
         # Check if ENOPT has been given in OPTIM. If it is not present, we assign a default value
         if 'enopt' not in self.keys_opt:
             # Default value
@@ -201,7 +216,15 @@ class EnOpt(PETEnsemble):
                 enopt = [self.keys_opt['enopt']]
             else:
                 enopt = self.keys_opt['enopt']
-
+            
+            # Assign resamplings, if not exit, assign default value
+            ind_resampling = bt.index2d(enopt, 'resamplings')
+            # obj_func_tol does not exist
+            if ind_resampling is None:
+                self.resamplings = default_resamplings
+            else:
+                self.resamplings = enopt[ind_resampling[0]][ind_resampling[1] + 1]
+            
             # Assign obj_func_tol, if not exit, assign default value
             ind_obj_func_tol = bt.index2d(enopt, 'obj_func_tol')
             # obj_func_tol does not exist
@@ -238,7 +261,7 @@ class EnOpt(PETEnsemble):
                 self.alpha_cov = enopt[ind_alpha_cov[0]][ind_alpha_cov[1] + 1]
             # Assign beta, if not exit, assign default value
             ind_beta = bt.index2d(enopt, 'beta')
-            # step_tol does not exist
+                # step_tol does not exist
             if ind_beta is None:
                 self.beta = default_beta
             # step_tol present; assign value
@@ -252,8 +275,7 @@ class EnOpt(PETEnsemble):
                 self.alpha_iter_max = default_alpha_iter_max
             # alpha_iter present; assign value
             else:
-                self.alpha_iter_max = enopt[ind_alpha_iter_max[0]
-                                            ][ind_alpha_iter_max[1] + 1]
+                self.alpha_iter_max = enopt[ind_alpha_iter_max[0]][ind_alpha_iter_max[1] + 1]
 
             # Assign number of models, if not exit, assign default value
             ind_num_models = bt.index2d(enopt, 'num_models')
@@ -274,8 +296,7 @@ class EnOpt(PETEnsemble):
             value_cov = np.array([])
             for name in self.prior_info.keys():
                 self.state[name] = self.prior_info[name]['mean']
-                value_cov = np.append(
-                    value_cov, self.prior_info[name]['variance'] * np.ones((len(self.state[name]),)))
+                value_cov = np.append(value_cov, self.prior_info[name]['variance'] * np.ones((len(self.state[name]),)))
                 if 'limits' in self.prior_info[name].keys():
                     self.lower_bound.append(self.prior_info[name]['limits'][0])
                     self.upper_bound.append(self.prior_info[name]['limits'][1])
@@ -314,12 +335,12 @@ class EnOpt(PETEnsemble):
                 print('num_samples must be a multiplum of num_models!')
                 sys.exit(0)
         self.state = self._gen_state_ensemble()
+
         self._invert_scale_state()
         self.calc_prediction()
         self._scale_state()
         self.num_func_eval += self.ne
-        obj_func_values = self.obj_func(
-            self.pred_data, self.keys_opt, self.sim.true_order)
+        obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
         obj_func_values = np.array(obj_func_values)
 
         # Finally, we calculate the ensemble sensitivity matrix.
@@ -338,8 +359,7 @@ class EnOpt(PETEnsemble):
         g_m = np.zeros(aug_state.shape[0])
         for i in np.arange(self.ne):
             g_m = g_m + pert_obj_func[i] * pert_state[:, i]
-            g_c = g_c + pert_obj_func[i] * \
-                (np.outer(pert_state[:, i], pert_state[:, i]) - self.cov)
+            g_c = g_c + pert_obj_func[i] * (np.outer(pert_state[:, i], pert_state[:, i]) - self.cov)
 
         self.cov_sens_matrix = g_c / (self.ne - 1)
         self.sens_matrix = g_m / (self.ne - 1)
@@ -351,37 +371,35 @@ class EnOpt(PETEnsemble):
         cov_blocks = ot.corr2BlockDiagonal(self.state, self.cov)
         start = 0
         for i, statename in enumerate(self.state.keys()):
-            # state_en[statename] = chol.gen_real(self.state[statename], self.cov[i, i], self.ne)
             mean = self.state[statename]
             cov = cov_blocks[i]
             if ['nesterov'] in self.keys_opt['enopt']:
-                if not isinstance(self.step, int):
-                    stop = start + len(self.state[statename])
-                    mean += self.beta * self.step[start:stop]
-                    cov += self.beta * self.cov_step[start:stop, start:stop]
-                    cov = self.get_sym_pos_semidef(cov)
-                    start = start + len(self.state[statename])
+                step = self.optimizer.get_momentum_for_nesterov()
+                if not isinstance(step, (int, float)):
+                    stop  = start + len(self.state[statename])
+                    mean  = mean + step[start:stop]
+                    cov   = cov + self.beta * self.cov_step[start:stop, start:stop]
+                    cov   = self.get_sym_pos_semidef(cov)
+                    start = start + len(self.state[statename]) 
+
             temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
             if self.upper_bound and self.lower_bound:
                 np.clip(temp_state_en, 0, 1, out=temp_state_en)
 
-            state_en[statename] = np.array(
-                [mean]).T + temp_state_en - np.array([np.mean(temp_state_en, 1)]).T
+            state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en,1)]).T
 
         return state_en
 
     def _scale_state(self):
         if self.upper_bound and self.lower_bound:
             for i, key in enumerate(self.state):
-                self.state[key] = (self.state[key] - self.lower_bound[i]) / \
-                    (self.upper_bound[i] - self.lower_bound[i])
+                self.state[key] = (self.state[key] - self.lower_bound[i]) / (self.upper_bound[i] - self.lower_bound[i])
                 np.clip(self.state[key], 0, 1, out=self.state[key])
 
     def _invert_scale_state(self):
         if self.upper_bound and self.lower_bound:
             for i, key in enumerate(self.state):
-                self.state[key] = self.lower_bound[i] + self.state[key] * \
-                    (self.upper_bound[i] - self.lower_bound[i])
+                self.state[key] = self.lower_bound[i] + self.state[key] * (self.upper_bound[i] - self.lower_bound[i])
 
     def save_analysis_debug(self, iteration):
         if 'analysisdebug' in self.keys_opt:
@@ -405,4 +423,12 @@ class EnOpt(PETEnsemble):
                     print(f'Cannot save {save_typ}!\n\n')
 
             # Save the variables
-            np.savez('debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
+            if 'debug_save_folder' in self.keys_opt:
+                folder = self.keys_opt['debug_save_folder']
+            else:
+                folder = './'
+            
+            #Make folder (if it does not exist) 
+            if not os.path.exists(folder):
+                os.mkdir(folder)
+

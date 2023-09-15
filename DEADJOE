@@ -1,0 +1,89 @@
+
+*** These modified files were found in JOE when it aborted on Wed Aug  2 13:29:32 2023
+*** JOE was aborted by UNIX signal 1
+
+*** File '(Unnamed)'
+/home/AD.NORCERESEARCH.NO/mani/PET/.git/COMMIT_EDITMSG
+
+*** File '/home/AD.NORCERESEARCH.NO/mani/PET/.git/COMMIT_EDITMSG'
+Added Adam
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Committer: Mathias Methlie Nilsen <mani@bgo-1504.ad.norceresearch.no>
+#
+# On branch main
+# Your branch is up to date with 'origin/main'.
+#
+# Changes to be committed:
+#	modified:   popt/update_schemes/enopt.py
+#
+# Untracked files:
+#	popt/update_schemes/optimizers.py
+#
+
+*** File '* Startup Log *'
+Processing '/etc/joe/editorrc'...
+Processing '/etc/joe/ftyperc'...
+Finished processing /etc/joe/ftyperc
+Finished processing /etc/joe/editorrc
+
+*** These modified files were found in JOE when it aborted on Wed Aug  2 13:33:07 2023
+*** JOE was aborted by UNIX signal 1
+
+*** File '(Unnamed)'
+/home/AD.NORCERESEARCH.NO/mani/PET/.git/COMMIT_EDITMSG
+
+*** File '/home/AD.NORCERESEARCH.NO/mani/PET/.git/COMMIT_EDITMSG'
+Added Optimizers 
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Committer: Mathias Methlie Nilsen <mani@bgo-1504.ad.norceresearch.no>
+#
+# On branch main
+# Your branch is up to date with 'origin/main'.
+#
+# Changes to be committed:
+#	modified:   popt/update_schemes/enopt.py
+#
+# Untracked files:
+#	DEADJOE
+#	popt/update_schemes/optimizers.py
+#
+
+*** File '* Startup Log *'
+Processing '/etc/joe/editorrc'...
+Processing '/etc/joe/ftyperc'...
+Finished processing /etc/joe/ftyperc
+Finished processing /etc/joe/editorrc
+
+*** These modified files were found in JOE when it aborted on Wed Aug  2 13:34:33 2023
+*** JOE was aborted by UNIX signal 1
+
+*** File '(Unnamed)'
+/home/AD.NORCERESEARCH.NO/mani/PET/.git/COMMIT_EDITMSG
+
+*** File '/home/AD.NORCERESEARCH.NO/mani/PET/.git/COMMIT_EDITMSG'
+Added Optimizers Adam and GradientAscent
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Committer: Mathias Methlie Nilsen <mani@bgo-1504.ad.norceresearch.no>
+#
+# On branch main
+# Your branch is up to date with 'origin/main'.
+#
+# Changes to be committed:
+#	modified:   popt/update_schemes/enopt.py
+#
+# Untracked files:
+#	DEADJOE
+#	popt/update_schemes/optimizers.py
+#
+
+*** File '* Startup Log *'
+Processing '/etc/joe/editorrc'...
+Processing '/etc/joe/ftyperc'...
+Finished processing /etc/joe/ftyperc
+Finished processing /etc/joe/editorrc

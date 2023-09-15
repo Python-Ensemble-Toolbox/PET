@@ -18,8 +18,7 @@ from popt.misc_tools import basic_tools as bt
 # Gets or creates a logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # set log level
-# define file handler and set formatter
-file_handler = logging.FileHandler('log_optim_loops.log')
+file_handler = logging.FileHandler('log_optim_loops.log')  # define file handler and set formatter
 formatter = logging.Formatter('%(asctime)s : %(levelname)s : %(name)s : %(message)s')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)  # add file handler to logger
@@ -49,8 +48,7 @@ class Optimize:
 
             # Check if the pickle save file exists in folder
             assert (self.pickle_restart_file in [f for f in os.listdir('..') if os.path.isfile(f)]), \
-                'The restart file "{0}" does not exist in folder. Cannot restart!'.format(
-                    self.pickle_restart_file)
+                'The restart file "{0}" does not exist in folder. Cannot restart!'.format(self.pickle_restart_file)
 
             # Load restart file
             self.load()
@@ -70,9 +68,6 @@ class Optimize:
         """
         Extract max. iter from ENOPT keyword in OPTIM part if inputted.
 
-        Changelog
-        ---------
-        - ST 4/5-18
         """
         # Default value for max. iterations
         default_max_iter = 50
@@ -105,8 +100,7 @@ class Optimize:
         # Logging output to screen, logger saved to log files.
         start_time = time.perf_counter()
         logger.info('Running optimization loops...')
-        info_str = '{:<10} {:<10} {:<10} {:<10} {:<10}'.format(
-            'iter', 'alpha_iter', 'obj_func', 'alpha', 'cov[0,0]')
+        info_str = '{:<10} {:<10} {:<10} {:<10} {:<10}'.format('iter', 'alpha_iter', 'obj_func', 'alpha', 'cov[0,0]')
         logger.info(info_str)
         info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
             format(self.iteration, 0, np.mean(self.method.obj_func_values), 0, 0)
@@ -123,7 +117,7 @@ class Optimize:
             # Update iteration counter if iteration was successful
             if is_successful is True:
                 self.iteration += 1
-                np.savez('opt_state', **self.method.state)  # save current state
+                np.savez('opt_state',**self.method.state)  # save current state
 
             # Save restart file (if requested)
             if 'restartsave' in self.method.keys_opt and self.method.keys_opt['restartsave'] == 'yes':
@@ -141,20 +135,14 @@ class Optimize:
 
         # Logging some info to screen
         logger.info('Optimization converged in %d iterations ', self.iteration-1)
-        logger.info('Optimization converged with final obj_func = %.2f',
-                    np.mean(self.method.obj_func_values))
-        logger.info('Total number of function evaluations = %d',
-                    self.method.num_func_eval)
-        logger.info('Total elapsed time = %.2f minutes',
-                    (time.perf_counter()-start_time)/60)
+        logger.info('Optimization converged with final obj_func = %.2f', np.mean(self.method.obj_func_values))
+        logger.info('Total number of function evaluations = %d', self.method.num_func_eval)
+        logger.info('Total elapsed time = %.2f minutes', (time.perf_counter()-start_time)/60)
 
     def save(self):
         """
         We use pickle to dump all the information we have in 'self'. Can be used, e.g., if some error has occurred.
 
-        Changelog
-        ---------
-        - ST 28/2-17
         """
         # Open save file and dump all info. in self
         with open(self.pickle_restart_file, 'wb') as f:
@@ -164,9 +152,6 @@ class Optimize:
         """
         Load a pickled file and save all info. in self.
 
-        Changelog
-        ---------
-        - ST 28/2-17
         """
         # Open file and read with pickle
         with open(self.pickle_restart_file, 'rb') as f:
