@@ -429,4 +429,9 @@ class EnOpt(PETEnsemble):
                 os.mkdir(folder)
 
             # Save the variables
-            np.savez('debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
+            np.savez(folder + '/debug_analysis_step_{0}'.format(str(iteration)), **save_dict)
+
+
+
+    
+        
