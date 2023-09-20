@@ -100,10 +100,10 @@ class Optimize:
         # Logging output to screen, logger saved to log files.
         start_time = time.perf_counter()
         logger.info('Running optimization loops...')
-        info_str = '{:<10} {:<10} {:<10} {:<10} {:<10} {:<10}'.format('iter', 'alpha_iter', 'obj_func', 'step-size', 'alpha_dim1', 'beta_dim1')
+        info_str = '{:<10} {:<10} {:<10} {:<10} {:<10} '.format('iter', 'alpha_iter', 'obj_func', 'step-size', 'cov[0,0]')
         logger.info(info_str)
-        info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e} {:<10.2e}'.\
-            format(self.iteration, 0, np.mean(self.method.obj_func_values), 0, 0, 0)
+        info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
+            format(self.iteration, 0, np.mean(self.method.obj_func_values), 0, 0)
         logger.info(info_str_iter)
         self.iteration += 1
 
@@ -117,7 +117,7 @@ class Optimize:
             # Update iteration counter if iteration was successful
             if is_successful is True:
                 self.iteration += 1
-                np.savez('opt_state',self.method.state)  # save current state
+                np.savez('opt_state',**self.method.state)  # save current state
 
             # Save restart file (if requested)
             if 'restartsave' in self.method.keys_opt and self.method.keys_opt['restartsave'] == 'yes':

@@ -1,10 +1,12 @@
 """Ensemble optimisation (steepest descent with ensemble gradient)."""
+
 # External imports
 import numpy as np
 import os
 import sys
 from numpy import linalg as la
 import logging
+from copy import deepcopy
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot, basic_tools as bt
@@ -46,6 +48,11 @@ class EnOpt(PETEnsemble):
         self.alpha_iter = 0  # number of backtracking steps
         self.resamp_iter = 0
         self.num_func_eval = 0  # Total number of function evaluations
+        self.bias_factors = None
+        self.bias_adaptive = None
+        self.bias_weights = np.ones(self.num_samples) / self.num_samples  # initialize with equal weights
+        self.bias_file = None
+        self.bias_points = None
         self._ext_enopt_param()
 
         # Get objective function
@@ -116,6 +123,7 @@ class EnOpt(PETEnsemble):
 
             # Calculate new objective function
             self.state = ot.update_optim_state(aug_state_upd, self.state, list_states)
+            bias_correction = self.bias_correction(self.state)
             self.ne = self.num_models
             self._invert_scale_state()
             if self.num_models > 1:
@@ -125,13 +133,9 @@ class EnOpt(PETEnsemble):
             new_func_values = 0
             if run_success:
                 new_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
+                new_func_values *= bias_correction
 
             if np.mean(new_func_values) - np.mean(self.obj_func_values) > self.obj_func_tol:
-
-                # Iteration was a success
-                improvement = True
-                success = True
-                self.optimizer.restore_parameters()
 
                 # Update objective function values and step
                 self.obj_func_values = new_func_values
@@ -151,6 +155,11 @@ class EnOpt(PETEnsemble):
                 # Update self.alpha in the one-dimensional case
                 if len(aug_state) == 1:
                     self.optimizer.step_size /= 2
+
+                # Iteration was a success
+                improvement = True
+                success = True
+                self.optimizer.restore_parameters()
 
             else:
 
@@ -289,6 +298,13 @@ class EnOpt(PETEnsemble):
             else:  # use Hessian
                 self.hessian = True
 
+            # Check if bias corrections should be used
+            ind_bias_corr = bt.index2d(enopt, 'bias_corr')
+            if ind_bias_corr is not None:  # bias_corr exist
+                self.bias_adaptive = 0  # if this number is larger than zero, then the bias factors are updated for each
+                                        # iteration, based on the given number of samples
+                self.bias_file = str(enopt[ind_bias_corr[0]][ind_bias_corr[1] + 1]).upper()  # mako file for simulations
+
             value_cov = np.array([])
             for name in self.prior_info.keys():
                 self.state[name] = self.prior_info[name]['mean']
@@ -320,6 +336,10 @@ class EnOpt(PETEnsemble):
         that S is an Ns x 1 vector, where Ns is length of the state vector (the objective function is just a scalar!)
         """
 
+        # If bias correction is used we need to temporarily store the initial state
+        if self.bias_file is not None and self.bias_factors is None:  # first iteration
+            initial_state = deepcopy(self.state)  # store this to update current objective values
+
         # Generate ensemble of states
         self.ne = self.num_samples
         nr = 1
@@ -334,18 +354,42 @@ class EnOpt(PETEnsemble):
 
         self._invert_scale_state()
         self.calc_prediction()
-        self._scale_state()
         self.num_func_eval += self.ne
         obj_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
         obj_func_values = np.array(obj_func_values)
 
+        # If bias correction is used we need to calculate the bias factors, J(u_j,m_j)/J(u_j,m)
+        if self.bias_file is not None:  # use bias corrections
+            if self.bias_factors is None:  # first iteration
+                currentfile = self.sim.file
+                self.sim.file = self.bias_file
+                self.ne = self.num_samples
+                self.aux_input = list(np.arange(self.ne))
+                self.num_func_eval += self.ne
+                self.calc_prediction()
+                self.sim.file = currentfile
+                bias_func_values = self.obj_func(self.pred_data, self.keys_opt, self.sim.true_order)
+                bias_func_values = np.array(bias_func_values)
+                self.bias_factors = bias_func_values / obj_func_values
+                self._scale_state()
+                self.bias_points = deepcopy(self.state)
+                self.obj_func_values *= self.bias_correction(initial_state)
+                self.save_analysis_debug(0)
+            elif self.bias_adaptive > 0:  # update factors to account for new information
+                pass  # not implemented yet
+        else:
+            self._scale_state()
+
         # Finally, we calculate the ensemble sensitivity matrix.
-        # First we need to perturb state and obj. func. ensemble with their mean. Note that, obj_func has shape (
-        # ne,)!
+        # First we need to perturb state and obj. func. ensemble with their mean. Note that, obj_func has shape (ne,)!
         list_states = list(self.state.keys())
         aug_state = at.aug_state(self.state, list_states)
         pert_state = aug_state - np.dot(aug_state.mean(1)[:, None], np.ones((1, self.ne)))
-        pert_obj_func = obj_func_values - np.array(np.repeat(self.obj_func_values, nr))
+        if self.bias_file is not None:  # use bias corrections
+            obj_func_values *= self.bias_correction(self.state)
+            pert_obj_func = obj_func_values -  np.mean(obj_func_values)
+        else:
+            pert_obj_func = obj_func_values - np.array(np.repeat(self.obj_func_values, nr))
 
         # Calculate cross-covariance between state and obj. func. which is the ensemble sensitivity matrix
         # self.sens_matrix = at.calc_crosscov(aug_state, obj_func_values)
@@ -359,6 +403,13 @@ class EnOpt(PETEnsemble):
 
         self.cov_sens_matrix = g_c / (self.ne - 1)
         self.sens_matrix = g_m / (self.ne - 1)
+
+    # Calculate bias correction (state is not yet used)
+    def bias_correction(self, state):
+        if self.bias_factors is not None:
+            return np.sum(self.bias_weights * self.bias_factors)
+        else:
+            return 1
 
     def _gen_state_ensemble(self):
 

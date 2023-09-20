@@ -826,11 +826,9 @@ class eclipse:
                 # En_XX/YYYY.DATA is the folder setup
                 rt_mem = int(self.ecl_case.root.split('/')[0].split('_')[1])
                 if rt_mem != member:  # wrong case
-                    self.ecl_case = ecl.EclipseCase('En_' + str(member) + os.sep +
-                                                    self.input_dict['runfile'].upper() + '.DATA')
+                    self.ecl_case = ecl.EclipseCase('En_' + str(member) + os.sep + self.file + '.DATA')
             else:
-                self.ecl_case = ecl.EclipseCase('En_' + str(member) + os.sep + self.input_dict['runfile'].upper()
-                                                + '.DATA')
+                self.ecl_case = ecl.EclipseCase('En_' + str(member) + os.sep + self.file + '.DATA')
             if ext_data_info[0] == 'days':
                 time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
                     dt.timedelta(days=ext_data_info[1])
@@ -853,11 +851,10 @@ class eclipse:
                     if hasattr(self, 'rft_case'):
                         rt_mem = int(self.rft_case.root.split('/')[0].split('_')[1])
                         if rt_mem != member:
-                            self.rft_case = ecl.EclipseRFT('En_' + str(member) + os.sep +
-                                                           self.input_dict['runfile'].upper())
+                            self.rft_case = ecl.EclipseRFT('En_' + str(member) + os.sep + self.file)
                     else:
                         self.rft_case = ecl.EclipseRFT(
-                            'En_' + str(member) + os.sep + self.input_dict['runfile'].upper())
+                            'En_' + str(member) + os.sep + self.file)
                     # Get the data. Due to formating we can slice the property.
                     rft_prop = self.rft_case.rft_data(well=whichResponse.split(
                         ' ')[1], prop=whichResponse.split(' ')[0][4:])
@@ -901,8 +898,7 @@ class eclipse:
             # If we have performed coarsening, we store the number of active grid-cells
             if self.upscale is not None:
                 # Get this number from INIT file
-                with ecl.EclipseFile('En_' + str(member) + os.sep + self.input_dict['runfile'].upper(),
-                                     'INIT') as case:
+                with ecl.EclipseFile('En_' + str(member) + os.sep + self.file, 'INIT') as case:
                     intHead = case.get('INTEHEAD')
                 # The active cell is element 12 of this vector, index 11 in python indexing...
                 active_cells = intHead[11]
@@ -910,7 +906,7 @@ class eclipse:
                     self.num_act.extend([active_cells])
 
         else:
-            case = ecl.EclipseCase(self.input_dict['runfile'].upper() + '.DATA')
+            case = ecl.EclipseCase(self.file + '.DATA')
             if ext_data_info[0] == 'days':
                 time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
                     dt.timedelta(days=ext_data_info[1])
@@ -921,7 +917,7 @@ class eclipse:
             if len(whichResponse.split(' ')) == 2:
                 # if rft, search for rft_
                 if 'rft_' in whichResponse:
-                    rft_case = ecl.EclipseRFT(self.input_dict['runfile'].upper())
+                    rft_case = ecl.EclipseRFT(self.file)
                     # Get the data. Due to formating we can slice the property.
                     rft_prop = rft_case.rft_data(well=whichResponse.split(
                         ' ')[1], prop=whichResponse.split(' ')[0][4:])
@@ -956,8 +952,7 @@ class eclipse:
             # If we have performed coarsening, we store the number of active grid-cells
             if self.upscale is not None:
                 # Get this number from INIT file
-                with ecl.EclipseFile('En_' + str(member) + os.sep + self.input_dict['runfile'].upper(),
-                                     'INIT') as case:
+                with ecl.EclipseFile('En_' + str(member) + os.sep + self.file,'INIT') as case:
                     intHead = case.get('INTEHEAD')
                 # The active cell is element 12 of this vector, index 11 in python indexing...
                 active_cells = intHead[11]
