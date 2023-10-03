@@ -102,7 +102,7 @@ class Optimize:
         logger.info('Running optimization loops...')
         info_str = '{:<10} {:<10} {:<10} {:<10} {:<10} '.format('iter', 'alpha_iter', 'obj_func', 'step-size', 'cov[0,0]')
         logger.info(info_str)
-        info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
+        info_str_iter = '{:<10} {:<10} {:<10.4f} {:<10.2e} {:<10.2e}'.\
             format(self.iteration, 0, np.mean(self.method.obj_func_values), 0, 0)
         logger.info(info_str_iter)
         self.iteration += 1

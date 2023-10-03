@@ -148,7 +148,7 @@ class EnOpt(PETEnsemble):
 
                 # Write logging info
                 if logger is not None:
-                    info_str_iter = '{:<10} {:<10} {:<10.2f} {:<10.2e} {:<10.2e}'.\
+                    info_str_iter = '{:<10} {:<10} {:<10.4f} {:<10.2e} {:<10.2e}'.\
                         format(iteration, self.alpha_iter, np.mean(self.obj_func_values), self.optimizer._step_size, self.cov[0, 0])
                     logger.info(info_str_iter)
 
@@ -189,8 +189,9 @@ class EnOpt(PETEnsemble):
         rtol = 1e-05
         if a.ndim > 1:
             S, U = np.linalg.eigh(a)
-            S = np.clip(S, 0, None) + rtol
-            a = (U*S)@U.T
+            if not np.all(S > 0):
+                S = np.clip(S, 0, None) + rtol
+                a = (U*S)@U.T
         else:
             a = np.maximum(a, rtol)
         return a

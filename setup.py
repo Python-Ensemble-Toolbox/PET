@@ -11,5 +11,5 @@ setup(
     description='Python Ensemble Toolbox',
     install_requires=['numpy', 'scipy', 'matplotlib', 'h5py', 'mako', 'tqdm', 'PyWavelets',
                       'psutil', 'pdoc', 'pytest', 'pandas', 'p_tqdm', 'mat73', 'opencv-python', 'rips', 'tomli',
-                      'tomli-w', 'pyyaml'],
+                      'tomli-w', 'pyyaml', 'libecalc'],
 )
