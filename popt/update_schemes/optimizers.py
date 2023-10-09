@@ -85,7 +85,35 @@ class GradientAscent:
         self.temp_velocity = beta*self.velocity + alpha*gradient
         new_control   = control + self.temp_velocity
         return new_control
-    
+
+    def apply_smc_update(self, control, gradient, **kwargs):
+        """
+        Apply a gradient update to the control parameter.
+
+        Arguments
+        -------------------------------------------------------------------------------------
+            control : 1-D array_like
+                The current value of the parameter being optimized.
+
+            gradient : 1-D array_like (same shape as control)
+                The gradient of the objective function with respect to the control parameter.
+
+            **kwargs : dict
+                Additional keyword arguments.
+
+        Returns
+        -------------------------------------------------------------------------------------
+            1-D array_like (same shape as control).
+            The new value of the control parameter after the update.
+        """
+        alpha = self._step_size
+
+
+        # apply update
+
+        new_control = alpha * control +  (1-alpha) * gradient
+        return new_control
+
     def apply_backtracking(self):
         """
         Apply backtracking by reducing step size and momentum temporarily.
