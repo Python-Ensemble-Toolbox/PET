@@ -132,7 +132,7 @@ class SmcOpt(PETEnsemble):
                 # Update objective function values and step
                 self.obj_func_values = new_func_values
                 self.state = ot.update_optim_state(aug_state_upd, self.state, list_states)
-
+                self._invert_scale_state()
                 # Write logging info
                 if logger is not None:
                     info_str_iter = '{:<10} {:<10} {:<10.4f}  '. \
@@ -411,8 +411,6 @@ class SmcOpt(PETEnsemble):
         for i, statename in enumerate(self.state.keys()):
             mean = self.state[statename]
             cov = cov_blocks[i]
-
-
             temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
             if self.upper_bound and self.lower_bound:
                 np.clip(temp_state_en, 0, 1, out=temp_state_en)
