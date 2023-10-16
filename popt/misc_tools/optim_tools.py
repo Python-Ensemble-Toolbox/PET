@@ -69,11 +69,11 @@ def corr2BlockDiagonal(state, corr):
     Makes the correlation matrix block diagonal.
     The blocks are the state varible types.
 
-    Parameters
+    Parameters:
     ---------------------------------------------
         corr : 2D-array_like, of shape (d, d)
 
-    Returns
+    Returns:
     ---------------------------------------------
         corr_blocks : list of block matrices, one for each variable type
     """

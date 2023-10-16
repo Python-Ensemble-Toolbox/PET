@@ -465,10 +465,10 @@ class GenOpt(PETEnsemble):
 #Some extra functions for GenOpt
 #--------------------------------------------------------------------------------------
 def sample_GaussianCopula(n, corr, marginals, return_Gaussian=False):
-    '''
+    """
     Draws n i.i.d. samples from a Gaussian copula with given marginals.
 
-    Parameters
+    Parameters:
     ----------------------------------------------------------
         n : int
             Number of samples to be drawn.
@@ -484,7 +484,7 @@ def sample_GaussianCopula(n, corr, marginals, return_Gaussian=False):
             If True, the Gaussian ensemble is returned also.
             Default is False
     
-    Returns
+    Returns:
     ----------------------------------------------------------
         out : ndarray, of shape (n, d)
             The ensemble drawn from the Copula
@@ -492,7 +492,7 @@ def sample_GaussianCopula(n, corr, marginals, return_Gaussian=False):
         out : ndarray, of shape (n, d)
             The Gaussian ensemble. Only returned if
             if return_Gaussian is True 
-    '''
+    """
     d = len(marginals)
     Z = np.random.multivariate_normal(mean=np.zeros(d), cov=corr, size=n)
     U = np.zeros_like(Z)
@@ -509,7 +509,7 @@ def fisher_beta(alpha, beta):
     '''
     Calculates the Fisher matrix of a Beta distribution.
     
-    Parameters
+    Parameters:
     ----------------------------------------------
         alpha : float
             alpha parameter in Beta distribution 
@@ -517,7 +517,7 @@ def fisher_beta(alpha, beta):
         beta : float
             beta parameter in Beta distribution
 
-    Returns
+    Returns:
     ----------------------------------------------
         out : 2-D array_like, of shape (2, 2)
             Fisher matrix 
@@ -536,12 +536,12 @@ def delA(a, b):
     Calculates the expression psi(a) - psi(a+b),
     where psi() is the digamma function.
 
-    Parameters
+    Parameters:
     --------------------------------------------
         a : float
         b : float
     
-    Returns
+    Returns:
     --------------------------------------------
         out : float
     '''
@@ -555,7 +555,7 @@ class CMA:
         '''
         This is a rather simple simple CMA class
 
-        Parameters
+        Parameters:
         ----------------------------------------------------------------------------------------------------------
             ne : int
                 Ensemble size
@@ -585,7 +585,7 @@ class CMA:
                 If False, the weighting scheme proposed in [1], where `w_i = log(n_mu + 1)-log(i)`,
                 and normalized such that they sum to one. Defualt is True.
 
-        References
+        References:
         ----------------------------------------------------------------------------------------------------------
             [1] Hansen, N. (2006). The CMA evolution strategy: a comparing review. 
                 In J. Lozano, P. Larranaga, I. Inza & E. Bengoetxea (ed.), Towards a new evolutionary computation. 
@@ -647,7 +647,7 @@ class CMA:
         '''
         Performs the CMA update.
 
-        Parameters
+        Parameters:
         --------------------------------------------------
             cov : 2-D array_like, of shape (d, d)
                 Current covariance or correlation matrix.
@@ -662,7 +662,7 @@ class CMA:
             J : 2-D-array_like, of shape (n,)
                 Objective ensemble of size n.
         
-        Returns
+        Returns:
         --------------------------------------------------
             out : 2-D array_like, of shape (d, d)
                 CMA updated covariance (correlation) matrix.

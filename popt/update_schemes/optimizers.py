@@ -10,7 +10,7 @@ class GradientAscent:
         v_t = beta * v_{t-1} + alpha * gradient\n
         x_t = x_{t-1} + v_t
 
-    Arguments
+    Arguments:
     -----------------------------------------------------------------------------------
         step_size : float
             The step size (learning rate) for the gradient ascent.
@@ -18,7 +18,7 @@ class GradientAscent:
         momentum : float
             The momentum factor to apply during updates.
 
-    Attributes
+    Attributes:
     -----------------------------------------------------------------------------------
         step_size : float
             The initial step size provided during initialization.
@@ -38,7 +38,7 @@ class GradientAscent:
         _momentum : float
             Private attribute for temporarily modifying momentum.
 
-    Methods
+    Methods:
     -----------------------------------------------------------------------------------
         apply_update(control, gradient, **kwargs):
             Apply a gradient update to the control parameter.
@@ -62,7 +62,7 @@ class GradientAscent:
         """
         Apply a gradient update to the control parameter.
 
-        Arguments
+        Arguments:
         -------------------------------------------------------------------------------------
             control : 1-D array_like
                 The current value of the parameter being optimized.
@@ -73,7 +73,7 @@ class GradientAscent:
             **kwargs : dict
                 Additional keyword arguments.
 
-        Returns
+        Returns:
         -------------------------------------------------------------------------------------
             1-D array_like (same shape as control). 
             The new value of the control parameter after the update.
@@ -90,7 +90,7 @@ class GradientAscent:
         """
         Apply a gradient update to the control parameter.
 
-        Arguments
+        Arguments:
         -------------------------------------------------------------------------------------
             control : 1-D array_like
                 The current value of the parameter being optimized.
@@ -101,7 +101,7 @@ class GradientAscent:
             **kwargs : dict
                 Additional keyword arguments.
 
-        Returns
+        Returns:
         -------------------------------------------------------------------------------------
             1-D array_like (same shape as control).
             The new value of the control parameter after the update.
@@ -148,7 +148,7 @@ class Adam:
             v_t_hat = v_t / (1 - β2^t)          \n
             x_{t+1} = x_t - α * m_t_hat / (sqrt(v_t_hat) + ε)
 
-        Arguments
+        Arguments:
         -------------------------------------------------------------------------------------
             step_size : float
                 The step size (learning rate) for the optimization.
@@ -159,7 +159,7 @@ class Adam:
             beta2 : float, optional
                 The exponential decay rate for the second moment estimates (default is 0.999).
 
-        Attributes
+        Attributes:
         -------------------------------------------------------------------------------------
             step_size : float
                 The initial step size provided during initialization.
@@ -188,7 +188,7 @@ class Adam:
             temp_vel2 : 1-D array_like
                 Temporary Second moment estimate.
 
-        Methods
+        Methods:
         -------------------------------------------------------------------------------------
             apply_update(control, gradient, **kwargs):
                 Apply an Adam update to the control parameter.
@@ -199,7 +199,7 @@ class Adam:
             restore_parameters():
                 Restore the original step size.
 
-        References
+        References:
         -------------------------------------------------------------------------------------
             [1] Kingma, D. P., & Ba, J. (2014).
                 Adam: A Method for Stochastic Optimization.
@@ -221,7 +221,7 @@ class Adam:
         """
         Apply a gradient update to the control parameter.
 
-        Arguments
+        Arguments:
         -------------------------------------------------------------------------------------
             control : 1-D array_like
                 The current value of the parameter being optimized.
@@ -232,7 +232,7 @@ class Adam:
             **kwargs : dict
                 Additional keyword arguments, including 'iter' for the current iteration.
 
-        Returns
+        Returns:
         -------------------------------------------------------------------------------------
             1-D array_like (same shape as control). 
             The new value of the control parameter after the update.
