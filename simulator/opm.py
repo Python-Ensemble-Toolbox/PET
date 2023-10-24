@@ -44,6 +44,8 @@ class flow(eclipse):
                 if self.options['mpi']:
                     com.extend(self.options['mpi'].split())
                 com.append(self.options['sim_path'] + 'flow')
+                if self.options['parsing-strictness']:
+                    com.extend(['--parsing-strictness=' + self.options['parsing-strictness']])
                 com.extend(['--output-dir=' + folder, *
                            self.options['sim_flag'].split(), filename + '.DATA'])
                 if 'sim_limit' in self.options:
