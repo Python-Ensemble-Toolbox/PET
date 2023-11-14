@@ -12,7 +12,7 @@ class SmcOpt(Optimize):
     TODO: Write docstring ala EnOpt
     """
 
-    def __init__(self, fun, x, sens, bounds=None, **options):
+    def __init__(self, fun, x, args, sens, bounds=None, **options):
         """
         Parameters
         ----------
@@ -48,6 +48,7 @@ class SmcOpt(Optimize):
         self.bounds = bounds  # parameter bounds
         self.mean_state = x  # initial mean state
         self.best_state = None  # best ensemble member
+        self.cov = args[0]  # covariance matrix for sampling
 
         # Set other optimization parameters
         self.obj_func_tol = __set__variable('obj_func_tol', 1e-6)
@@ -55,6 +56,7 @@ class SmcOpt(Optimize):
         self.alpha_iter_max = __set__variable('alpha_maxiter', 5)
         self.max_resample = __set__variable('resample', 0)
         self.cov_factor = __set__variable('cov_factor', 0.5)
+        self.inflation_factor= __set__variable('cov_factor', 1)
 
         # Calculate objective function of startpoint
         if not self.restart:
@@ -83,12 +85,15 @@ class SmcOpt(Optimize):
         improvement = False
         success = False
         resampling_iter = 0
-        inflate = 2 * (self.cov_factor + self.iteration)
+        inflate = 2 * (self.inflation_factor + self.iteration)
 
         while improvement is False:  # resampling loop
 
+            # Shrink covariance each time we try resampling
+            shrink = self.cov_factor ** resampling_iter
+
             # Calc sensitivity
-            (sens_matrix, self.best_state, best_func_tmp) = self.sens(self.mean_state, inflate)
+            (sens_matrix, self.best_state, best_func_tmp) = self.sens(self.mean_state, inflate, shrink*self.cov)
             self.njev += 1
 
             # Initialize for this step

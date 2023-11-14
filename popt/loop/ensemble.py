@@ -313,9 +313,10 @@ class Ensemble(PETEnsemble):
         # Set the ensemble state equal to the input control vector x
         self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
 
-        # Set the covariance equal to the input
+        # Set the inflation factor and covariance equal to the input
         self.inflation_factor = args[0]
-
+        self.cov = args[1]
+        
         # If bias correction is used we need to temporarily store the initial state
         initial_state = None
         if self.bias_file is not None and self.bias_factors is None:  # first iteration
