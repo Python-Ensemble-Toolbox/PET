@@ -1,22 +1,15 @@
 import numpy as np
 
+
 class GradientAscent:
-
-    def __init__(self, step_size, momentum):
-        """
+    r"""
     A class for performing gradient ascent optimization with momentum and backtracking.
-    The gradient ascent update equation with momentum is given by:
+    The gradient descent update equation with momentum is given by:
 
-        v_t = beta * v_{t-1} + alpha * gradient\n
-        x_t = x_{t-1} + v_t
+    .. math::
+        v_t = \beta * v_{t-1} + \alpha * gradient
 
-    Arguments
-    -----------------------------------------------------------------------------------
-        step_size : float
-            The step size (learning rate) for the gradient ascent.
-
-        momentum : float
-            The momentum factor to apply during updates.
+        x_t = x_{t-1} - v_t
 
     Attributes
     -----------------------------------------------------------------------------------
@@ -26,10 +19,10 @@ class GradientAscent:
         momentum : float
             The initial momentum factor provided during initialization.
 
-        velocity : 1-D array_like
+        velocity : array_like
             Current velocity of the optimization process.
 
-        temp_velocity : 1-D array_like
+        temp_velocity : array_like
             Temporary velocity
 
         _step_size : float
@@ -50,6 +43,17 @@ class GradientAscent:
             Restore the original step size and momentum values.
     """
 
+    def __init__(self, step_size, momentum):
+        r"""
+        Arguments
+        -----------------------------------------------------------------------------------
+            step_size : float
+                The step size (learning rate) for the gradient ascent.
+
+            momentum : float
+                The momentum factor to apply during updates.
+        """
+
         self.step_size = step_size
         self.momentum  = momentum
         self.velocity  = 0
@@ -61,13 +65,14 @@ class GradientAscent:
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
+        NOTE: This is the steepest decent update: x_new = x_old - x_step.
 
         Arguments
         -------------------------------------------------------------------------------------
-            control : 1-D array_like
+            control : array_like
                 The current value of the parameter being optimized.
 
-            gradient : 1-D array_like (same shape as control)
+            gradient : array_like
                 The gradient of the objective function with respect to the control parameter.
 
             **kwargs : dict
@@ -75,16 +80,16 @@ class GradientAscent:
 
         Returns
         -------------------------------------------------------------------------------------
-            1-D array_like (same shape as control). 
-            The new value of the control parameter after the update.
+            new_control, temp_velocity: tuple
+                The new value of the control parameter after the update, and the current state step.
         """
         alpha = self._step_size
         beta  = self._momentum
 
-        #apply update
+        # apply update
         self.temp_velocity = beta*self.velocity + alpha*gradient
-        new_control   = control + self.temp_velocity
-        return new_control
+        new_control   = control - self.temp_velocity
+        return new_control, self.temp_velocity
 
     def apply_smc_update(self, control, gradient, **kwargs):
         """
@@ -92,10 +97,10 @@ class GradientAscent:
 
         Arguments
         -------------------------------------------------------------------------------------
-            control : 1-D array_like
+            control : array_like
                 The current value of the parameter being optimized.
 
-            gradient : 1-D array_like (same shape as control)
+            gradient : array_like
                 The gradient of the objective function with respect to the control parameter.
 
             **kwargs : dict
@@ -103,15 +108,13 @@ class GradientAscent:
 
         Returns
         -------------------------------------------------------------------------------------
-            1-D array_like (same shape as control).
-            The new value of the control parameter after the update.
+            new_control: numpy.ndarray
+                The new value of the control parameter after the update.
         """
         alpha = self._step_size
 
-
         # apply update
-
-        new_control = alpha * control +  (1-alpha) * gradient
+        new_control = alpha * control + (1-alpha) * gradient
         return new_control
 
     def apply_backtracking(self):
@@ -130,11 +133,70 @@ class GradientAscent:
         self._momentum  = self.momentum
     
     def get_momentum_for_nesterov(self):
-        return self.momentum*self.velocity
-        
+        return self.momentum * self.velocity
+
+    def get_step_size(self):
+        return self._step_size
 
 
 class Adam:
+    """
+    A class implementing the Adam optimizer for gradient-based optimization.
+    The Adam update equation for the control x using gradient g,
+    iteration t, and small constants ε is given by:
+
+        m_t = β1 * m_{t-1} + (1 - β1) * g   \n
+        v_t = β2 * v_{t-1} + (1 - β2) * g^2 \n
+        m_t_hat = m_t / (1 - β1^t)          \n
+        v_t_hat = v_t / (1 - β2^t)          \n
+        x_{t+1} = x_t - α * m_t_hat / (sqrt(v_t_hat) + ε)
+
+    Attributes
+    -------------------------------------------------------------------------------------
+        step_size : float
+            The initial step size provided during initialization.
+
+        beta1 : float
+            The exponential decay rate for the first moment estimates.
+
+        beta2 : float
+            The exponential decay rate for the second moment estimates.
+
+        vel1 : 1-D array_like
+            First moment estimate.
+
+        vel2 : 1-D array_like
+            Second moment estimate.
+
+        eps : float
+            Small constant to prevent division by zero.
+
+        _step_size : float
+            Private attribute for temporarily modifying step size.
+
+        temp_vel1 : 1-D array_like
+            Temporary first moment estimate.
+
+        temp_vel2 : 1-D array_like
+            Temporary Second moment estimate.
+
+    Methods
+    -------------------------------------------------------------------------------------
+        apply_update(control, gradient, **kwargs):
+            Apply an Adam update to the control parameter.
+
+        apply_backtracking():
+            Apply backtracking by reducing step size temporarily.
+
+        restore_parameters():
+            Restore the original step size.
+
+    References
+    -------------------------------------------------------------------------------------
+        [1] Kingma, D. P., & Ba, J. (2014).
+            Adam: A Method for Stochastic Optimization.
+            arXiv preprint arXiv:1412.6980.
+    """
 
     def __init__(self, step_size, beta1=0.9, beta2=0.999):
         """
@@ -159,51 +221,6 @@ class Adam:
             beta2 : float, optional
                 The exponential decay rate for the second moment estimates (default is 0.999).
 
-        Attributes
-        -------------------------------------------------------------------------------------
-            step_size : float
-                The initial step size provided during initialization.
-
-            beta1 : float
-                The exponential decay rate for the first moment estimates.
-
-            beta2 : float
-                The exponential decay rate for the second moment estimates.
-
-            vel1 : 1-D array_like
-                First moment estimate.
-
-            vel2 : 1-D array_like
-                Second moment estimate.
-
-            eps : float
-                Small constant to prevent division by zero.
-
-            _step_size : float
-                Private attribute for temporarily modifying step size.
-
-            temp_vel1 : 1-D array_like
-                Temporary first moment estimate.
-
-            temp_vel2 : 1-D array_like
-                Temporary Second moment estimate.
-
-        Methods
-        -------------------------------------------------------------------------------------
-            apply_update(control, gradient, **kwargs):
-                Apply an Adam update to the control parameter.
-
-            apply_backtracking():
-                Apply backtracking by reducing step size temporarily.
-
-            restore_parameters():
-                Restore the original step size.
-
-        References
-        -------------------------------------------------------------------------------------
-            [1] Kingma, D. P., & Ba, J. (2014).
-                Adam: A Method for Stochastic Optimization.
-                arXiv preprint arXiv:1412.6980.
         """
         self.step_size = step_size
         self.beta1 = beta1
@@ -216,17 +233,17 @@ class Adam:
         self.temp_vel1 = 0
         self.temp_vel2 = 0
 
-
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
+        NOTE: This is the steepest decent update: x_new = x_old - x_step.
 
         Arguments
         -------------------------------------------------------------------------------------
-            control : 1-D array_like
+            control : array_like
                 The current value of the parameter being optimized.
 
-            gradient : 1-D array_like (same shape as control)
+            gradient : array_like
                 The gradient of the objective function with respect to the control parameter.
 
             **kwargs : dict
@@ -234,8 +251,8 @@ class Adam:
 
         Returns
         -------------------------------------------------------------------------------------
-            1-D array_like (same shape as control). 
-            The new value of the control parameter after the update.
+            new_control, temp_velocity: tuple
+                The new value of the control parameter after the update, and the current state step.
         """
         iter  = kwargs['iter'] 
         alpha = self._step_size
@@ -247,8 +264,9 @@ class Adam:
         vel1_hat  = self.temp_vel1/(1-beta1**iter)
         vel2_hat  = self.temp_vel2/(1-beta2**iter)
 
-        new_control = control + alpha*vel1_hat/(np.sqrt(vel2_hat)+self.eps)
-        return new_control
+        step = alpha*vel1_hat/(np.sqrt(vel2_hat)+self.eps)
+        new_control = control - step  # steepest decent
+        return new_control, step
 
     def apply_backtracking(self):
         """
@@ -263,3 +281,6 @@ class Adam:
         self.vel1 = self.temp_vel1
         self.vel2 = self.temp_vel2
         self._step_size = self.step_size
+
+    def get_step_size(self):
+        return self._step_size

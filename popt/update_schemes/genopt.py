@@ -473,7 +473,7 @@ def sample_GaussianCopula(n, corr, marginals, return_Gaussian=False):
         n : int
             Number of samples to be drawn.
         
-        corr : 2D-array_like, of shape (d, d)
+        corr : array_like, of shape (d, d)
             Correlation matrix of Gaussian Copula
         
         marginals : list[rv_continuous_frozen]
@@ -519,7 +519,7 @@ def fisher_beta(alpha, beta):
 
     Returns
     ----------------------------------------------
-        out : 2-D array_like, of shape (2, 2)
+        out : array_like, of shape (2, 2)
             Fisher matrix 
     '''
     a = alpha
@@ -649,22 +649,22 @@ class CMA:
 
         Parameters
         --------------------------------------------------
-            cov : 2-D array_like, of shape (d, d)
+            cov : array_like, of shape (d, d)
                 Current covariance or correlation matrix.
             
-            step : 1-D array_like, of shape (d,) 
+            step : array_like, of shape (d,)
                 New step of control vector.
                 Used to update the evolution path.
 
-            X : 2-D array_like, of shape (n, d)
+            X : array_like, of shape (n, d)
                 Control ensemble of size n.
             
-            J : 2-D-array_like, of shape (n,)
+            J : array_like, of shape (n,)
                 Objective ensemble of size n.
         
         Returns
         --------------------------------------------------
-            out : 2-D array_like, of shape (d, d)
+            out : array_like, of shape (d, d)
                 CMA updated covariance (correlation) matrix.
         '''
         a_mu  = self.alpha_mu

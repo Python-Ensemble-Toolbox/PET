@@ -8,7 +8,7 @@ def npv(pred_data, keys_opt, report):
 
     Parameters
     ----------
-    pred_data_en : array_like
+    pred_data : array_like
         Ensemble of predicted data.
 
     keys_opt : list
@@ -19,7 +19,7 @@ def npv(pred_data, keys_opt, report):
 
     Returns
     -------
-    objective_values : array_like
+    objective_values : numpy.ndarray
         Objective function values (NPV) for all ensemble members.
     """
 
@@ -45,4 +45,4 @@ def npv(pred_data, keys_opt, report):
 
     object_scaling = keys_opt['npv_const'][5][1]
     values = sum(values) / object_scaling
-    return values
+    return np.array(values)

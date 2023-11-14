@@ -74,6 +74,7 @@ def ecalc_npv(pred_data, keys_opt, report):
     N = Qop.shape[0]
     T = Qop.shape[1]
     values = []
+    em_values = []
     for n in range(N):
         with open('ecalc_input.csv', 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',')
@@ -98,11 +99,13 @@ def ecalc_npv(pred_data, keys_opt, report):
         emissions_total = emissions.sum(1).rename("emissions_total")
         emissions_total.to_csv(HERE / "emissions.csv")
         Qem = emissions_total.values * Dd  # total number of tons
+        em_values.append(Qem)
 
         value = (Qop[n, :] * wop + Qgp[n, :] * wgp - Qwp[n, :] * wwp - Qwi[n, :] * wwi - Qem * wem) / (
             (1 + disc) ** (Dd / 365))
         values.append(np.sum(value))
 
+    np.savez('em_values.npz', em_values=np.array(em_values))
     return np.array(values) / object_scaling
 
 

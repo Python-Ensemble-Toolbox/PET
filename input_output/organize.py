@@ -6,10 +6,10 @@ import datetime as dt
 
 
 class Organize_input():
-    def __init__(self, keys_pr, keys_fwd):
+    def __init__(self, keys_pr, keys_fwd, keys_en=None):
         self.keys_pr = keys_pr
         self.keys_fwd = keys_fwd
-        self.keys_en = None
+        self.keys_en = keys_en
 
     def organize(self):
         # Organize the data types given by DATATYPE keyword
