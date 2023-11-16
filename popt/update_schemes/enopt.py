@@ -1,6 +1,7 @@
 # External imports
 import numpy as np
 from numpy import linalg as la
+import time
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
@@ -92,6 +93,7 @@ class EnOpt(Optimize):
 
         # Calculate objective function of startpoint
         if not self.restart:
+            self.start_time = time.perf_counter()
             self.obj_func_values = self.fun(self.mean_state)
             self.nfev += 1
             self.optimize_result = ot.get_optimize_result(self)

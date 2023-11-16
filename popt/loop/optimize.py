@@ -6,11 +6,12 @@ import time
 import pickle
 
 # Gets or creates a logger
-logging.basicConfig(level=logging.INFO, filename='pet_logger.log', filemode='a',
-                    format='%(asctime)s : %(levelname)s : %(name)s : %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
-logger = logging.getLogger('PET.POPT')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # set log level
+file_handler = logging.FileHandler('popt.log')  # define file handler and set formatter
 formatter = logging.Formatter('%(asctime)s : %(levelname)s : %(name)s : %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)  # add file handler to logger
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
@@ -133,9 +134,6 @@ class Optimize:
             if self.pickle_restart_file in [f for f in os.listdir('.') if os.path.isfile(f)]:
                 os.remove(self.pickle_restart_file)
 
-            # Logging output to screen, logger saved to log files.
-            self.start_time = time.perf_counter()
-
             self.iteration += 1
 
         # Run a while loop until max iterations or convergence is reached
@@ -162,7 +160,8 @@ class Optimize:
                     np.mean(self.optimize_result['fun']))
         logger.info('       Total number of function evaluations = %d', self.optimize_result['nfev'])
         logger.info('       Total number of jacobi evaluations = %d', self.optimize_result['njev'])
-        logger.info('       Total elapsed time = %.2f minutes', (time.perf_counter()-self.start_time)/60)
+        if self.start_time is not None:
+            logger.info('       Total elapsed time = %.2f minutes', (time.perf_counter()-self.start_time)/60)
 
     def save(self):
         """

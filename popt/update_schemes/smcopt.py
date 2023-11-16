@@ -1,5 +1,6 @@
 # External imports
 import numpy as np
+import time
 
 # Internal imports
 from popt.loop.optimize import Optimize
@@ -60,6 +61,7 @@ class SmcOpt(Optimize):
 
         # Calculate objective function of startpoint
         if not self.restart:
+            self.start_time = time.perf_counter()
             self.obj_func_values = self.fun(self.mean_state)
             self.best_func = np.mean(self.obj_func_values)
             self.nfev += 1
