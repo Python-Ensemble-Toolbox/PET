@@ -82,7 +82,7 @@ class Ensemble(PETEnsemble):
                 self.lower_bound.append(lb)
                 self.upper_bound.append(ub)
                 if self.transform:
-                    value_cov = value_cov / (ub - lb)
+                    value_cov = value_cov / (ub - lb)**2
                     np.clip(value_cov, 0, 1, out=value_cov)
                     self.bounds += num_state_var*[(0, 1)]
                 else:
@@ -302,7 +302,7 @@ class Ensemble(PETEnsemble):
                 Control vector, shape (number of controls, )
 
             args : tuple
-                Covarice (:math:`C_x`), shape (number of controls, number of controls)
+                Inflation factor and covarice (:math:`C_x`), shape (number of controls, number of controls)
 
         Returns
         -------

@@ -56,7 +56,7 @@ class SmcOpt(Optimize):
         self.alpha_iter_max = __set__variable('alpha_maxiter', 5)
         self.max_resample = __set__variable('resample', 0)
         self.cov_factor = __set__variable('cov_factor', 0.5)
-        self.inflation_factor= __set__variable('cov_factor', 1)
+        self.inflation_factor = __set__variable('inflation_factor', 1)
 
         # Calculate objective function of startpoint
         if not self.restart:
