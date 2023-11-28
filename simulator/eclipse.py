@@ -30,7 +30,7 @@ class eclipse:
 
     def __init__(self, input_dict=None, filename=None, options=None):
         """
-        The inputs are all optional, however, in the same fashion as the other simulators a system must be followed.
+        The inputs are all optional, but in the same fashion as the other simulators a system must be followed.
         The input_dict can be utilized as a single input. Here all nescessary info is stored. Alternatively,
         if input_dict is not defined, all the other input variables must be defined.
 
