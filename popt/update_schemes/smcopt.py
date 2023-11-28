@@ -1,6 +1,7 @@
 # External imports
 import numpy as np
 import time
+import pprint
 
 # Internal imports
 from popt.loop.optimize import Optimize
@@ -31,6 +32,19 @@ class SmcOpt(Optimize):
 
             options: dict
                 Optimization options
+
+                - maxiter: maximum number of iterations (default 10)
+                - restart: restart optimization from a restart file (default false)
+                - restartsave: save a restart file after each successful iteration (defalut false)
+                - tol: convergence tolerance for the objective function (default 1e-6)
+                - alpha: weight between previous and new step (default 0.1)
+                - alpha_maxiter: maximum number of backtracing trials (default 5)
+                - resample: number indicating how many times resampling is tried if no improvement is found
+                - cov_factor: factor used to shrink the covariance for each resampling trial (defalut 0.5)
+                - inflation_factor: term used to weight down prior influence (defalult 1)
+                - savedata: specify which class variables to save to the result files (state, objective function
+                            value, iteration number, number of function evaluations, and number of gradient
+                            evaluations, are always saved)
         """
 
         # init PETEnsemble
@@ -68,7 +82,8 @@ class SmcOpt(Optimize):
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
             if self.logger is not None:
-                self.logger.info('       Running optimization...')
+                self.logger.info('       ====== Running optimization - SmcOpt ======')
+                self.logger.info('\n' + pprint.pformat(self.options))
                 info_str = '       {:<10} {:<10} {:<15} {:<15} '.format('iter', 'alpha_iter',
                                                                            'obj_func', 'step-size')
                 self.logger.info(info_str)

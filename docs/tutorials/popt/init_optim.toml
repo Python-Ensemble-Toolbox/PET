@@ -1,0 +1,54 @@
+[ensemble]
+disable_tqdm = true
+ne = 10
+state = ["injbhp","prodbhp"]
+prior_injbhp = [
+    ["mean","init_injbhp.npz"],
+    ["var",6250.0],
+    ["limits",100.0,500.0]
+]
+prior_prodbhp = [
+    ["mean","init_prodbhp.npz"],
+    ["var",6250.0,],
+    ["limits",20.0,300.0]
+]
+num_models = 1
+transform = true
+
+[optim]
+maxiter = 5
+tol = 1e-06
+alpha = 0.2
+beta = 0.1
+alpha_maxiter = 3
+resample = 0
+optimizer = 'GA'
+nesterov = true
+restartsave = true
+restart = false
+hessian = false
+inflation_factor = 10
+savedata = ["alpha","obj_func_values"]
+
+[fwdsim]
+npv_const = [
+    ["wop",283.05],
+    ["wgp",0.0],
+    ["wwp",37.74],
+    ["wwi",12.58],
+    ["disc",0.08],
+    ["obj_scaling",-1.0e6]
+]
+parallel = 5
+simoptions = ['sim_flag', '--parsing-strictness=low']
+runfile = "3well"
+reportpoint = [
+    1994-02-09 00:00:00,
+    1995-01-01 00:00:00,
+    1996-01-01 00:00:00,
+    1997-01-01 00:00:00,
+    1998-01-01 00:00:00,
+    1999-01-01 00:00:00,
+]
+reporttype = "dates"
+datatype = ["fopt","fgpt","fwpt","fwit"]

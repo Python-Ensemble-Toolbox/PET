@@ -14,6 +14,13 @@ def npv(pred_data, keys_opt, report):
     keys_opt : list
         Keys with economic data.
 
+            - wop: oil price
+            - wgp: gas price
+            - wwp: water production cost
+            - wwi: water injection cost
+            - disc: discount factor
+            - obj_scaling: used to scale the objective function (negative since all methods are minimizers)
+
     report : list
         Report dates.
 

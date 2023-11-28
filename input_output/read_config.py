@@ -377,6 +377,7 @@ def check_mand_keywords_en(keys_en):
 
     # Mandatory keywords in ENSEMBLE
     assert 'ne' in keys_en, 'NE not in ENSEMBLE!'
+    assert 'state' in keys_en, 'STATE not in ENSEMBLE!'
 
 
 def change_file_extension(filename, new_extension):

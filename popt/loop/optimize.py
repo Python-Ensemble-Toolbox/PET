@@ -162,6 +162,7 @@ class Optimize:
         logger.info('       Total number of jacobi evaluations = %d', self.optimize_result['njev'])
         if self.start_time is not None:
             logger.info('       Total elapsed time = %.2f minutes', (time.perf_counter()-self.start_time)/60)
+        logger.info('       ============================================')
 
     def save(self):
         """

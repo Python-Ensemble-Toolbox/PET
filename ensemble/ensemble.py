@@ -109,6 +109,12 @@ class Ensemble:
             else:
                 self.sim_limit = float('inf')
 
+            # bool that can be used to supress tqdm output (useful when testing code)
+            if 'disable_tqdm' in self.keys_en:
+                self.disable_tqdm = self.keys_en['disable_tqdm']
+            else:
+                self.disable_tqdm = False
+
             # extract information that is given for the prior model
             self._ext_prior_info()
 
@@ -546,7 +552,7 @@ class Ensemble:
 
             # Run prediction in parallel using p_map
             en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                            list_member_index, num_cpus=no_tot_run)
+                            list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
 
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
@@ -673,7 +679,7 @@ class Ensemble:
 
             # Run prediction in parallel using p_map
             en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                            list_member_index, num_cpus=no_tot_run)
+                            list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
 
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]

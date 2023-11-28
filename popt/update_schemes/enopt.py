@@ -2,6 +2,7 @@
 import numpy as np
 from numpy import linalg as la
 import time
+import pprint
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
@@ -55,6 +56,23 @@ class EnOpt(Optimize):
 
             options: dict
                 Optimization options
+
+                    - maxiter: maximum number of iterations (default 10)
+                    - restart: restart optimization from a restart file (default false)
+                    - restartsave: save a restart file after each successful iteration (defalut false)
+                    - tol: convergence tolerance for the objective function (default 1e-6)
+                    - alpha: step size for the steepest decent method (default 0.1)
+                    - beta: momentum coefficient for running accelerated optimization (default 0.0)
+                    - alpha_maxiter: maximum number of backtracing trials (default 5)
+                    - resample: number indicating how many times resampling is tried if no improvement is found
+                    - optimizer: 'GA' (gradient accent) or Adam (default 'GA')
+                    - nesterov: use Nesterov acceleration if true (default false)
+                    - hessian: use Hessian approximation (if the algorithm permits use of Hessian) (default false)
+                    - normalize: normalize the gradient if true (default true)
+                    - cov_factor: factor used to shrink the covariance for each resampling trial (defalut 0.5)
+                    - savedata: specify which class variables to save to the result files (state, objective function
+                                value, iteration number, number of function evaluations, and number of gradient
+                                evaluations, are always saved)
         """
 
         # init PETEnsemble
@@ -99,7 +117,8 @@ class EnOpt(Optimize):
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
             if self.logger is not None:
-                self.logger.info('       Running optimization...')
+                self.logger.info('       ====== Running optimization - EnOpt ======')
+                self.logger.info('\n'+pprint.pformat(self.options))
                 info_str = '       {:<10} {:<10} {:<15} {:<15} {:<15} '.format('iter', 'alpha_iter',
                                                                         'obj_func', 'step-size', 'cov[0,0]')
                 self.logger.info(info_str)

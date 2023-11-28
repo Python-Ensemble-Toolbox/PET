@@ -40,6 +40,13 @@ class Ensemble(PETEnsemble):
         keys_en : dict
             Options for the ensemble class
 
+            - disable_tqdm: supress tqdm progress bar for clean output in the notebook
+            - ne: number of perturbations used to compute the gradient
+            - state: name of state variables passed to the .mako file
+            - prior_<name>: the prior information the state variables, including mean, variance and variable limits
+            - num_models: number of models (if robust optimization) (default 1)
+            - transform: transform variables to [0,1] if true (default true)
+
         sim : callable
             The forward simulator (e.g. flow)
 
