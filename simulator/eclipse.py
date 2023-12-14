@@ -26,39 +26,41 @@ class eclipse:
     ECLIPSE reference manual 2009.1. Schlumberger, GeoQuest (2009).
 
     To run this class, eclipse must be installed and elcrun must be in the system path!
-
-    Changelog
-    ---------
-    - KF 11/9-2015
     """
 
     def __init__(self, input_dict=None, filename=None, options=None):
         """
-        The inputs are all optional, however, in the same fashion as the other simulators a system must be followed. The
-        input_dict can be utilized as a single input. Here all nescessary info is stored. Alternatively, if input_dict
-        is not defined, all the other input variables must be defined.
+        The inputs are all optional, but in the same fashion as the other simulators a system must be followed.
+        The input_dict can be utilized as a single input. Here all nescessary info is stored. Alternatively,
+        if input_dict is not defined, all the other input variables must be defined.
 
         Parameters
         ----------
         input_dict : dict, optional
             Dictionary containing all information required to run the simulator.
 
+                - parallel: number of forward simulations run in parallel
+                - simoptions: options for the simulations
+                    - mpi: option to use mpi (always use > 2 cores)
+                    - sim_path: Path to the simulator
+                    - sim_flag: Flags sent to the simulator (see simulator documentation for all possibilities)
+                - sim_limit: maximum number of seconds a simulation can run before being killed
+                - runfile: name of the simulation input file
+                - reportpoint: these are the dates the simulator reports results
+                - reporttype: this key states that the report poins are given as dates
+                - datatype: the data types the simulator reports
+
         filename : str, optional
-            Name of the .mako file utilized to generate the ECL input .DATA file. Must be in uppercase for the ECL simulator.
+            Name of the .mako file utilized to generate the ECL input .DATA file. Must be in uppercase for the
+            ECL simulator.
 
         options : dict, optional
             Dictionary with options for the simulator.
-            - 'sim_path' : str
-                Path to the simulator.
 
         Returns
         -------
         initial_object : object
             Initial object from the class ecl_100.
-
-        Changelog
-        ---------
-        - KF 11/9-2015
         """
 
         # IN

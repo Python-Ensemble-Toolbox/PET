@@ -35,15 +35,9 @@ def ecalc_npv(pred_data, keys_opt, report):
     """
 
     # Economic values
-    wop = keys_opt['npv_const'][0][1]
-    wgp = keys_opt['npv_const'][1][1]
-    wwp = keys_opt['npv_const'][2][1]
-    wwi = keys_opt['npv_const'][3][1]
-    wem = keys_opt['npv_const'][4][1]
-    disc = keys_opt['npv_const'][5][1]
-
-    # Objective scaling
-    object_scaling = keys_opt['npv_const'][6][1]
+    npv_const = {}
+    for name, value in keys_opt['npv_const']:
+        npv_const[name] = value
 
     # Collect production data
     Qop = []
@@ -74,6 +68,7 @@ def ecalc_npv(pred_data, keys_opt, report):
     N = Qop.shape[0]
     T = Qop.shape[1]
     values = []
+    em_values = []
     for n in range(N):
         with open('ecalc_input.csv', 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',')
@@ -98,12 +93,20 @@ def ecalc_npv(pred_data, keys_opt, report):
         emissions_total = emissions.sum(1).rename("emissions_total")
         emissions_total.to_csv(HERE / "emissions.csv")
         Qem = emissions_total.values * Dd  # total number of tons
+        em_values.append(Qem)
 
-        value = (Qop[n, :] * wop + Qgp[n, :] * wgp - Qwp[n, :] * wwp - Qwi[n, :] * wwi - Qem * wem) / (
-            (1 + disc) ** (Dd / 365))
+        value = (Qop[n, :] * npv_const['wop'] + Qgp[n, :] * npv_const['wgp'] - Qwp[n, :] * npv_const['wwp'] -
+                 Qwi[n, :] * npv_const['wwi'] - Qem * npv_const['wem']) / (
+            (1 + npv_const['disc']) ** (Dd / 365))
         values.append(np.sum(value))
 
-    return np.array(values) / object_scaling
+    # Save emissions for later analysis
+    np.savez('em_values.npz', em_values=np.array(em_values))
+
+    if 'obj_scaling' in npv_const:
+        return np.array(values) / npv_const['obj_scaling']
+    else:
+        return np.array(values)
 
 
 def results_as_df(yaml_model, results, getter) -> pd.DataFrame:

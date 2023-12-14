@@ -24,14 +24,10 @@ def ren_npv(pred_data, keys_opt, report):
         Objective function values (NPV) for all ensemble members.
     """
 
-    # Get economic values
-    wop = keys_opt['npv_const'][0][1]
-    wgp = keys_opt['npv_const'][1][1]
-    wwp = keys_opt['npv_const'][2][1]
-    wwi = keys_opt['npv_const'][3][1]
-    wrenwi = keys_opt['npv_const'][4][1]
-    disc = keys_opt['npv_const'][5][1]
-    object_scaling = keys_opt['npv_const'][6][1]
+    # Economic values
+    npv_const = {}
+    for name, value in keys_opt['npv_const']:
+        npv_const[name] = value
 
     # Loop over timesteps
     values = []
@@ -56,10 +52,14 @@ def ren_npv(pred_data, keys_opt, report):
 
         delta_days = (report[1][i] - report[1][i - 1]).days
 
-        val = (Qop * wop + Qgp * wgp - Qwp * wwp - Qwi * wwi - Qrenwi * wrenwi) / (
-            (1 + disc) ** (delta_days / 365))
+        val = (Qop * npv_const['wop'] + Qgp * npv_const['wgp'] - Qwp * npv_const['wwp'] - Qwi * npv_const['wwi'] -
+               Qrenwi * npv_const['wrenwi']) / (
+            (1 + npv_const['disc']) ** (delta_days / 365))
 
         values.append(val)
 
-    values = sum(values) / object_scaling
-    return values
+    if 'obj_scaling' in npv_const:
+        return sum(values) / npv_const['obj_scaling']
+    else:
+        return sum(values)
+
