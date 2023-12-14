@@ -9,12 +9,13 @@ from yaml.loader import FullLoader
 import numpy as np
 
 
-def convert_pipt_to_yaml(init_file):
+def convert_txt_to_yaml(init_file):
     # Read .pipt or .popt file
     pr, fwd = read_txt(init_file)
 
     # Write dictionaries to yaml file with same base file name
-    with open(init_file.rstrip('pipt') + 'yaml', 'w') as f:
+    new_file = change_file_extension(init_file, '.yaml')
+    with open(new_file, 'wb') as f:
         if 'daalg' in pr:
             yaml.dump({'dataassim': pr, 'fwdsim': fwd}, f)
         else:
@@ -70,12 +71,13 @@ def read_yaml(init_file):
     return org.get_keys_pr(), org.get_keys_fwd()
 
 
-def convert_pipt_to_toml(init_file):
+def convert_txt_to_toml(init_file):
     # Read .pipt or .popt file
     pr, fwd = read_txt(init_file)
 
     # Write dictionaries to toml file with same base file name
-    with open(init_file.rstrip('pipt') + 'toml', 'wb') as f:
+    new_file = change_file_extension(init_file, '.toml')
+    with open(new_file, 'wb') as f:
         if 'daalg' in pr:
             tomli_w.dump({'dataassim': pr, 'fwdsim': fwd}, f)
         else:
@@ -96,6 +98,11 @@ def read_toml(init_file):
         t = tomli.load(fid)
 
     # Check for dataassim and fwdsim
+    if 'ensemble' in t.keys():
+        keys_en = t['ensemble']
+        check_mand_keywords_en(keys_en)
+    else:
+        keys_en = None
     if 'optim' in t.keys():
         keys_pr = t['optim']
         check_mand_keywords_opt(keys_pr)
@@ -110,10 +117,10 @@ def read_toml(init_file):
         raise KeyError
 
     # Organize keywords
-    org = Organize_input(keys_pr, keys_fwd)
+    org = Organize_input(keys_pr, keys_fwd, keys_en)
     org.organize()
 
-    return org.get_keys_pr(), org.get_keys_fwd()
+    return org.get_keys_pr(), org.get_keys_fwd(), org.get_keys_en()
 
 
 def read_txt(init_file):
@@ -362,6 +369,21 @@ def check_mand_keywords_da(keys_da):
 
 def check_mand_keywords_opt(keys_opt):
     """Check for mandatory keywords in `OPTIM` part, and output error if they are not present"""
+pass
 
-    # Mandatory keywords in OPTIM
-    assert 'ne' in keys_opt, 'NE not in OPTIM!'
+
+def check_mand_keywords_en(keys_en):
+    """Check for mandatory keywords in `ENSEMBLE` part, and output error if they are not present"""
+
+    # Mandatory keywords in ENSEMBLE
+    assert 'ne' in keys_en, 'NE not in ENSEMBLE!'
+    assert 'state' in keys_en, 'STATE not in ENSEMBLE!'
+
+
+def change_file_extension(filename, new_extension):
+    if '.' in filename:
+        name, old_extension = filename.rsplit('.', 1)
+        new_filename = name + '.' + new_extension
+    else:
+        new_filename = filename + '.' + new_extension
+    return new_filename

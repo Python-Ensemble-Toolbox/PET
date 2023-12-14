@@ -109,6 +109,12 @@ class Ensemble:
             else:
                 self.sim_limit = float('inf')
 
+            # bool that can be used to supress tqdm output (useful when testing code)
+            if 'disable_tqdm' in self.keys_en:
+                self.disable_tqdm = self.keys_en['disable_tqdm']
+            else:
+                self.disable_tqdm = False
+
             # extract information that is given for the prior model
             self._ext_prior_info()
 
@@ -457,7 +463,7 @@ class Ensemble:
 
             # Store the covariance matrix
             self.cov_prior[name] = cov
-
+        
         # Save the ensemble for later inspection
         np.savez('prior.npz', **self.state)
 
@@ -546,7 +552,7 @@ class Ensemble:
 
             # Run prediction in parallel using p_map
             en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                            list_member_index, num_cpus=no_tot_run)
+                            list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
 
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
@@ -587,7 +593,7 @@ class Ensemble:
                             self.state[key][:, list_crash[indx]] = deepcopy(
                                 self.state[key][:, el])
                     en_pred[list_crash[indx]] = deepcopy(en_pred[el])
-
+ 
             # Convert ensemble specific result into pred_data, and filter for NONE data
             self.pred_data.extend([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
                                     if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
@@ -673,7 +679,7 @@ class Ensemble:
 
             # Run prediction in parallel using p_map
             en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                            list_member_index, num_cpus=no_tot_run)
+                            list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
 
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
