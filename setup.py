@@ -18,7 +18,7 @@ setup(
         'tqdm',
         'PyWavelets',
         'psutil',
-        'pdoc',
+        'pdoc @ git+https://github.com/patnr/pdoc@main',
         'pytest',
         'pandas',
         'p_tqdm',
