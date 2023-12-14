@@ -4,12 +4,14 @@ Many python libraries use `sphinx` to generate docs via `readthedocs` (also host
 This setup is too powerful (and therefore complicated) for our purposes.
 Instead, we use [pdoc](https://github.com/mitmproxy/pdoc), run via **GitHub Actions**,
 as configured [here](./.github/workflows/deploy-docs.yml).
-The resulting `html` is hosted with **Github Pages**.
+
+.. warning:: dirs must contain `__init__.py` file to be recognized by `pdoc`.
 
 `pdoc` grabs the docstrings of modules/classes/functions,
 and renders them into pretty html.
-The docstrings should be written using markdown syntax.
+The resulting `html` is hosted with **Github Pages**.
 
+The docstrings should be written using **markdown** syntax.
 In general, you should also try to [reference other objects](https://pdoc.dev/docs/pdoc.html#link-to-other-identifiers)
 (if appropriate) by using backticks.
 And if you want to do it really well, you should follow
@@ -22,6 +24,20 @@ To *live preview* your changes, do
 ```sh
 pdoc -t docs/templates --docformat=numpy --math pipt popt misc ensemble simulator input_output docs/dev_guide.py
 ```
+
+This will probably open a browser window with the rendered html.
+You can also ctrl/cmd-cick the printed localhost link, or simply copy-paste it into your browser.
+
+If you want to reproduce errors that occur in **CI**, you'll want to include the option `-o docs-generated `.
+Since this actually generates html *files*, it will processes **all** of the files by default
+(without which you might not pick up on the error).
+
+.. note:: PS: it seems that the upstream `pdoc` does not report where parsing errors occur
+  (it simply quits with a traceback).
+  We therefore use my (`patnr`) fork which
+
+  - skips the markdown conversion,
+  - prints the specific docstring that causes issues.
 
 ## Tests
 
