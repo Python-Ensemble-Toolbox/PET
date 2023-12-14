@@ -2,12 +2,15 @@
 import numpy as np
 import sys
 import warnings
+
 from copy import deepcopy
+
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as PETEnsemble
+from popt.loop.dist import GenOptDistribution
 
 
 class Ensemble(PETEnsemble):
@@ -56,7 +59,7 @@ class Ensemble(PETEnsemble):
 
         # Initialize PETEnsemble
         super(Ensemble, self).__init__(keys_en, sim)
-
+        
         def __set__variable(var_name=None, defalut=None):
             if var_name in keys_en:
                 return keys_en[var_name]
@@ -97,6 +100,8 @@ class Ensemble(PETEnsemble):
                 self.cov = np.append(self.cov, value_cov)
             else:
                 self.bounds += num_state_var*[(None, None)]
+
+        self._scale_state()
         self.cov = np.diag(self.cov)
 
         # Set objective function (callable)
@@ -119,6 +124,13 @@ class Ensemble(PETEnsemble):
         self.bias_weights = np.ones(self.num_samples) / self.num_samples  # initialize with equal weights
         self.bias_points = None  # this is the points used to estimate the bias correction
 
+        # Setup GenOpt
+        self.genopt = GenOptDistribution(self.get_state(), 
+                                         self.get_cov(), 
+                                         func=self.function, 
+                                         ne=self.num_samples)
+
+
     def get_state(self):
         """
         Returns
@@ -126,8 +138,6 @@ class Ensemble(PETEnsemble):
         x : numpy.ndarray
             Control vector as ndarray, shape (number of controls, number of perturbations)
         """
-
-        self._scale_state()
         x = ot.aug_optim_state(self.state, list(self.state.keys()))
         return x
 
@@ -150,6 +160,15 @@ class Ensemble(PETEnsemble):
         """
 
         return self.bounds
+    
+    def get_final_state(self, return_dict=False):
+        
+        self._invert_scale_state()
+        if return_dict:
+            return self.state
+        else:
+            return self.get_state()
+
 
     def function(self, x, *args):
         """
@@ -165,17 +184,28 @@ class Ensemble(PETEnsemble):
             obj_func_values : numpy.ndarray
                 Objective function values, shape (number of perturbations, )
         """
-
         self._aux_input()
-        self.ne = self.num_models
+
+        if len(x.shape) == 1:
+            self.ne = self.num_models
+        else:
+            self.ne = x.shape[1]
+
         self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))  # go from nparray to dict
         self._invert_scale_state()  # ensure that state is in [lb,ub]
         run_success = self.calc_prediction()  # calculate flow data
+        self._scale_state()  # scale back to [0, 1]
         if run_success:
-            self.state_func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
+            func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
         else:
-            self.state_func_values = 0  # the simulations have crashed
-        return self.state_func_values
+            func_values = np.inf  # the simulations have crashed
+
+        if len(x.shape) == 1:
+            self.state_func_values = func_values
+        else:
+            self.ens_func_values = func_values
+
+        return func_values
 
     def gradient(self, x, *args):
         r"""
@@ -226,12 +256,9 @@ class Ensemble(PETEnsemble):
         self.ne = self.num_samples
         nr = self._aux_input()
         self.state = self._gen_state_ensemble()
-
-        self._invert_scale_state()  # ensure that state is in [lb,ub]
-        self.calc_prediction()  # calculate flow data
-        self._scale_state()  # scale back to [0, 1]
-        self.ens_func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
-        self.ens_func_values = np.array(self.ens_func_values)
+        
+        state_ens = at.aug_state(self.state, list(self.state.keys()))
+        self.function(state_ens)
 
         # If bias correction is used we need to calculate the bias factors, J(u_j,m_j)/J(u_j,m)
         if self.bias_file is not None:  # use bias corrections
@@ -298,6 +325,18 @@ class Ensemble(PETEnsemble):
         hessian = g_c / (self.ne - 1)
 
         return hessian
+    '''
+    def genopt_gradient(self, x, *args):
+        self.genopt.update_distribution(*args)
+        gradient = self.genopt.ensemble_gradient(func=self.function, 
+                                                 x=x, 
+                                                 ne=self.num_samples)
+        return gradient
+    
+    def genopt_mutation_gradient(self, x=None, *args, **kwargs):
+        return self.genopt.ensemble_mutation_gradient(return_ensembles=kwargs['return_ensembles'])
+    '''
+
 
     def calc_ensemble_weights(self, x, *args):
         r"""
@@ -370,12 +409,13 @@ class Ensemble(PETEnsemble):
             mean = self.state[statename]
             cov = cov_blocks[i]
             temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
+            shifted_ensemble = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en, 1)]).T
             if self.upper_bound and self.lower_bound:
                 if self.transform:
-                    np.clip(temp_state_en, 0, 1, out=temp_state_en)
+                    np.clip(shifted_ensemble, 0, 1, out=shifted_ensemble)
                 else:
-                    np.clip(temp_state_en, self.lower_bound[i], self.upper_bound[i], out=temp_state_en)
-            state_en[statename] = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en, 1)]).T
+                    np.clip(shifted_ensemble, self.lower_bound[i], self.upper_bound[i], out=shifted_ensemble)
+            state_en[statename] = shifted_ensemble
 
         return state_en
 
@@ -447,5 +487,4 @@ class Ensemble(PETEnsemble):
 
 
 
-
-
+        

@@ -87,8 +87,8 @@ class GradientAscent:
         beta  = self._momentum
 
         # apply update
-        self.temp_velocity = beta*self.velocity + alpha*gradient
-        new_control   = control - self.temp_velocity
+        self.temp_velocity = beta*self.velocity - alpha*gradient
+        new_control   = control + self.temp_velocity
         return new_control, self.temp_velocity
 
     def apply_smc_update(self, control, gradient, **kwargs):

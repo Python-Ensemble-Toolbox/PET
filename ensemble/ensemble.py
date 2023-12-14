@@ -463,7 +463,7 @@ class Ensemble:
 
             # Store the covariance matrix
             self.cov_prior[name] = cov
-
+        
         # Save the ensemble for later inspection
         np.savez('prior.npz', **self.state)
 
@@ -593,7 +593,7 @@ class Ensemble:
                             self.state[key][:, list_crash[indx]] = deepcopy(
                                 self.state[key][:, el])
                     en_pred[list_crash[indx]] = deepcopy(en_pred[el])
-
+ 
             # Convert ensemble specific result into pred_data, and filter for NONE data
             self.pred_data.extend([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
                                     if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))

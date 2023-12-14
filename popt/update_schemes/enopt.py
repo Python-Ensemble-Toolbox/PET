@@ -129,7 +129,7 @@ class EnOpt(Optimize):
         if optimizer == 'GA':
             self.optimizer = opt.GradientAscent(self.alpha, self.beta)
         elif optimizer == 'Adam':
-            self.optimizer = opt.Adam(self.alpha)
+            self.optimizer = opt.Adam(self.alpha, self.beta)
 
         # The EnOpt class self-ignites, and it is possible to send the EnOpt class as a callale method to scipy.minimize
         self.run_loop()  # run_loop resides in the Optimization class (super)

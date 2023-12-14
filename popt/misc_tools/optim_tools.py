@@ -65,7 +65,6 @@ def update_optim_state(aug_state, state, list_state):
     # Return
     return state
 
-
 def corr2BlockDiagonal(state, corr):
     """
     Makes the correlation matrix block diagonal. The blocks are the state varible types.
