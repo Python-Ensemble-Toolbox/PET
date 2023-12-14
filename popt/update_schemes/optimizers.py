@@ -7,9 +7,11 @@ class GradientAscent:
     The gradient descent update equation with momentum is given by:
 
     .. math::
-        v_t = \beta * v_{t-1} + \alpha * gradient
+        \begin{align}
+            v_t &= \beta * v_{t-1} + \alpha * gradient \\\
+            x_t &= x_{t-1} - v_t
+        \end{align}
 
-        x_t = x_{t-1} - v_t
 
     Attributes
     -----------------------------------------------------------------------------------
@@ -45,8 +47,8 @@ class GradientAscent:
 
     def __init__(self, step_size, momentum):
         r"""
-        Arguments
-        -----------------------------------------------------------------------------------
+        Parameters
+        ----------
         step_size : float
             The step size (learning rate) for the gradient ascent.
 
@@ -62,12 +64,13 @@ class GradientAscent:
         self._step_size    = step_size
         self._momentum     = momentum
     
+
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
         NOTE: This is the steepest decent update: x_new = x_old - x_step.
 
-        Arguments
+        Parameters
         -------------------------------------------------------------------------------------
         control : array_like
             The current value of the parameter being optimized.
@@ -95,7 +98,7 @@ class GradientAscent:
         """
         Apply a gradient update to the control parameter.
 
-        Arguments
+        Parameters
         -------------------------------------------------------------------------------------
         control : array_like
             The current value of the parameter being optimized.
@@ -210,7 +213,7 @@ class Adam:
             v_t_hat = v_t / (1 - β2^t)          \n
             x_{t+1} = x_t - α * m_t_hat / (sqrt(v_t_hat) + ε)
 
-        Arguments
+        Parameters
         -------------------------------------------------------------------------------------
         step_size : float
             The step size (learning rate) for the optimization.
@@ -238,7 +241,7 @@ class Adam:
         Apply a gradient update to the control parameter.
         NOTE: This is the steepest decent update: x_new = x_old - x_step.
 
-        Arguments
+        Parameters
         -------------------------------------------------------------------------------------
         control : array_like
             The current value of the parameter being optimized.
