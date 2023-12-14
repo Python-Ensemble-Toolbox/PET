@@ -9,39 +9,39 @@ class CMA:
 
         Parameters
         ----------------------------------------------------------------------------------------------------------
-            ne : int
-                Ensemble size
-            
-            dim : int
-                Dimensions of control vector
-            
-            alpha_mu : float
-                Learning rate for rank-mu update. If None, value proposed in [1] is used.
-            
-            n_mu : int, `n_mu < ne`
-                Number of best samples of ne, to be used for rank-mu update.
-                Default is int(ne/2).
-            
-            alpha_1 : float
-                Learning rate fro rank-one update. If None, value proposed in [1] is used.
-            
-            alpha_c : float
-                Parameter (inverse if backwards time horizen)for evolution path update 
-                in the rank-one update. See [1] for more info. If None, value proposed in [1] is used.
+        ne : int
+            Ensemble size
+        
+        dim : int
+            Dimensions of control vector
+        
+        alpha_mu : float
+            Learning rate for rank-mu update. If None, value proposed in [1] is used.
+        
+        n_mu : int, `n_mu < ne`
+            Number of best samples of ne, to be used for rank-mu update.
+            Default is int(ne/2).
+        
+        alpha_1 : float
+            Learning rate fro rank-one update. If None, value proposed in [1] is used.
+        
+        alpha_c : float
+            Parameter (inverse if backwards time horizen)for evolution path update 
+            in the rank-one update. See [1] for more info. If None, value proposed in [1] is used.
 
-            corr_update : bool
-                If True, CMA is used to update a correlation matrix. Default is False.
-            
-            equal_weights : bool
-                If True, all n_mu members are assign equal weighting, `w_i = 1/n_mu`.
-                If False, the weighting scheme proposed in [1], where `w_i = log(n_mu + 1)-log(i)`,
-                and normalized such that they sum to one. Defualt is True.
+        corr_update : bool
+            If True, CMA is used to update a correlation matrix. Default is False.
+        
+        equal_weights : bool
+            If True, all n_mu members are assign equal weighting, `w_i = 1/n_mu`.
+            If False, the weighting scheme proposed in [1], where `w_i = log(n_mu + 1)-log(i)`,
+            and normalized such that they sum to one. Defualt is True.
 
         References
         ----------------------------------------------------------------------------------------------------------
-            [1] Hansen, N. (2006). The CMA evolution strategy: a comparing review. 
-                In J. Lozano, P. Larranaga, I. Inza & E. Bengoetxea (ed.), Towards a new evolutionary computation. 
-                Advances on estimation of distribution algorithms (pp. 75--102) . Springer .     
+        [1] Hansen, N. (2006). The CMA evolution strategy: a comparing review. 
+            In J. Lozano, P. Larranaga, I. Inza & E. Bengoetxea (ed.), Towards a new evolutionary computation. 
+            Advances on estimation of distribution algorithms (pp. 75--102) . Springer .     
         '''
         self.alpha_mu       = alpha_mu
         self.n_mu           = n_mu

@@ -20,33 +20,33 @@ class SmcOpt(Optimize):
         """
         Parameters
         ----------
-            fun: callable
-                objective function
+        fun: callable
+            objective function
 
-            x: ndarray
-                Initial state
+        x: ndarray
+            Initial state
 
-            sens: callable
-                Ensemble sensitivity
+        sens: callable
+            Ensemble sensitivity
 
-            bounds: list, optional
-                (min, max) pairs for each element in x. None is used to specify no bound.
+        bounds: list, optional
+            (min, max) pairs for each element in x. None is used to specify no bound.
 
-            options: dict
-                Optimization options
+        options: dict
+            Optimization options
 
-                - maxiter: maximum number of iterations (default 10)
-                - restart: restart optimization from a restart file (default false)
-                - restartsave: save a restart file after each successful iteration (defalut false)
-                - tol: convergence tolerance for the objective function (default 1e-6)
-                - alpha: weight between previous and new step (default 0.1)
-                - alpha_maxiter: maximum number of backtracing trials (default 5)
-                - resample: number indicating how many times resampling is tried if no improvement is found
-                - cov_factor: factor used to shrink the covariance for each resampling trial (defalut 0.5)
-                - inflation_factor: term used to weight down prior influence (defalult 1)
-                - savedata: specify which class variables to save to the result files (state, objective function
-                            value, iteration number, number of function evaluations, and number of gradient
-                            evaluations, are always saved)
+            - maxiter: maximum number of iterations (default 10)
+            - restart: restart optimization from a restart file (default false)
+            - restartsave: save a restart file after each successful iteration (defalut false)
+            - tol: convergence tolerance for the objective function (default 1e-6)
+            - alpha: weight between previous and new step (default 0.1)
+            - alpha_maxiter: maximum number of backtracing trials (default 5)
+            - resample: number indicating how many times resampling is tried if no improvement is found
+            - cov_factor: factor used to shrink the covariance for each resampling trial (defalut 0.5)
+            - inflation_factor: term used to weight down prior influence (defalult 1)
+            - savedata: specify which class variables to save to the result files (state, objective function
+                        value, iteration number, number of function evaluations, and number of gradient
+                        evaluations, are always saved)
         """
 
         # init PETEnsemble

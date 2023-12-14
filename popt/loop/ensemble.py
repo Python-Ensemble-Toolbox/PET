@@ -19,20 +19,20 @@ class Ensemble(PETEnsemble):
 
     Methods
     -------
-        get_state()
-            Returns control vector as ndarray
+    get_state()
+        Returns control vector as ndarray
 
-        get_cov()
-            Returns the ensemble covariance matrix
+    get_cov()
+        Returns the ensemble covariance matrix
 
-        function(x,*args)
-            Objective function called during optimization
+    function(x,*args)
+        Objective function called during optimization
 
-        gradient(x,*args)
-            Ensemble gradient
+    gradient(x,*args)
+        Ensemble gradient
 
-        hessian(x,*args)
-            Ensemble hessian
+    hessian(x,*args)
+        Ensemble hessian
 
     """
 
@@ -176,13 +176,13 @@ class Ensemble(PETEnsemble):
 
         Parameters
         ----------
-            x : ndarray
-                Control vector, shape (number of controls, number of perturbations)
+        x : ndarray
+            Control vector, shape (number of controls, number of perturbations)
 
         Returns
         -------
-            obj_func_values : numpy.ndarray
-                Objective function values, shape (number of perturbations, )
+        obj_func_values : numpy.ndarray
+            Objective function values, shape (number of perturbations, )
         """
         self._aux_input()
 
@@ -229,15 +229,15 @@ class Ensemble(PETEnsemble):
 
         Parameters
         ----------
-            x : ndarray
-                Control vector, shape (number of controls, )
+        x : ndarray
+            Control vector, shape (number of controls, )
 
-            args : tuple
-                Covarice (:math:`C_x`), shape (number of controls, number of controls)
+        args : tuple
+            Covarice (:math:`C_x`), shape (number of controls, number of controls)
 
         Returns
         -------
-            gradient : numpy.ndarray
+        gradient : numpy.ndarray
                 The gradient evaluated at x, shape (number of controls, )
         """
 
@@ -297,13 +297,13 @@ class Ensemble(PETEnsemble):
 
         Parameters
         ----------
-            x : ndarray
-                Control vector, shape (number of controls, number of perturbations)
+        x : ndarray
+            Control vector, shape (number of controls, number of perturbations)
 
         Returns
         -------
-            hessian: numpy.ndarray
-                The hessian evaluated at x, shape (number of controls, number of controls)
+        hessian: numpy.ndarray
+            The hessian evaluated at x, shape (number of controls, number of controls)
 
         References
         ----------
@@ -344,15 +344,15 @@ class Ensemble(PETEnsemble):
 
         Parameters
         ----------
-            x : ndarray
-                Control vector, shape (number of controls, )
+        x : ndarray
+            Control vector, shape (number of controls, )
 
-            args : tuple
-                Inflation factor and covarice (:math:`C_x`), shape (number of controls, number of controls)
+        args : tuple
+            Inflation factor and covarice (:math:`C_x`), shape (number of controls, number of controls)
 
         Returns
         -------
-            sens_matrix, best_ens, best_func : tuple
+        sens_matrix, best_ens, best_func : tuple
                 The weighted ensemble, the best ensemble member, and the best objective function value
         """
 
