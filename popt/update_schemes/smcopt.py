@@ -66,7 +66,7 @@ class SmcOpt(Optimize):
         self.cov = args[0]  # covariance matrix for sampling
 
         # Set other optimization parameters
-        self.obj_func_tol = __set__variable('obj_func_tol', 1e-6)
+        self.obj_func_tol = __set__variable('tol', 1e-6)
         self.alpha = __set__variable('alpha', 0.1)
         self.alpha_iter_max = __set__variable('alpha_maxiter', 5)
         self.max_resample = __set__variable('resample', 0)

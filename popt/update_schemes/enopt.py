@@ -94,7 +94,7 @@ class EnOpt(Optimize):
         self.mean_state = x  # initial mean state
 
         # Set other optimization parameters
-        self.obj_func_tol = __set__variable('obj_func_tol', 1e-6)
+        self.obj_func_tol = __set__variable('tol', 1e-6)
         self.alpha = __set__variable('alpha', 0.1)
         self.alpha_cov = __set__variable('alpha_cov', 0.001)
         self.beta = __set__variable('beta', 0.0)  # this is stored in the optimizer class

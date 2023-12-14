@@ -41,8 +41,10 @@ class eclipse:
 
                 - parallel: number of forward simulations run in parallel
                 - simoptions: options for the simulations
+                    - mpi: option to use mpi (always use > 2 cores)
                     - sim_path: Path to the simulator
                     - sim_flag: Flags sent to the simulator (see simulator documentation for all possibilities)
+                - sim_limit: maximum number of seconds a simulation can run before being killed
                 - runfile: name of the simulation input file
                 - reportpoint: these are the dates the simulator reports results
                 - reporttype: this key states that the report poins are given as dates
