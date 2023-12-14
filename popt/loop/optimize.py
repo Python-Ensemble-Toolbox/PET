@@ -25,40 +25,40 @@ class Optimize:
 
     Attributes
     ----------
-        logger : Logger
-            Print output to screen and log-file
+    logger : Logger
+        Print output to screen and log-file
 
-        pickle_restart_file : str
-            Save name for pickle dump/load
+    pickle_restart_file : str
+        Save name for pickle dump/load
 
-        optimize_result : OptimizeResult
-            Dictionary with results for the current iteration
+    optimize_result : OptimizeResult
+        Dictionary with results for the current iteration
 
-        iteration : int
-             Iteration index
+    iteration : int
+            Iteration index
 
-        max_iter : int
-            Max number of iterations
+    max_iter : int
+        Max number of iterations
 
-        restart : bool
-            Restart flag
+    restart : bool
+        Restart flag
 
-        restartsave : bool
-            Save restart information flag
+    restartsave : bool
+        Save restart information flag
 
     Methods
     -------
-        run_loop()
-            The main optimization loop
+    run_loop()
+        The main optimization loop
 
-        save()
-            Save restart file
+    save()
+        Save restart file
 
-        load()
-            Load restart file
+    load()
+        Load restart file
 
-        calc_update()
-            Empty dummy function, actual functionality must be defined by the subclasses
+    calc_update()
+        Empty dummy function, actual functionality must be defined by the subclasses
 
     """
 
@@ -66,7 +66,7 @@ class Optimize:
         """
         Parameters
         ----------
-            options: dict
+        options: dict
                 Optimization options
         """
 

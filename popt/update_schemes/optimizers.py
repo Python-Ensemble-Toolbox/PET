@@ -7,51 +7,53 @@ class GradientAscent:
     The gradient descent update equation with momentum is given by:
 
     .. math::
-        v_t = \beta * v_{t-1} + \alpha * gradient
+        \begin{align}
+            v_t &= \beta * v_{t-1} + \alpha * gradient \\\
+            x_t &= x_{t-1} - v_t
+        \end{align}
 
-        x_t = x_{t-1} - v_t
 
     Attributes
     -----------------------------------------------------------------------------------
-        step_size : float
-            The initial step size provided during initialization.
+    step_size : float
+        The initial step size provided during initialization.
 
-        momentum : float
-            The initial momentum factor provided during initialization.
+    momentum : float
+        The initial momentum factor provided during initialization.
 
-        velocity : array_like
-            Current velocity of the optimization process.
+    velocity : array_like
+        Current velocity of the optimization process.
 
-        temp_velocity : array_like
-            Temporary velocity
+    temp_velocity : array_like
+        Temporary velocity
 
-        _step_size : float
-            Private attribute for temporarily modifying step size.
+    _step_size : float
+        Private attribute for temporarily modifying step size.
 
-        _momentum : float
-            Private attribute for temporarily modifying momentum.
+    _momentum : float
+        Private attribute for temporarily modifying momentum.
 
     Methods
     -----------------------------------------------------------------------------------
-        apply_update(control, gradient, **kwargs):
-            Apply a gradient update to the control parameter.
+    apply_update(control, gradient, **kwargs):
+        Apply a gradient update to the control parameter.
 
-        apply_backtracking():
-            Apply backtracking by reducing step size and momentum temporarily.
+    apply_backtracking():
+        Apply backtracking by reducing step size and momentum temporarily.
 
-        restore_parameters():
-            Restore the original step size and momentum values.
+    restore_parameters():
+        Restore the original step size and momentum values.
     """
 
     def __init__(self, step_size, momentum):
         r"""
-        Arguments
-        -----------------------------------------------------------------------------------
-            step_size : float
-                The step size (learning rate) for the gradient ascent.
+        Parameters
+        ----------
+        step_size : float
+            The step size (learning rate) for the gradient ascent.
 
-            momentum : float
-                The momentum factor to apply during updates.
+        momentum : float
+            The momentum factor to apply during updates.
         """
 
         self.step_size = step_size
@@ -62,26 +64,27 @@ class GradientAscent:
         self._step_size    = step_size
         self._momentum     = momentum
     
+
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
         NOTE: This is the steepest decent update: x_new = x_old - x_step.
 
-        Arguments
+        Parameters
         -------------------------------------------------------------------------------------
-            control : array_like
-                The current value of the parameter being optimized.
+        control : array_like
+            The current value of the parameter being optimized.
 
-            gradient : array_like
-                The gradient of the objective function with respect to the control parameter.
+        gradient : array_like
+            The gradient of the objective function with respect to the control parameter.
 
-            **kwargs : dict
-                Additional keyword arguments.
+        **kwargs : dict
+            Additional keyword arguments.
 
         Returns
         -------------------------------------------------------------------------------------
-            new_control, temp_velocity: tuple
-                The new value of the control parameter after the update, and the current state step.
+        new_control, temp_velocity: tuple
+            The new value of the control parameter after the update, and the current state step.
         """
         alpha = self._step_size
         beta  = self._momentum
@@ -95,21 +98,21 @@ class GradientAscent:
         """
         Apply a gradient update to the control parameter.
 
-        Arguments
+        Parameters
         -------------------------------------------------------------------------------------
-            control : array_like
-                The current value of the parameter being optimized.
+        control : array_like
+            The current value of the parameter being optimized.
 
-            gradient : array_like
-                The gradient of the objective function with respect to the control parameter.
+        gradient : array_like
+            The gradient of the objective function with respect to the control parameter.
 
-            **kwargs : dict
-                Additional keyword arguments.
+        **kwargs : dict
+            Additional keyword arguments.
 
         Returns
         -------------------------------------------------------------------------------------
-            new_control: numpy.ndarray
-                The new value of the control parameter after the update.
+        new_control: numpy.ndarray
+            The new value of the control parameter after the update.
         """
         alpha = self._step_size
 
@@ -153,49 +156,49 @@ class Adam:
 
     Attributes
     -------------------------------------------------------------------------------------
-        step_size : float
-            The initial step size provided during initialization.
+    step_size : float
+        The initial step size provided during initialization.
 
-        beta1 : float
-            The exponential decay rate for the first moment estimates.
+    beta1 : float
+        The exponential decay rate for the first moment estimates.
 
-        beta2 : float
-            The exponential decay rate for the second moment estimates.
+    beta2 : float
+        The exponential decay rate for the second moment estimates.
 
-        vel1 : 1-D array_like
-            First moment estimate.
+    vel1 : 1-D array_like
+        First moment estimate.
 
-        vel2 : 1-D array_like
-            Second moment estimate.
+    vel2 : 1-D array_like
+        Second moment estimate.
 
-        eps : float
-            Small constant to prevent division by zero.
+    eps : float
+        Small constant to prevent division by zero.
 
-        _step_size : float
-            Private attribute for temporarily modifying step size.
+    _step_size : float
+        Private attribute for temporarily modifying step size.
 
-        temp_vel1 : 1-D array_like
-            Temporary first moment estimate.
+    temp_vel1 : 1-D array_like
+        Temporary first moment estimate.
 
-        temp_vel2 : 1-D array_like
-            Temporary Second moment estimate.
+    temp_vel2 : 1-D array_like
+        Temporary Second moment estimate.
 
     Methods
     -------------------------------------------------------------------------------------
-        apply_update(control, gradient, **kwargs):
-            Apply an Adam update to the control parameter.
+    apply_update(control, gradient, **kwargs):
+        Apply an Adam update to the control parameter.
 
-        apply_backtracking():
-            Apply backtracking by reducing step size temporarily.
+    apply_backtracking():
+        Apply backtracking by reducing step size temporarily.
 
-        restore_parameters():
-            Restore the original step size.
+    restore_parameters():
+        Restore the original step size.
 
     References
     -------------------------------------------------------------------------------------
-        [1] Kingma, D. P., & Ba, J. (2014).
-            Adam: A Method for Stochastic Optimization.
-            arXiv preprint arXiv:1412.6980.
+    [1] Kingma, D. P., & Ba, J. (2014).
+        Adam: A Method for Stochastic Optimization.
+        arXiv preprint arXiv:1412.6980.
     """
 
     def __init__(self, step_size, beta1=0.9, beta2=0.999):
@@ -210,16 +213,16 @@ class Adam:
             v_t_hat = v_t / (1 - β2^t)          \n
             x_{t+1} = x_t - α * m_t_hat / (sqrt(v_t_hat) + ε)
 
-        Arguments
+        Parameters
         -------------------------------------------------------------------------------------
-            step_size : float
-                The step size (learning rate) for the optimization.
+        step_size : float
+            The step size (learning rate) for the optimization.
 
-            beta1 : float, optional
-                The exponential decay rate for the first moment estimates (default is 0.9).
+        beta1 : float, optional
+            The exponential decay rate for the first moment estimates (default is 0.9).
 
-            beta2 : float, optional
-                The exponential decay rate for the second moment estimates (default is 0.999).
+        beta2 : float, optional
+            The exponential decay rate for the second moment estimates (default is 0.999).
 
         """
         self.step_size = step_size
@@ -238,21 +241,21 @@ class Adam:
         Apply a gradient update to the control parameter.
         NOTE: This is the steepest decent update: x_new = x_old - x_step.
 
-        Arguments
+        Parameters
         -------------------------------------------------------------------------------------
-            control : array_like
-                The current value of the parameter being optimized.
+        control : array_like
+            The current value of the parameter being optimized.
 
-            gradient : array_like
-                The gradient of the objective function with respect to the control parameter.
+        gradient : array_like
+            The gradient of the objective function with respect to the control parameter.
 
-            **kwargs : dict
-                Additional keyword arguments, including 'iter' for the current iteration.
+        **kwargs : dict
+            Additional keyword arguments, including 'iter' for the current iteration.
 
         Returns
         -------------------------------------------------------------------------------------
-            new_control, temp_velocity: tuple
-                The new value of the control parameter after the update, and the current state step.
+        new_control, temp_velocity: tuple
+            The new value of the control parameter after the update, and the current state step.
         """
         iter  = kwargs['iter'] 
         alpha = self._step_size

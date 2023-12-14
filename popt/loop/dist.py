@@ -15,22 +15,21 @@ class GenOptDistribution:
         '''
         Parameters
         ----------
-            x : array_like, shape (d,)
-                Initial control vector. Used initally to get the dimensionality of the problem.
-            
-            cov : array_like, shape (d,d)
-                Initial covaraince matrix. Used to construct the correlation matrix and 
-                epsilon parameter of GenOpt
-            
-            theta0 : list, of length 2 ([alpha, beta])
-                Initial alpha and beta parameter of the marginal Beta distributions.
-            
-            func : callable (optional)
-                An objective function that can be used later for the gradeint.
-                Can also be passed directly to the gradeint fucntion.
-            
-            ne : int
-            
+        x : array_like, shape (d,)
+            Initial control vector. Used initally to get the dimensionality of the problem.
+        
+        cov : array_like, shape (d,d)
+            Initial covaraince matrix. Used to construct the correlation matrix and 
+            epsilon parameter of GenOpt
+        
+        theta0 : list, of length 2 ([alpha, beta])
+            Initial alpha and beta parameter of the marginal Beta distributions.
+        
+        func : callable (optional)
+            An objective function that can be used later for the gradeint.
+            Can also be passed directly to the gradeint fucntion.
+        
+        ne : int
         '''
         self.dim   = x.size                         # dimension of state                 
         self.corr  = ot.cov2corr(cov)               # initial correlation
@@ -46,12 +45,12 @@ class GenOptDistribution:
 
         Parameters
         ----------
-            theta : array_like, shape (d,2)
-                Contains the alpha (first column) and beta (second column) 
-                of the marginal distirbutions.
+        theta : array_like, shape (d,2)
+            Contains the alpha (first column) and beta (second column) 
+            of the marginal distirbutions.
 
-            corr : array_like, shape (d,d)
-                Correlation matrix 
+        corr : array_like, shape (d,d)
+            Correlation matrix 
         '''
         self.theta = theta
         self.corr  = corr
@@ -77,8 +76,8 @@ class GenOptDistribution:
 
         Parameters
         ----------
-            size: int
-                Ensemble size (ne). Size of the sample to be drawn.
+        size: int
+            Ensemble size (ne). Size of the sample to be drawn.
         
         Returns
         -------
@@ -115,16 +114,16 @@ class GenOptDistribution:
         
         Parameters
         ----------
-            x : array_like, shape (d,)
-                Current state vector.
-            
-            enX : array_like, shape (ne,d)
-                Ensemble matrix X sampled from GenOpt distribution
+        x : array_like, shape (d,)
+            Current state vector.
+        
+        enX : array_like, shape (ne,d)
+            Ensemble matrix X sampled from GenOpt distribution
         
         Returns
         -------
-            out : array_like, shape (ne,d)
-                Epsilon transfromed ensemble matrix, Y
+        out : array_like, shape (ne,d)
+            Epsilon transfromed ensemble matrix, Y
         '''
         enY = np.zeros_like(enX) # tranfomred ensemble 
 
@@ -151,21 +150,21 @@ class GenOptDistribution:
 
         Parameters
         ----------
-            x : array_like, shape (d,)
-                Current state vector.
-            
-            args : (theta, corr)
-                theta (parameters of distribution), shape (d,2)
-                corr (correlation matrix), shape (d,d)
-            
-            kwargs :
-                func : callable objectvie function
-                ne : ensemble size
+        x : array_like, shape (d,)
+            Current state vector.
         
+        args : (theta, corr)
+            theta (parameters of distribution), shape (d,2)
+            corr (correlation matrix), shape (d,d)
+        
+        kwargs :
+            func : callable objectvie function
+            ne : ensemble size
+    
         Returns
         -------
-            out : array_like, shape (d,)
-                The average gradient.
+        out : array_like, shape (d,)
+            The average gradient.
         '''
         # check for objective fucntion 
         if 'func' in kwargs:
@@ -236,16 +235,16 @@ class GenOptDistribution:
 
         Parameters
         ----------
-            kwargs:
-                return_ensemble : bool
-                    If True, all the ensemble matrices are also returned in a dictionary.
+        kwargs:
+            return_ensemble : bool
+                If True, all the ensemble matrices are also returned in a dictionary.
         
         Returns
         -------
-            out : array_like, shape (d,2)
-                Mutation gradeint of theta
-            
-            NB! If return_ensembles=True, the ensmebles are also returned!
+        out : array_like, shape (d,2)
+            Mutation gradeint of theta
+        
+        NB! If return_ensembles=True, the ensmebles are also returned!
         '''
         if 'return_ensembles' in kwargs:
             ensembles = {'gaussian'   : self.enZ,
@@ -279,16 +278,16 @@ class GenOptDistribution:
         
         Parameters
         ----------------------------------------------
-            alpha : float
-                alpha parameter in Beta distribution 
+        alpha : float
+            alpha parameter in Beta distribution 
 
-            beta : float
-                beta parameter in Beta distribution
+        beta : float
+            beta parameter in Beta distribution
 
         Returns
         ----------------------------------------------
-            out : array_like, of shape (2, 2)
-                Fisher matrix 
+        out : array_like, of shape (2, 2)
+            Fisher matrix 
         '''
         a = alpha
         b = beta
@@ -315,12 +314,12 @@ def delA(theta):
 
     Parameters
     --------------------------------------------
-        a : float
-        b : float
+    a : float
+    b : float
     
     Returns
     --------------------------------------------
-        out : float
+    out : float
     '''
     a = theta[0]
     b = theta[1]

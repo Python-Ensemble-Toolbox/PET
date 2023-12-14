@@ -72,16 +72,16 @@ def corr2BlockDiagonal(state, corr):
 
     Parameters
     ----------
-        state: dict
-            Current control state, including state names
+    state: dict
+        Current control state, including state names
 
-        corr : array_like
-            Correlation matrix, of shape (d, d)
+    corr : array_like
+        Correlation matrix, of shape (d, d)
 
     Returns
     -------
-        corr_blocks : list
-            block matrices, one for each variable type
+    corr_blocks : list
+        block matrices, one for each variable type
 
     """
 
@@ -108,22 +108,22 @@ def time_correlation(a, state, n_timesteps, dt=1.0):
 
     Parameters
     -------------------------------------------------------------
-        a : float
-            Correlation coef, in range (0, 1).
+    a : float
+        Correlation coef, in range (0, 1).
 
-        state : dict
-            Control state (represented in a dict).
-        
-        n_timesteps : int
-            Number of time-steps to correlate for each component.
-        
-        dt : float or int
-            Duration between each time-step. Default is 1.
+    state : dict
+        Control state (represented in a dict).
     
+    n_timesteps : int
+        Number of time-steps to correlate for each component.
+    
+    dt : float or int
+        Duration between each time-step. Default is 1.
+
     Returns
     -------------------------------------------------------------
-        out : numpy.ndarray
-            Correlation matrix with time correlation    
+    out : numpy.ndarray
+        Correlation matrix with time correlation    
     """
     dim_states = [int(state[name].size/n_timesteps) for name in list(state.keys())]
     blocks     = []
@@ -152,13 +152,13 @@ def cov2corr(cov):
 
     Parameters
     -------------
-        cov : array_like
-            The covaraince matrix, of shape (d,d).
+    cov : array_like
+        The covaraince matrix, of shape (d,d).
 
     Returns
     -------------
-        out : numpy.ndarray
-            The correlation matrix, of shape (d,d)
+    out : numpy.ndarray
+        The correlation matrix, of shape (d,d)
     """
     std  = np.sqrt(np.diag(cov))
     corr = np.divide(cov, np.outer(std, std))
@@ -171,16 +171,16 @@ def corr2cov(corr, std):
 
     Parameters
     ----------
-        corr : array_like
-            The correlation matrix, of shape (d,d).
+    corr : array_like
+        The correlation matrix, of shape (d,d).
 
-        std : array_like
-            Array of the standard deviations, of shape (d, ).
+    std : array_like
+        Array of the standard deviations, of shape (d, ).
 
     Returns
     -------
-        out : numpy.ndarray
-            The covaraince matrix, of shape (d,d)
+    out : numpy.ndarray
+        The covaraince matrix, of shape (d,d)
     """
     cov = np.multiply(corr, np.outer(std, std))
     return cov
@@ -192,13 +192,13 @@ def get_sym_pos_semidef(a):
 
     Parameters
     ----------
-        a : array_like
-            The input matrix, of shape (d,d)
+    a : array_like
+        The input matrix, of shape (d,d)
 
     Returns
     -------
-        a : numpy.ndarray
-            The positive semidefinite matrix, of shape (d,d)
+    a : numpy.ndarray
+        The positive semidefinite matrix, of shape (d,d)
     """
 
     rtol = 1e-05
@@ -218,16 +218,16 @@ def clip_state(x, bounds):
 
     Parameters
     ----------
-        x : array_like
-            The input state
+    x : array_like
+        The input state
 
-        bounds : array_like
-            (min, max) pairs for each element in x. None is used to specify no bound.
+    bounds : array_like
+        (min, max) pairs for each element in x. None is used to specify no bound.
 
     Returns
     -------
-        x : numpy.ndarray
-            The state after truncation
+    x : numpy.ndarray
+        The state after truncation
     """
 
     if bounds is not None:
@@ -245,13 +245,13 @@ def get_optimize_result(obj):
 
     Parameters
     ----------
-        obj : popt.loop.optimize.Optimize
-            An instance of an optimization class
+    obj : popt.loop.optimize.Optimize
+        An instance of an optimization class
 
     Returns
     -------
-         save_dict : scipy.optimize.OptimizeResult
-            The requested optimization results
+    save_dict : scipy.optimize.OptimizeResult
+        The requested optimization results
     """
 
     # Initialize dictionary of variables to save
@@ -288,8 +288,8 @@ def save_optimize_results(intermediate_result):
 
     Parameters
     ----------
-        intermediate_result : scipy.optimize.OptimizeResult
-            An instance of an OptimizeResult class
+    intermediate_result : scipy.optimize.OptimizeResult
+        An instance of an OptimizeResult class
     """
 
     # Cast to OptimizeResult if a ndarray is passed as argument
