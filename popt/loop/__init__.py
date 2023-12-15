@@ -1,1 +1,1 @@
-"""Descriptive description."""
+"""Main loop for running optimization."""

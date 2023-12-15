@@ -22,7 +22,7 @@ the [numpy style guide](https://numpydoc.readthedocs.io/en/latest/format.html#se
 To *live preview* your changes, do
 
 ```sh
-pdoc -t docs/templates --docformat=numpy --math pipt popt misc ensemble simulator input_output docs/dev_guide.py
+pdoc -t docs/templates --docformat=numpy --math pipt popt misc ensemble simulator input_output docs/dev_guide.py docs/tutorials.py
 ```
 
 This will probably open a browser window with the rendered html.
