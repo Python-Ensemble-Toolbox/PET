@@ -1,4 +1,4 @@
-# PET: Python Ensemble-based Toolbox
+# PET: Python Ensemble Toolbox
 
 <h1 align="center">
 <img src="https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png" width="300">
