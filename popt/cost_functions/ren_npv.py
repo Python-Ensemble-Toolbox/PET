@@ -51,7 +51,6 @@ def ren_npv(pred_data, keys_opt, report):
         Qwi = np.sum(Qwi, axis=0)
 
         delta_days = (report[1][i] - report[1][i - 1]).days
-
         val = (Qop * npv_const['wop'] + Qgp * npv_const['wgp'] - Qwp * npv_const['wwp'] - Qwi * npv_const['wwi'] -
                Qrenwi * npv_const['wrenwi']) / (
             (1 + npv_const['disc']) ** (delta_days / 365))

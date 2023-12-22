@@ -83,7 +83,7 @@ class Ensemble(PETEnsemble):
         self.bounds = []
         self.cov = np.array([])
         for name in self.prior_info.keys():
-            self.state[name] = self.prior_info[name]['mean']
+            self.state[name] = np.asarray(self.prior_info[name]['mean'])
             num_state_var = len(self.state[name])
             value_cov = self.prior_info[name]['variance'] * np.ones((num_state_var,))
             if 'limits' in self.prior_info[name].keys():
@@ -204,7 +204,7 @@ class Ensemble(PETEnsemble):
             self.state_func_values = func_values
         else:
             self.ens_func_values = func_values
-
+        
         return func_values
 
     def gradient(self, x, *args):
