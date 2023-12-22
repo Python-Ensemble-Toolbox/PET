@@ -291,7 +291,6 @@ def save_optimize_results(intermediate_result):
     intermediate_result : scipy.optimize.OptimizeResult
         An instance of an OptimizeResult class
     """
-
     # Cast to OptimizeResult if a ndarray is passed as argument
     if type(intermediate_result) is np.ndarray:
         intermediate_result = OptimizeResult({'x': intermediate_result})
@@ -300,7 +299,7 @@ def save_optimize_results(intermediate_result):
     if 'save_folder' in intermediate_result:
         save_folder = intermediate_result['save_folder']
         if not os.path.exists(save_folder):
-            os.mkdir(save_folder)
+            os.makedirs(save_folder)
     else:
         save_folder = './'
 
