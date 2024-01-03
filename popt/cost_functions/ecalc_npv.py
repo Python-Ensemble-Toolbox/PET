@@ -3,6 +3,7 @@ import numpy as np
 import csv
 from pathlib import Path
 import pandas as pd
+import sys
 
 HERE = Path().cwd()  # fallback for ipynb's
 HERE = HERE.resolve()
@@ -31,7 +32,7 @@ def ecalc_npv(pred_data, keys_opt, report):
 
     from libecalc.core.ecalc import EnergyCalculator
     from libecalc.common.time_utils import Frequency
-    from libecalc.input.model import YamlModel
+    from libecalc.presentation.yaml.model import YamlModel
 
     # Economic values
     npv_const = {}
@@ -112,14 +113,17 @@ def results_as_df(yaml_model, results, getter) -> pd.DataFrame:
     """Extract relevant values, as well as some meta (`attrs`)."""
     df = {}
     attrs = {}
+    res = None
     for id_hash in results:
         res = results[id_hash]
         res = getter(res)
-        component = yaml_model.graph.components[id_hash]
+        component = yaml_model.graph.get_node(id_hash)
         df[component.name] = res.values
         attrs[component.name] = {'id_hash': id_hash,
                                  'kind': type(component).__name__,
                                  'unit': res.unit}
+    if res is None:
+        sys.exit('No emission results from eCalc!')
     df = pd.DataFrame(df, index=res.timesteps)
     df.index.name = "dates"
     df.attrs = attrs
