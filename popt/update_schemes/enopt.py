@@ -72,7 +72,7 @@ class EnOpt(Optimize):
                 - cov_factor: factor used to shrink the covariance for each resampling trial (defalut 0.5)
                 - savedata: specify which class variables to save to the result files (state, objective
                             function value, iteration number, number of function evaluations, and number
-                                of gradient evaluations, are always saved)
+                            of gradient evaluations, are always saved)
         """
 
         # init PETEnsemble

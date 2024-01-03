@@ -14,7 +14,7 @@ def convert_txt_to_yaml(init_file):
     pr, fwd = read_txt(init_file)
 
     # Write dictionaries to yaml file with same base file name
-    new_file = change_file_extension(init_file, '.yaml')
+    new_file = change_file_extension(init_file, 'yaml')
     with open(new_file, 'wb') as f:
         if 'daalg' in pr:
             yaml.dump({'dataassim': pr, 'fwdsim': fwd}, f)
@@ -76,7 +76,7 @@ def convert_txt_to_toml(init_file):
     pr, fwd = read_txt(init_file)
 
     # Write dictionaries to toml file with same base file name
-    new_file = change_file_extension(init_file, '.toml')
+    new_file = change_file_extension(init_file, 'toml')
     with open(new_file, 'wb') as f:
         if 'daalg' in pr:
             tomli_w.dump({'dataassim': pr, 'fwdsim': fwd}, f)
