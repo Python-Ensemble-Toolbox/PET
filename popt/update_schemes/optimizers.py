@@ -287,3 +287,31 @@ class Adam:
 
     def get_step_size(self):
         return self._step_size
+
+
+class AdaMax(Adam):
+    '''
+    AdaMax optimizer
+    
+    References
+    -------------------------------------------------------------------------------------
+    [1] Kingma, D. P., & Ba, J. (2014).
+        Adam: A Method for Stochastic Optimization.
+        arXiv preprint arXiv:1412.6980.
+    '''
+    def __init__(self, step_size, beta1=0.9, beta2=0.999):
+        super().__init__(step_size, beta1, beta2)
+    
+    def apply_update(self, control, gradient, **kwargs):
+        iter  = kwargs['iter'] 
+        alpha = self._step_size
+        beta1 = self.beta1
+        beta2 = self.beta2
+
+        self.temp_vel1 = beta1*self.vel1 + (1-beta1)*gradient
+        self.temp_vel2 = max(beta2*self.vel2, np.linalg.norm(gradient))
+
+        step = alpha/(1-beta1**iter) * self.temp_vel1/self.temp_vel2
+        new_control = control - step  # steepest decent
+        return new_control, step
+    
