@@ -462,7 +462,7 @@ class Ensemble(PETEnsemble):
         """
         Transform the internal state from [0, 1] to [lb, ub]
         """
-        if self.upper_bound and self.lower_bound:
+        if self.transform and (self.upper_bound and self.lower_bound):
             for i, key in enumerate(self.state):
                 if self.transform:
                     self.state[key] = self.lower_bound[i] + self.state[key]*(self.upper_bound[i] - self.lower_bound[i])
