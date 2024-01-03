@@ -39,8 +39,10 @@ class Ensemble(PETEnsemble):
                          f'{keys_da["analysis"]} update scheme with {keys_da["energy"]} Energy.')
 
         # Internalize PIPT dictionary
-        self.keys_da = keys_da
-        self.keys_en = keys_en
+        if not hasattr(self, 'keys_da'):
+            self.keys_da = keys_da
+        if not hasattr(self, 'keys_en'):
+            self.keys_en = keys_en
 
         if self.restart is False:
             # Init in _init_prediction_output (used in run_prediction)

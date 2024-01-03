@@ -116,7 +116,7 @@ class approx_update():
                 if len(self.scale_data.shape) == 1:
                     scaled_delta_data = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
                                                np.ones((1, pert_state.shape[1]))) * (
-                        self.read_obs_data - self.aug_pred_data)
+                        self.real_obs_data - self.aug_pred_data)
                 else:
                     scaled_delta_data = solve(
                         self.scale_data, (self.real_obs_data - self.aug_pred_data))

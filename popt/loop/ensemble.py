@@ -22,6 +22,9 @@ class Ensemble(PETEnsemble):
     get_state()
         Returns control vector as ndarray
 
+    get_final_state(return_dict)
+        Returns final control vector between [lb,ub]
+
     get_cov()
         Returns the ensemble covariance matrix
 
@@ -33,6 +36,9 @@ class Ensemble(PETEnsemble):
 
     hessian(x,*args)
         Ensemble hessian
+
+    calc_ensemble_weights(self,x,*args):
+        Calculate weights used in sequential monte carlo optimization
 
     """
 
@@ -130,7 +136,6 @@ class Ensemble(PETEnsemble):
                                          func=self.function, 
                                          ne=self.num_samples)
 
-
     def get_state(self):
         """
         Returns
@@ -162,13 +167,24 @@ class Ensemble(PETEnsemble):
         return self.bounds
     
     def get_final_state(self, return_dict=False):
-        
+        """
+        Parameters
+        ----------
+        return_dict : bool
+            Retrun dictionary if true
+
+        Returns
+        -------
+        x : numpy.ndarray
+            Control vector as ndarray, shape (number of controls, number of perturbations)
+        """
+
         self._invert_scale_state()
         if return_dict:
-            return self.state
+            x = self.state
         else:
-            return self.get_state()
-
+            x = self.get_state()
+        return x
 
     def function(self, x, *args):
         """
@@ -337,7 +353,6 @@ class Ensemble(PETEnsemble):
         return self.genopt.ensemble_mutation_gradient(return_ensembles=kwargs['return_ensembles'])
     '''
 
-
     def calc_ensemble_weights(self, x, *args):
         r"""
         Calculate weights used in sequential monte carlo optimization.
@@ -467,14 +482,12 @@ class Ensemble(PETEnsemble):
         Function for computing the bias factors
         """
 
-        global num_fun_eval
         if self.bias_factors is None:  # first iteration
             currentfile = self.sim.file
             self.sim.file = self.bias_file
             self.ne = self.num_samples
             self.aux_input = list(np.arange(self.ne))
             self.calc_prediction()
-            num_fun_eval += self.ne
             self.sim.file = currentfile
             bias_func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
             bias_func_values = np.array(bias_func_values)

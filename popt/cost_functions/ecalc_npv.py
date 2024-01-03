@@ -33,7 +33,6 @@ def ecalc_npv(pred_data, keys_opt, report):
     from libecalc.common.time_utils import Frequency
     from libecalc.input.model import YamlModel
 
-
     # Economic values
     npv_const = {}
     for name, value in keys_opt['npv_const']:
@@ -75,7 +74,7 @@ def ecalc_npv(pred_data, keys_opt, report):
             writer.writerow(['dd/mm/yyyy', 'GAS_PROD', 'OIL_PROD', 'WATER_INJ'])
             for t in range(T):
                 D = report[1][t]
-                writer.writerow([D.strftime("%d/%m/%Y"), Qgp[n, t], Qop[n, t], Qwi[n, t]])
+                writer.writerow([D.strftime("%d/%m/%Y"), Qgp[n, t]/Dd[t], Qop[n, t]/Dd[t], Qwi[n, t]/Dd[t]])
 
         # Config
         model_path = HERE / "ecalc_config.yaml"  # "drogn.yaml"
