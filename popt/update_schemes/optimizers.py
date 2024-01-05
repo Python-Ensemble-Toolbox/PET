@@ -309,9 +309,9 @@ class AdaMax(Adam):
         beta2 = self.beta2
 
         self.temp_vel1 = beta1*self.vel1 + (1-beta1)*gradient
-        self.temp_vel2 = max(beta2*self.vel2, np.linalg.norm(gradient))
-
+        self.temp_vel2 = np.maximum(beta2*self.vel2, np.abs(gradient))
+        
         step = alpha/(1-beta1**iter) * self.temp_vel1/self.temp_vel2
-        new_control = control - step  # steepest decent
+        new_control = control - step 
         return new_control, step
     
