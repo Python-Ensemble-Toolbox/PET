@@ -10,7 +10,8 @@ setup(
     author_email='krfo@norceresearch.no',
     description='Python Ensemble Toolbox',
     install_requires=[
-	'wheel',
+	#'wheel',
+	#'bdist_wheel',
         'numpy',
         'scipy',
         'matplotlib',
