@@ -10,8 +10,6 @@ setup(
     author_email='krfo@norceresearch.no',
     description='Python Ensemble Toolbox',
     install_requires=[
-	#'wheel',
-	#'bdist_wheel',
         'numpy',
         'scipy',
         'matplotlib',
@@ -22,8 +20,7 @@ setup(
         'psutil',
         'pdoc @ git+https://github.com/patnr/pdoc@main',
         'pytest',
-	#'pandas',
-        'pandas>=1.5,<2', #for compatibility with p_tqdm
+        'pandas>=1.5,<2', #version selected for compatibility with p_tqdm
         'p_tqdm',
         'mat73',
         'opencv-python',
