@@ -728,4 +728,6 @@ class Ensemble:
         # loop over time instance first, and the level instance.
         self.pred_data = np.array(ml_pred_data).T.tolist()
 
+        self.treat_modeling_error(self.iteration)
+
         return success
