@@ -199,6 +199,11 @@ class Assimilate:
             if 'restartsave' in self.ensemble.keys_da and self.ensemble.keys_da['restartsave'] == 'yes':
                 self.ensemble.save()
 
+        # always store posterior forcast and state, unless specifically told not to
+        if 'nosave' not in self.ensemble.keys_da:
+            np.savez('posterior_state_estimate.npz', **self.ensemble.state)
+            np.savez('posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
+
         # If none of the convergence criteria were met, max. iteration was the reason iterations stopped.
         if conv is False:
             reason = 'Iterations stopped due to max iterations reached!'
