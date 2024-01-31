@@ -35,13 +35,13 @@ class LineSearch(Optimize):
         self.mean_state = x         # initial mean state
         
         # Set other optimization parameters
-        self.alpha          = __set__variable('alpha', 0.25)
         self.alpha_iter_max = __set__variable('alpha_maxiter', 5)
         self.alpha_cov      = __set__variable('alpha_cov', 0.001)
         self.normalize      = __set__variable('normalize', True)
         self.max_resample   = __set__variable('resample', 0)
         self.normalize      = __set__variable('normalize', True)
         self.cov_factor     = __set__variable('cov_factor', 0.5)
+        self.alpha          = 0.0
 
         # Initialize line-search parameters (scipy defaults)
         self.ls_options = {'c1': __set__variable('c1', 0.0001),
@@ -62,10 +62,11 @@ class LineSearch(Optimize):
                 self.logger.info(info_str)
                 self.logger.info('       {:<21} {:<15.4e}'.format(self.iteration, np.mean(self.obj_func_values)))
 
-        # The EnOpt class self-ignites, and it is possible to send the EnOpt class as a callale method to scipy.minimize
-        self.run_loop()  # run_loop resides in the Optimization class (super)
+        
+        self.run_loop() 
     
     def set_amax(self, xk, dk):
+        '''not used currently'''
         amax = np.zeros_like(xk)
         for i, xi in enumerate(xk):
             lower, upper = self.bounds[i]
@@ -75,34 +76,30 @@ class LineSearch(Optimize):
                 amax[i] = (lower-xi)/dk[i]
         return np.min(amax)
                 
-
     def calc_update(self):
 
         # Initialize variables for this step
-        improvement = False
         success = False
-        resampling_iter = 0
 
-
-        # Shrink covariance each time we try resampling
-        shrink = self.cov_factor ** resampling_iter
-
-        #compute gradient
         def _jac(x):
-            g = self.jac(x, shrink*self.cov)
+            g = self.jac(x, self.cov)
             return g/la.norm(g, np.inf)
         
+        def _fun(x):
+            x = ot.clip_state(x, self.bounds)
+            return self.fun(x, self.cov).mean()
+
+        #compute gradient
         pk = _jac(self.mean_state) 
     
         # Compute the hessian
         hessian = self.hess()
-        amax    = self.alpha
         if self.normalize:
             hessian /= np.maximum(la.norm(hessian, np.inf), 1e-12)  # scale the hessian with inf-norm
             
 
         # perform line search
-        ls_results = line_search(f=lambda x: self.fun(x, shrink*self.cov).mean(), 
+        ls_results = line_search(f=_fun, 
                                  myfprime=_jac, 
                                  xk=self.mean_state, 
                                  pk=-pk, 
@@ -110,7 +107,6 @@ class LineSearch(Optimize):
                                  old_fval=self.obj_func_values.mean(),
                                  c1=self.ls_options['c1'],
                                  c2=self.ls_options['c2'],
-                                 amax=0.9*self.set_amax(self.mean_state, -pk),
                                  maxiter=self.alpha_iter_max)
         
         step_size, nfev, njev, fnew, fold, slope = ls_results
@@ -118,7 +114,7 @@ class LineSearch(Optimize):
         if not step_size == None:
 
             # update state
-            self.mean_state = self.mean_state - step_size*pk
+            self.mean_state = ot.clip_state(self.mean_state - step_size*pk, self.bounds)
             self.obj_func_values = fnew
             self.alpha = step_size
 
@@ -131,7 +127,6 @@ class LineSearch(Optimize):
             self.cov = ot.get_sym_pos_semidef(self.cov)
 
             # update status
-            improvement = True
             success = True
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
@@ -143,6 +138,9 @@ class LineSearch(Optimize):
                     format(self.iteration, 0, np.mean(self.obj_func_values),
                             self.alpha, self.cov[0, 0])
                 self.logger.info(info_str_iter)
+        
+        else:
+            success = False
 
         return success
 
