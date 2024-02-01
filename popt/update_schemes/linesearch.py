@@ -2,6 +2,7 @@
 import numpy as np
 import time
 import pprint
+import warnings
 
 from numpy import linalg as la
 from scipy.optimize import line_search
@@ -9,7 +10,9 @@ from scipy.optimize import line_search
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
-import popt.update_schemes.optimizers as opt
+
+# ignore line_search did not converge message
+warnings.filterwarnings('ignore', message='The line search algorithm did not converge')
 
 
 class LineSearch(Optimize):
@@ -33,6 +36,7 @@ class LineSearch(Optimize):
         self.hess       = hess      # hessian function
         self.bounds     = bounds    # parameter bounds
         self.mean_state = x         # initial mean state
+        self.pk_from_ls = None
         
         # Set other optimization parameters
         self.alpha_iter_max = __set__variable('alpha_maxiter', 5)
@@ -81,16 +85,25 @@ class LineSearch(Optimize):
         # Initialize variables for this step
         success = False
 
+        # define dummy functions for scipy.line_search
         def _jac(x):
+            self.njev += 1
+            x = ot.clip_state(x, self.bounds) # ensure bounds are respected
             g = self.jac(x, self.cov)
-            return g/la.norm(g, np.inf)
+            g = g/la.norm(g, np.inf) if self.normalize else g 
+            return g
         
         def _fun(x):
-            x = ot.clip_state(x, self.bounds)
-            return self.fun(x, self.cov).mean()
+            self.nfev += 1
+            x = ot.clip_state(x, self.bounds) # ensure bounds are respected
+            f = self.fun(x, self.cov).mean()
+            return f
 
-        #compute gradient
-        pk = _jac(self.mean_state) 
+        #compute gradient. If a line_search is already done, the new grdient is alread returned as slope by the function
+        if self.pk_from_ls is None:
+            pk = _jac(self.mean_state)
+        else:
+            pk = self.pk_from_ls
     
         # Compute the hessian
         hessian = self.hess()
@@ -99,6 +112,7 @@ class LineSearch(Optimize):
             
 
         # perform line search
+        self.logger.info('Performing line search...')  
         ls_results = line_search(f=_fun, 
                                  myfprime=_jac, 
                                  xk=self.mean_state, 
@@ -111,16 +125,14 @@ class LineSearch(Optimize):
         
         step_size, nfev, njev, fnew, fold, slope = ls_results
         
-        if not step_size == None:
+        if isinstance(step_size, float):
+            self.logger.info('Strong Wolfie conditions satisfied')
 
             # update state
-            self.mean_state = ot.clip_state(self.mean_state - step_size*pk, self.bounds)
+            self.mean_state      = ot.clip_state(self.mean_state - step_size*pk, self.bounds)
             self.obj_func_values = fnew
-            self.alpha = step_size
-
-            # update evaluations
-            self.nfev += nfev
-            self.njev += njev
+            self.alpha           = step_size
+            self.pk_from_ls      = slope
 
             # Update covariance
             self.cov = self.cov - self.alpha_cov * hessian
@@ -130,7 +142,6 @@ class LineSearch(Optimize):
             success = True
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
-            self.iteration += 1
 
             # Write logging info
             if self.logger is not None:
@@ -138,8 +149,12 @@ class LineSearch(Optimize):
                     format(self.iteration, 0, np.mean(self.obj_func_values),
                             self.alpha, self.cov[0, 0])
                 self.logger.info(info_str_iter)
+
+            # update iteration
+            self.iteration += 1
         
         else:
+            self.logger.info('Strong Wolfie conditions not satisfied!')
             success = False
 
         return success
