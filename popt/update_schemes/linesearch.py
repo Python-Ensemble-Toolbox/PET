@@ -47,9 +47,11 @@ class LineSearch(Optimize):
         self.cov_factor     = __set__variable('cov_factor', 0.5)
         self.alpha          = 0.0
 
-        # Initialize line-search parameters (scipy defaults)
+        # Initialize line-search parameters (scipy defaults for c1, and c2)
+        self.alpha_max  = __set__variable('alpha_max', 1.0)
         self.ls_options = {'c1': __set__variable('c1', 0.0001),
                            'c2': __set__variable('c2', 0.9)}
+        
         
         # Calculate objective function of startpoint
         if not self.restart:
@@ -121,6 +123,7 @@ class LineSearch(Optimize):
                                  old_fval=self.obj_func_values.mean(),
                                  c1=self.ls_options['c1'],
                                  c2=self.ls_options['c2'],
+                                 amax=self.alpha_max,
                                  maxiter=self.alpha_iter_max)
         
         step_size, nfev, njev, fnew, fold, slope = ls_results
