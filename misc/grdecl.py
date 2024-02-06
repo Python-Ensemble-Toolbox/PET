@@ -1728,10 +1728,10 @@ def _write_single(path, base, grid, lookup, dialect):
             _write_dimens_ecl(fileobj, dimens)
         else:
             assert False
-
-        log.info('Grid size is %d x %d x %d', *dimens)
-        log.info('Writing keyword DIMENS')
-        _write_dimens_ext(fileobj, dimens, lookup)
+        #
+        # log.info('Grid size is %d x %d x %d', *dimens)
+        # log.info('Writing keyword DIMENS')
+        # _write_dimens_ext(fileobj, dimens, lookup)
 
         # start with all the predefined leading keywords, and then write the
         # rest of them in alphabetical order
