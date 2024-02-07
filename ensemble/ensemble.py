@@ -516,7 +516,10 @@ class Ensemble:
             success = self.calc_ml_prediction(input_state)
         else:
             # Number of parallel runs
-            no_tot_run = int(self.sim.input_dict['parallel'])
+            if 'parallel' in self.sim.input_dict:
+                no_tot_run = int(self.sim.input_dict['parallel'])
+            else:
+                no_tot_run = 1
             self.pred_data = []
 
             # for level in self.multilevel['level']: #
