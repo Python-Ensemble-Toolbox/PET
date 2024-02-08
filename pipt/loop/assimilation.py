@@ -201,8 +201,14 @@ class Assimilate:
 
         # always store posterior forcast and state, unless specifically told not to
         if 'nosave' not in self.ensemble.keys_da:
-            np.savez('posterior_state_estimate.npz', **self.ensemble.state)
-            np.savez('posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
+            try: # first try to save as npz file
+                np.savez('posterior_state_estimate.npz', **self.ensemble.state)
+                np.savez('posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
+            except: # If this fails, store as pickle
+                with open('posterior_state_estimate.p', 'wb') as file:
+                    pickle.dump(self.ensemble.state, file)
+                with open('posterior_forecast.p', 'wb') as file:
+                    pickle.dump(self.ensemble.pred_data, file)
 
         # If none of the convergence criteria were met, max. iteration was the reason iterations stopped.
         if conv is False:
