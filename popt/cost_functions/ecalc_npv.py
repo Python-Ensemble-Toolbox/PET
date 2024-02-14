@@ -5,6 +5,10 @@ from pathlib import Path
 import pandas as pd
 import sys
 
+from libecalc.application.energy_calculator import EnergyCalculator
+from libecalc.common.time_utils import Frequency
+from libecalc.presentation.yaml.model import YamlModel
+
 HERE = Path().cwd()  # fallback for ipynb's
 HERE = HERE.resolve()
 
@@ -29,10 +33,6 @@ def ecalc_npv(pred_data, keys_opt, report):
     objective_values : array_like
         Objective function values (NPV) for all ensemble members.
     """
-
-    from libecalc.application.energy_calculator import EnergyCalculator
-    from libecalc.common.time_utils import Frequency
-    from libecalc.presentation.yaml.model import YamlModel
 
     # Economic values
     npv_const = {}

@@ -81,6 +81,9 @@ class Ensemble(PETEnsemble):
         # Number of samples to compute gradient
         self.num_samples = self.ne
 
+        # Save pred data?
+        self.save_prediction = __set__variable('save_prediction', None)
+
         # We need the limits to convert between [0, 1] and [lb, ub],
         # and we need the bounds as list of (min, max) pairs
         # Also set the state and covarianve equal to the values provided in the input.
@@ -209,7 +212,7 @@ class Ensemble(PETEnsemble):
 
         self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))  # go from nparray to dict
         self._invert_scale_state()  # ensure that state is in [lb,ub]
-        run_success = self.calc_prediction()  # calculate flow data
+        run_success = self.calc_prediction(save_prediction=self.save_prediction)  # calculate flow data
         self._scale_state()  # scale back to [0, 1]
         if run_success:
             func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
