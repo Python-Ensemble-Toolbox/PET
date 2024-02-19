@@ -14,7 +14,7 @@ from libecalc.presentation.yaml.model import YamlModel
 HERE = Path().cwd()
 HERE = HERE.resolve()
 
-def ren_npv_co2(pred_data, keys_opt, report):
+def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
     '''
     Net Present Value with Renewable Power and co2 emissions (with eCalc)
 
@@ -33,6 +33,8 @@ def ren_npv_co2(pred_data, keys_opt, report):
     -------
     objective_values : array_like
         Objective function values (NPV) for all ensemble members.
+    
+    NOTE: This function is not very generalized!
     '''
     # define a data getter
     get_data = lambda i, key: pred_data[i+1][key].squeeze() - pred_data[i][key].squeeze()
@@ -74,6 +76,7 @@ def ren_npv_co2(pred_data, keys_opt, report):
     gas_inj_energy  = energy_arrays['gas']
 
     # calculate the NPV values
+    emissions_ensemble = []
     for n in range(ne):
 
         # config eCalc
@@ -93,6 +96,8 @@ def ren_npv_co2(pred_data, keys_opt, report):
         compressor_power     = consumption['compressor_train'].values
         compressor_power_gas = np.clip(compressor_power - ren_comp_energy[n][:-1], 0, None)
 
+        base_power = consumption[['re-compressors', 'baseload', 'boosterpump']].sum(axis=1).values
+
         # calculate the co2 emissions. This is done the same way as eCalc does it,
         # first we interpolate the genset table
         gen_df    = remove_comments_from_df(pd.read_csv(HERE/'genset.csv'))
@@ -100,10 +105,13 @@ def ren_npv_co2(pred_data, keys_opt, report):
         gen_fuel  = gen_df[gen_df.columns[1]].values
         gen_curve = interp1d(x=gen_pow, y=gen_fuel)
 
-        fuel = gen_curve(compressor_power_gas + gas_inj_energy[n][:-1]) # Sm3/day
-        fuel = fuel*ndays                                               # Sm3 
-        co2_emission_factor = 2.416                                     # kg/Sm3
-        co2_emissions = co2_emission_factor*fuel/1000                   # tons
+        fuel = gen_curve(compressor_power_gas + gas_inj_energy[n][:-1] + base_power) # Sm3/day
+        fuel = fuel*ndays                                                            # Sm3 
+        co2_emission_factor = 2.416                                                  # kg/Sm3
+        co2_emissions = co2_emission_factor*fuel/1000                                # tons
+
+        if save_emissions:
+            emissions_ensemble.append(co2_emissions)
     
         # calculate npv value
         gain = const['wop']*prod_oil[n] + const['wgp']*prod_gas[n]
@@ -112,6 +120,9 @@ def ren_npv_co2(pred_data, keys_opt, report):
 
         npv_values[n] = np.sum( (gain-loss)/disc )
     
+    if save_emissions:
+        emissions_ensemble = np.array(emissions_ensemble)
+        np.save('co2_emissions.npy', emissions_ensemble)
 
     # clear energy arrays
     np.savez(HERE/'energy_arrays.npz', 
@@ -154,7 +165,7 @@ def remove_comments_from_df(dataframe: pd.DataFrame, symbol='#') -> pd.DataFrame
     for i in dataframe.index:
         if symbol in dataframe[cols].loc[i].to_string():
             dataframe = dataframe.drop(index=[i])
-    return dataframe
+    return dataframe.astype('float64')
 
 
 
