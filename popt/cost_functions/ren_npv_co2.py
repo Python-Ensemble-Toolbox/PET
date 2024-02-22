@@ -75,7 +75,7 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
 
     # Load energy arrays. These arrays contain the excess windpower used for gas compression,
     # and the energy from gas which is used in the water intection.
-    energy_arrays = np.load(HERE/'energy_arrays.npz')
+    energy_arrays = np.load(HERE/'energy_arrays.npz', allow_pickle=True)
     ren_comp_energy = energy_arrays['ren']
     gas_inj_energy  = energy_arrays['gas']
 
@@ -99,11 +99,12 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
         consumption          = results_as_df(yaml_model, consumer_results, lambda r: r.component_result.energy_usage)
         compressor_power     = consumption['compressor_train'].values
 
-        compressor_power_gas = sum_series(pd.Series(compressor_power   , pd.DatetimeIndex(consumption['dates'])),
+        # subtract power from wind, and sum.
+        compressor_power_gas = sum_series(pd.Series(compressor_power   , pd.DatetimeIndex(report[1][1:])),
                                           pd.Series(-ren_comp_energy[n], pd.DatetimeIndex(energy_arrays['dates'])))
         base_power = consumption[['re-compressors', 'baseload', 'boosterpump']].sum(axis=1).values
 
-        total_gas_power = sum_series(pd.Series(base_power, pd.DatetimeIndex(consumption['dates'])),
+        total_gas_power = sum_series(pd.Series(base_power, pd.DatetimeIndex(report[1][1:])),
                                      compressor_power_gas)
 
         # calculate the co2 emissions. This is done the same way as eCalc does it,
