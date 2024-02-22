@@ -161,5 +161,3 @@ class LineSearch(Optimize):
             success = False
 
         return success
-
-

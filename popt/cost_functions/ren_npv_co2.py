@@ -39,8 +39,12 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
     # define a data getter
     get_data = lambda i, key: pred_data[i+1][key].squeeze() - pred_data[i][key].squeeze()
 
-    # ensemble size, number of report-dates
-    ne, nt = len(get_data(1,'fopt')), len(pred_data) 
+    # ensemble size (ne), number of report-dates (nt)
+    nt = len(pred_data) 
+    try: 
+        ne = len(get_data(1,'fopt'))
+    except: 
+        ne = 1
 
     # Economic and other constatns
     const = dict(keys_opt['npv_const'])
@@ -94,9 +98,13 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
         consumer_results     = model.evaluate_energy_usage(yaml_model.variables)
         consumption          = results_as_df(yaml_model, consumer_results, lambda r: r.component_result.energy_usage)
         compressor_power     = consumption['compressor_train'].values
-        compressor_power_gas = np.clip(compressor_power - ren_comp_energy[n][:-1], 0, None)
 
+        compressor_power_gas = sum_series(pd.Series(compressor_power   , pd.DatetimeIndex(consumption['dates'])),
+                                          pd.Series(-ren_comp_energy[n], pd.DatetimeIndex(energy_arrays['dates'])))
         base_power = consumption[['re-compressors', 'baseload', 'boosterpump']].sum(axis=1).values
+
+        total_gas_power = sum_series(pd.Series(base_power, pd.DatetimeIndex(consumption['dates'])),
+                                     compressor_power_gas)
 
         # calculate the co2 emissions. This is done the same way as eCalc does it,
         # first we interpolate the genset table
@@ -105,7 +113,7 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
         gen_fuel  = gen_df[gen_df.columns[1]].values
         gen_curve = interp1d(x=gen_pow, y=gen_fuel)
 
-        fuel = gen_curve(compressor_power_gas + gas_inj_energy[n][:-1] + base_power) # Sm3/day
+        fuel = gen_curve(total_gas_power.values) # Sm3/day
         fuel = fuel*ndays                                                            # Sm3 
         co2_emission_factor = 2.416                                                  # kg/Sm3
         co2_emissions = co2_emission_factor*fuel/1000                                # tons
@@ -166,6 +174,25 @@ def remove_comments_from_df(dataframe: pd.DataFrame, symbol='#') -> pd.DataFrame
         if symbol in dataframe[cols].loc[i].to_string():
             dataframe = dataframe.drop(index=[i])
     return dataframe.astype('float64')
+
+
+def sum_series(a: pd.Series, b: pd.Series) -> pd.Series:
+
+    c = a + b
+
+    for index, value in c.items():
+
+        if np.isnan(value):
+
+            try:
+                c[index] = a[index]
+            except:
+                c[index] = b[index]
+    
+    return c
+                
+
+
 
 
 
