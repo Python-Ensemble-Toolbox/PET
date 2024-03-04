@@ -11,8 +11,9 @@ from libecalc.application.energy_calculator import EnergyCalculator
 from libecalc.common.time_utils import Frequency
 from libecalc.presentation.yaml.model import YamlModel
 
-HERE = Path().cwd()
+HERE = Path().cwd()  # fallback for ipynb's
 HERE = HERE.resolve()
+
 
 def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
     '''
@@ -76,7 +77,7 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
 
     # Load energy arrays. These arrays contain the excess windpower used for gas compression,
     # and the energy from gas which is used in the water intection.
-    power_arrays = np.load(f'{kwargs['power']}.npz')
+    power_arrays = np.load(kwargs['power']+'.npz')
     ren_comp_energy = power_arrays['ren']
     gas_inj_energy  = power_arrays['gas']
 
@@ -89,9 +90,9 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
                        'OIL_PROD'   : prod_oil[n]/ndays,
                        'GAS_PROD'   : prod_gas[n]/ndays, 
                        'WATER_INJ'  : inj_wat[n]/ndays,
-                       'THP_MAX'    : thp[n]} ).to_csv(HERE/'ecalc_input.csv', index=False)
+                       'THP_MAX'    : thp[n]} ).to_csv('ecalc_input.csv', index=False)
         
-        model_path = HERE/f'{kwargs['yamlfile']}.yaml'
+        model_path = HERE/str(kwargs['yamlfile']+'.yaml')
         yaml_model = YamlModel(path=model_path, output_frequency=Frequency.NONE)
         
         # compute power consumption of gas compressor with eCalc 
@@ -106,7 +107,7 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
 
         # calculate the co2 emissions. This is done the same way as eCalc does it,
         # first we interpolate the genset table
-        gen_df    = remove_comments_from_df(pd.read_csv(HERE/'genset.csv'))
+        gen_df    = remove_comments_from_df(pd.read_csv('genset.csv'))
         gen_pow   = gen_df[gen_df.columns[0]].values
         gen_fuel  = gen_df[gen_df.columns[1]].values
         gen_curve = interp1d(x=gen_pow, y=gen_fuel)
@@ -131,12 +132,12 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
         np.save('co2_emissions.npy', emissions_ensemble)
 
     # clear energy arrays
-    np.savez(HERE/f'{kwargs['power']}.npz', 
+    np.savez(kwargs['power']+'.npz', 
              ren=np.zeros_like(ren_comp_energy), 
              gas=np.zeros_like(gas_inj_energy))
 
     # delete ecalc_input
-    os.remove(HERE/'ecalc_input.csv')  
+    os.remove('ecalc_input.csv')  
 
     scaling = 1.0
     if 'obj_scaling' in const:
