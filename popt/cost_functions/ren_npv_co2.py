@@ -47,7 +47,8 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
         ne = 1
 
     # Economic and other constatns
-    const = dict(keys_opt['npv_const'])
+    const  = dict(keys_opt['npv_const'])
+    kwargs = dict(keys_opt['npv_kwargs']) 
 
     # define some empty  array variables
     prod_oil, prod_gas, prod_wat, inj_wat, thp = [np.zeros((ne, nt-1)) for _ in range(5)]
@@ -75,9 +76,9 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
 
     # Load energy arrays. These arrays contain the excess windpower used for gas compression,
     # and the energy from gas which is used in the water intection.
-    energy_arrays = np.load(HERE/'energy_arrays.npz', allow_pickle=True)
-    ren_comp_energy = energy_arrays['ren']
-    gas_inj_energy  = energy_arrays['gas']
+    power_arrays = np.load(f'{kwargs['power']}.npz')
+    ren_comp_energy = power_arrays['ren']
+    gas_inj_energy  = power_arrays['gas']
 
     # calculate the NPV values
     emissions_ensemble = []
@@ -90,22 +91,18 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
                        'WATER_INJ'  : inj_wat[n]/ndays,
                        'THP_MAX'    : thp[n]} ).to_csv(HERE/'ecalc_input.csv', index=False)
         
-        model_path = HERE/'ecalc_config.yaml'
+        model_path = HERE/f'{kwargs['yamlfile']}.yaml'
         yaml_model = YamlModel(path=model_path, output_frequency=Frequency.NONE)
         
         # compute power consumption of gas compressor with eCalc 
         model = EnergyCalculator(graph=yaml_model.graph)
-        consumer_results     = model.evaluate_energy_usage(yaml_model.variables)
-        consumption          = results_as_df(yaml_model, consumer_results, lambda r: r.component_result.energy_usage)
-        compressor_power     = consumption['compressor_train'].values
+        consumption = results_as_df(yaml_model, 
+                                    model.evaluate_energy_usage(yaml_model.variables), 
+                                    lambda r: r.component_result.energy_usage)
 
-        # subtract power from wind, and sum.
-        compressor_power_gas = sum_series(pd.Series(compressor_power   , pd.DatetimeIndex(report[1][1:])),
-                                          pd.Series(-ren_comp_energy[n], pd.DatetimeIndex(energy_arrays['dates'])))
-        base_power = consumption[['re-compressors', 'baseload', 'boosterpump']].sum(axis=1).values
+        base_power  = consumption[kwargs['basekeys']].sum(axis=1).values
+        total_gas_power = base_power - ren_comp_energy[n,:-1] + gas_inj_energy[n,:-1]
 
-        total_gas_power = sum_series(pd.Series(base_power, pd.DatetimeIndex(report[1][1:])),
-                                     compressor_power_gas)
 
         # calculate the co2 emissions. This is done the same way as eCalc does it,
         # first we interpolate the genset table
@@ -114,10 +111,10 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
         gen_fuel  = gen_df[gen_df.columns[1]].values
         gen_curve = interp1d(x=gen_pow, y=gen_fuel)
 
-        fuel = gen_curve(total_gas_power.values) # Sm3/day
-        fuel = fuel*ndays                                                            # Sm3 
-        co2_emission_factor = 2.416                                                  # kg/Sm3
-        co2_emissions = co2_emission_factor*fuel/1000                                # tons
+        fuel = gen_curve(total_gas_power)                   # Sm3/day
+        fuel = fuel*ndays                                   # Sm3 
+        co2_emission_factor = 2.416                         # kg/Sm3
+        co2_emissions = co2_emission_factor*fuel/1000       # tons
 
         if save_emissions:
             emissions_ensemble.append(co2_emissions)
@@ -134,7 +131,7 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
         np.save('co2_emissions.npy', emissions_ensemble)
 
     # clear energy arrays
-    np.savez(HERE/'energy_arrays.npz', 
+    np.savez(HERE/f'{kwargs['power']}.npz', 
              ren=np.zeros_like(ren_comp_energy), 
              gas=np.zeros_like(gas_inj_energy))
 
@@ -175,23 +172,6 @@ def remove_comments_from_df(dataframe: pd.DataFrame, symbol='#') -> pd.DataFrame
         if symbol in dataframe[cols].loc[i].to_string():
             dataframe = dataframe.drop(index=[i])
     return dataframe.astype('float64')
-
-
-def sum_series(a: pd.Series, b: pd.Series) -> pd.Series:
-
-    c = a + b
-
-    for index, value in c.items():
-
-        if np.isnan(value):
-
-            try:
-                c[index] = a[index]
-            except:
-                c[index] = b[index]
-    
-    return c
-                
 
 
 
