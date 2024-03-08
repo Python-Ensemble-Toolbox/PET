@@ -42,6 +42,7 @@ class SmcOpt(Optimize):
             - resample: number indicating how many times resampling is tried if no improvement is found
             - cov_factor: factor used to shrink the covariance for each resampling trial (defalut 0.5)
             - inflation_factor: term used to weight down prior influence (defalult 1)
+            - survival_factor: fraction of surviving samples
             - savedata: specify which class variables to save to the result files (state, objective function
                         value, iteration number, number of function evaluations, and number of gradient
                         evaluations, are always saved)
@@ -72,6 +73,7 @@ class SmcOpt(Optimize):
         self.max_resample = __set__variable('resample', 0)
         self.cov_factor = __set__variable('cov_factor', 0.5)
         self.inflation_factor = __set__variable('inflation_factor', 1)
+        self.survival_factor = __set__variable('survival_factor', 0)
 
         # Calculate objective function of startpoint
         if not self.restart:
@@ -110,7 +112,8 @@ class SmcOpt(Optimize):
             shrink = self.cov_factor ** resampling_iter
 
             # Calc sensitivity
-            (sens_matrix, self.best_state, best_func_tmp) = self.sens(self.mean_state, inflate, shrink*self.cov)
+            (sens_matrix, self.best_state, best_func_tmp) = self.sens(self.mean_state, inflate,
+                                                                      shrink*self.cov, self.survival_factor)
             self.njev += 1
 
             # Initialize for this step

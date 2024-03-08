@@ -117,7 +117,7 @@ class GradientAscent:
         alpha = self._step_size
 
         # apply update
-        new_control = alpha * control + (1-alpha) * gradient
+        new_control = (1-alpha) * control + alpha * gradient
         return new_control
 
     def apply_backtracking(self):
