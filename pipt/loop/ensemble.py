@@ -4,6 +4,7 @@
 import logging
 import os.path
 
+import numpy
 import numpy as np
 import sys
 from copy import deepcopy, copy
@@ -300,8 +301,10 @@ class Ensemble(PETEnsemble):
                     # Entry is a numerical value
                     # Some numerical value or None
                     elif not isinstance(truedata[i][j], str):
-                        self.obs_data[i][self.keys_da['datatype']
-                                         [j]] = np.array([truedata[i][j]])
+                        if type(truedata[i][j]) is numpy.ndarray:
+                            self.obs_data[i][self.keys_da['datatype'][j]] = truedata[i][j]
+                        else:
+                            self.obs_data[i][self.keys_da['datatype'][j]] = np.array([truedata[i][j]])
 
                     # Scale data if required (currently only one group of data can be scaled)
                     if 'scale' in self.keys_da and self.keys_da['scale'][0] in self.keys_da['datatype'][j] and \

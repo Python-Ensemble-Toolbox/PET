@@ -119,24 +119,24 @@ class flow_sim2seis(flow):
                         multfactor = self.ecl_case.cell_data('PORV_RC', time)
 
                         pem_input['PORO'] = np.array(
-                            multfactor[~tmp.mask]*tmp[~tmp.mask], dtype=np.float)
+                            multfactor[~tmp.mask]*tmp[~tmp.mask], dtype=float)
                     else:
-                        pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=np.float)
+                        pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
                     # get active NTG if needed
                     if 'ntg' in self.pem_input:
                         if self.pem_input['ntg'] == 'no':
                             pem_input['NTG'] = None
                         else:
                             tmp = self.ecl_case.cell_data('NTG')
-                            pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=np.float)
+                            pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
                     else:
                         tmp = self.ecl_case.cell_data('NTG')
-                        pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=np.float)
+                        pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
 
                     for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
                         tmp = self.ecl_case.cell_data(var, time)
                         # only active, and conv. to float
-                        pem_input[var] = np.array(tmp[~tmp.mask], dtype=np.float)
+                        pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
 
                     if 'press_conv' in self.pem_input:
                         pem_input['PRESSURE'] = pem_input['PRESSURE'] * \
@@ -147,7 +147,7 @@ class flow_sim2seis(flow):
                         P_init = self.pem.p_init*np.ones(tmp.shape)[~tmp.mask]
                     else:
                         # initial pressure is first
-                        P_init = np.array(tmp[~tmp.mask], dtype=np.float)
+                        P_init = np.array(tmp[~tmp.mask], dtype=float)
 
                     if 'press_conv' in self.pem_input:
                         P_init = P_init*self.pem_input['press_conv']
@@ -280,7 +280,8 @@ class flow_rock(flow):
             self.ecl_case = ecl.EclipseCase(
                 'En_' + str(self.ensemble_member) + os.sep + self.file + '.DATA')
             phases = self.ecl_case.init.phases
-            if 'OIL' in phases and 'WAT' in phases and 'GAS' in phases:  # This should be extended
+            #if 'OIL' in phases and 'WAT' in phases and 'GAS' in phases:  # This should be extended
+            if 'WAT' in phases and 'GAS' in phases:
                 vintage = []
                 # loop over seismic vintages
                 for v, assim_time in enumerate(self.pem_input['vintage']):
@@ -293,24 +294,28 @@ class flow_rock(flow):
                         multfactor = self.ecl_case.cell_data('PORV_RC', time)
 
                         pem_input['PORO'] = np.array(
-                            multfactor[~tmp.mask]*tmp[~tmp.mask], dtype=np.float)
+                            multfactor[~tmp.mask]*tmp[~tmp.mask], dtype=float)
                     else:
-                        pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=np.float)
+                        pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
                     # get active NTG if needed
                     if 'ntg' in self.pem_input:
                         if self.pem_input['ntg'] == 'no':
                             pem_input['NTG'] = None
                         else:
                             tmp = self.ecl_case.cell_data('NTG')
-                            pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=np.float)
+                            pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
                     else:
                         tmp = self.ecl_case.cell_data('NTG')
-                        pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=np.float)
+                        pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
 
+                    pem_input['RS'] = None
                     for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
-                        tmp = self.ecl_case.cell_data(var, time)
+                        try:
+                            tmp = self.ecl_case.cell_data(var, time)
+                        except:
+                            pass
                         # only active, and conv. to float
-                        pem_input[var] = np.array(tmp[~tmp.mask], dtype=np.float)
+                        pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
 
                     if 'press_conv' in self.pem_input:
                         pem_input['PRESSURE'] = pem_input['PRESSURE'] * \
@@ -321,7 +326,7 @@ class flow_rock(flow):
                         P_init = self.pem.p_init*np.ones(tmp.shape)[~tmp.mask]
                     else:
                         # initial pressure is first
-                        P_init = np.array(tmp[~tmp.mask], dtype=np.float)
+                        P_init = np.array(tmp[~tmp.mask], dtype=float)
 
                     if 'press_conv' in self.pem_input:
                         P_init = P_init*self.pem_input['press_conv']
@@ -356,8 +361,12 @@ class flow_rock(flow):
             else:
                 pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
 
+            pem_input['RS'] = None
             for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
-                tmp = self.ecl_case.cell_data(var, base_time)
+                try:
+                    tmp = self.ecl_case.cell_data(var, time)
+                except:
+                    pass
                 # only active, and conv. to float
                 pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
 
