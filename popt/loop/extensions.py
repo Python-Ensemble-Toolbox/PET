@@ -7,7 +7,9 @@ from scipy.special import polygamma, digamma
 from popt.misc_tools import optim_tools as ot
 
 
-class GenOptDistribution:
+__all__ = ['GenOptExtension']
+
+class GenOptExtension:
     '''
     Class that contains all the operations on the mutation distribution of GenOpt
     '''
@@ -107,7 +109,7 @@ class GenOptDistribution:
 
         return enZ, enX
 
-    def epsilon_transformation(self, x, enX):
+    def eps_trafo(self, x, enX):
         '''
         Performs the epsilon transformation, 
             X ∈ [0, 1] ---> Y ∈ [x-ε, x+ε]
@@ -167,12 +169,11 @@ class GenOptDistribution:
             The average gradient.
         '''
         # check for objective fucntion 
-        if 'func' in kwargs:
-            func = kwargs.get('func')
-        elif self.func is None:
-            raise ValueError('No objectvie fucntion given. Please pass keyword argument: func=<your func>')
-        else:
+        func = kwargs.get('func')
+        if (func is None) and (self.func is not None):
             func = self.func
+        else:
+            raise ValueError('No objectvie fucntion given. Please pass keyword argument: func=<your func>')
         
         # check for ensemble size
         if 'ne' in kwargs:
@@ -186,47 +187,51 @@ class GenOptDistribution:
         if args:
             self.update_distribution(*args)
 
-        # sample and eps-transfrom
+        # sample
         self.enZ, self.enX = self.sample(size=ne)
-        self.enY = self.epsilon_transformation(x, self.enX)
+
+        # create ensembles
+        self.enY = self.eps_trafo(x, self.enX)
         self.enJ = func(self.enY.T)
+        meanJ = self.enJ.mean()
 
-        # calculate the ensemble gradient
-        self.enJ    = self.enJ[:,np.newaxis]                    # shape (ne,1)
-        self.enZ    = self.enZ.T                                # shape (d,ne)
-        self.enX    = self.enX.T                                # shape (d,ne)
-        alphas      = (self.theta[:,0])[:,np.newaxis]           # shape (d,1)   
-        betas       = (self.theta[:,1])[:,np.newaxis]           # shape (d,1)
+        # parameters
+        a = self.theta[:,0] # shape (d,)   
+        b = self.theta[:,1] # shape (d,)
 
-        H = np.linalg.inv(self.corr) - np.identity(self.dim)    # shape (d, d)
-        N = stats.norm.pdf(self.enZ)                            # shape (d, Ne)
-        M = np.zeros((self.dim, ne))                            # shape (d, Ne)
+        # copula term
+        matH = np.linalg.inv(self.corr) - np.identity(self.dim)
+    
+        # empty gradients
+        gx = np.zeros(self.dim)
+        gt = np.zeros_like(self.theta)
 
         for d in range(self.dim):
-            marginal = stats.beta(*self.theta[d])
-            M[d,:]   = marginal.pdf(self.enX[d])
+            for n in range(ne):
+                
+                j = self.enJ[n]
+                x = self.enX[n]
+                z = self.enZ[n] 
+                
+                # gradient componets
+                g_marg = (a[d]-1)/x[d] - (b[d]-1)/(1-x[d])
+                g_dist = np.inner(matH[d], z)*stats.beta.pdf(x[d], a[d], b[d])/stats.norm.pdf(z[d])
+                gx[d] += (j-meanJ)*(g_marg - g_dist)
 
-        # get cov matrix
-        cov = self.get_cov()
+                # mutation gradient
+                log_term = [np.log(x[d]), np.log(1-x[d])]
+                psi_term = [delA(a[d], b[d]), delA(b[d], a[d])]
+                gt[d] += (j-meanJ)*(np.array(log_term)-np.array(psi_term))
+            
+            # fisher matrix
+            f_inv = np.linalg.inv(self.fisher_matrix(a[d], b[d])) 
+            gt[d] = np.matmul(f_inv, gt[d])
 
-        # grad via Stein's lemma
-        ensembleX = (alphas-1)/self.enX - (betas-1)/(1-self.enX) - (H@self.enZ)*M/N 
-        grad      = -cov@ensembleX@self.enJ/(ne-1)
-        grad      = 2*self.eps*np.squeeze(grad) # scale gradient. grad-shape (d,)
+             
+        gx = -np.matmul(self.get_cov(), gx)/(2*self.eps*(ne-1))
+        self.grad_theta = gt/(ne-1)
 
-        # mutation gradient
-        finv = lambda th: np.linalg.inv(self.fisher_matrix(*th))
-        fishers_inv = np.apply_along_axis(finv, axis=1, arr=self.theta) #shape (d, 2, 2)
-
-        log_term = np.array([np.log(self.enX), np.log(1-self.enX)])
-        psi_term = np.array([np.apply_along_axis(delA, axis=1, arr=self.theta),
-                             np.apply_along_axis(delA, axis=1, arr=np.flip(self.theta, axis=1))])
-        
-        ensembleTheta   = log_term-psi_term[:,:,None]
-        self.grad_theta = np.sum(ensembleTheta*self.enJ.T, axis=-1)/(ne-1)
-        self.grad_theta = np.einsum('kij,jk->ki', fishers_inv, self.grad_theta, optimize=True)
-
-        return grad
+        return gx
     
     def mutation_gradient(self, x=None, *args, **kwargs):
         '''
@@ -307,7 +312,7 @@ def var2eps(var, theta):
     epsilon = np.sqrt(0.25*var/frac)
     return epsilon
 
-def delA(theta):
+def delA(a, b):
     '''
     Calculates the expression psi(a) - psi(a+b),
     where psi() is the digamma function.
@@ -321,6 +326,4 @@ def delA(theta):
     --------------------------------------------
     out : float
     '''
-    a = theta[0]
-    b = theta[1]
     return digamma(a)-digamma(a+b)
