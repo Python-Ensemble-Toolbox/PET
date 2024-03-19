@@ -93,7 +93,7 @@ def ren_npv_co2(pred_data, keys_opt, report, save_emissions=False):
         os.remove('co2_emissions.npy')
 
     # clear energy arrays
-    np.savez(kwargs['power']+'.npz', wind=np.zeros((ne, nt)))
+    np.savez(kwargs['power']+'.npz', wind=np.zeros((ne, nt)), ren=np.zeros((ne,nt)), gas=np.zeros((ne,nt)))
 
     scaling = 1.0
     if 'obj_scaling' in const:
