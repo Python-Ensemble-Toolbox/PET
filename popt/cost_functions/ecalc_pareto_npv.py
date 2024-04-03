@@ -1,4 +1,5 @@
 """Net present value."""
+import numpy
 import numpy as np
 import csv
 from pathlib import Path
@@ -96,19 +97,29 @@ def ecalc_pareto_npv(pred_data, keys_opt, report):
         Qem = emissions_total.values * Dd  # total number of tons
 
         value1 = (Qop[n, :] * npv_const['wop'] + Qgp[n, :] * npv_const['wgp'] - Qwp[n, :] * npv_const['wwp'] -
-                 Qwi[n, :] * npv_const['wwi'] - Qem * npv_const['wem']) / (
-            (1 + npv_const['disc']) ** (Dd / 365))
+                  Qwi[n, :] * npv_const['wwi'] - Qem * npv_const['wem']) / (
+                         (1 + npv_const['disc']) ** (Dd / 365))
         value1 = np.sum(value1)
-        value2 = - Qem * npv_const['wemc'] / ((1 + npv_const['disc']) ** (Dd / 365))
-        value2 = np.sum(value2)
-
-        # scale all values
         if 'obj_scaling' in npv_const:
             value1 /= npv_const['obj_scaling']
-            value2 /= npv_const['obj_scaling']
+
+        value2 = np.array([])
+        if 'wemc' in npv_const:  # multi-opjective with co2 cost correction
+            value2 = - Qem * npv_const['wemc'] / ((1 + npv_const['disc']) ** (Dd / 365))
+            value2 = np.sum(value2)
+            if 'obj_scaling' in npv_const:
+                value2 /= npv_const['obj_scaling']
+        elif 'w' in npv_const:  # multi-objective with emission intensity
+            rho_o = 840.0  # oil density
+            rho_g = 1  # gas density
+            conv = 1000  # convert from kilo to tonne
+            value2 = np.sum(Qem*conv) / (np.sum(Qop[n, :]*rho_o + Qgp[n, :]*rho_g)/conv) # kg/toe
 
         pareto_values.append([np.sum(Qem), value1, value2])
-        values.append(value1 + value2)  # total objective function
+        if 'w' in npv_const:
+            values.append((1-npv_const['w'])*value1 + -1.0*npv_const['w']*value2)
+        else:
+            values.append(value1 + value2)  # total objective function
 
     # Save emissions and both objective functions for later analysis
     pareto_file = 'pareto_values.npz'
