@@ -31,7 +31,7 @@ def ecalc_pareto_npv(pred_data, keys_opt, report):
         Objective function values (NPV) for all ensemble members.
     """
 
-    from libecalc.core.ecalc import EnergyCalculator
+    from libecalc.application.energy_calculator import EnergyCalculator
     from libecalc.common.time_utils import Frequency
     from libecalc.presentation.yaml.model import YamlModel
 

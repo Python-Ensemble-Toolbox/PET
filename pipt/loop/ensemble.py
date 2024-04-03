@@ -417,8 +417,9 @@ class Ensemble(PETEnsemble):
                         self.datavar[i][datatype[j]][ind_tol] = datavar[i][2*j+1][1] ** 2
 
                     else:  # Single. rel. var input
-                        self.datavar[i][datatype[j]] = (
-                            datavar[i][2*j+1] * 0.01 * self.obs_data[i][datatype[j]]) ** 2
+                        var = (datavar[i][2*j+1] * 0.01 * self.obs_data[i][datatype[j]]) ** 2
+                        var = np.clip(var, 1.0e-9, None)  # avoid zero variance
+                        self.datavar[i][datatype[j]] = var
                 # EMP
                 elif datavar[i][2*j] == 'emp' and datavar[i][2*j+1].endswith('.npz') and \
                         self.obs_data[i][datatype[j]] is not None:  # Empirical var.
