@@ -29,5 +29,6 @@ setup(
         'tomli-w',
         'pyyaml',
         'libecalc',
+        'sklearn'
     ],
 )

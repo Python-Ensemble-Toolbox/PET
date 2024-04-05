@@ -1,11 +1,8 @@
-"""Descriptive description."""
-
 from simulator.opm import flow
 from importlib import import_module
 import datetime as dt
 import numpy as np
 import os
-import time
 from misc import ecl, grdecl
 import shutil
 import glob
@@ -17,10 +14,10 @@ from sklearn.preprocessing import StandardScaler
 
 
 class flow_sim2seis(flow):
-    '''
+    """
     Couple the OPM-flow simulator with a sim2seis simulator such that both reservoir quantities and petro-elastic
     quantities can be calculated. Inherit the flow class, and use super to call similar functions.
-    '''
+    """
 
     def __init__(self, input_dict=None, filename=None, options=None):
         super().__init__(input_dict, filename, options)
@@ -196,12 +193,11 @@ class flow_sim2seis(flow):
                         self.pred_data[prim_ind][key] = np.sum(
                             np.abs(result[:, :, :, v]), axis=0).flatten()
 
-
 class flow_rock(flow):
-    '''
+    """
     Couple the OPM-flow simulator with a rock-physics simulator such that both reservoir quantities and petro-elastic
     quantities can be calculated. Inherit the flow class, and use super to call similar functions.
-    '''
+    """
 
     def __init__(self, input_dict=None, filename=None, options=None):
         super().__init__(input_dict, filename, options)
@@ -348,59 +344,59 @@ class flow_rock(flow):
                     self.pem._filter()
                     vintage.append(deepcopy(self.pem.bulkimp))
 
-        if hasattr(self.pem, 'baseline'):  # 4D measurement
-            base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
-                                    self.startDate['day']) + dt.timedelta(days=self.pem.baseline)
-            # pem_input = {}
-            # get active porosity
-            tmp = self.ecl_case.cell_data('PORO')
+            if hasattr(self.pem, 'baseline'):  # 4D measurement
+                base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
+                                        self.startDate['day']) + dt.timedelta(days=self.pem.baseline)
+                # pem_input = {}
+                # get active porosity
+                tmp = self.ecl_case.cell_data('PORO')
 
-            if 'compaction' in self.pem_input:
-                multfactor = self.ecl_case.cell_data('PORV_RC', base_time)
+                if 'compaction' in self.pem_input:
+                    multfactor = self.ecl_case.cell_data('PORV_RC', base_time)
 
-                pem_input['PORO'] = np.array(
-                    multfactor[~tmp.mask] * tmp[~tmp.mask], dtype=float)
+                    pem_input['PORO'] = np.array(
+                        multfactor[~tmp.mask] * tmp[~tmp.mask], dtype=float)
+                else:
+                    pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
+
+                pem_input['RS'] = None
+                for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
+                    try:
+                        tmp = self.ecl_case.cell_data(var, base_time)
+                    except:
+                        pass
+                    # only active, and conv. to float
+                    pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
+
+                if 'press_conv' in self.pem_input:
+                    pem_input['PRESSURE'] = pem_input['PRESSURE'] * \
+                        self.pem_input['press_conv']
+
+                saturations = [1 - (pem_input['SWAT'] + pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)]
+                               for ph in phases]
+                # Get the pressure
+                self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
+                                    ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
+                                    ensembleMember=None)
+
+                # mask the bulkimp to get proper dimensions
+                tmp_value = np.zeros(self.ecl_case.init.shape)
+
+                tmp_value[self.ecl_case.init.actnum] = self.pem.bulkimp
+                # kill if values are inf or nan
+                assert not np.isnan(tmp_value).any()
+                assert not np.isinf(tmp_value).any()
+                self.pem.bulkimp = np.ma.array(data=tmp_value, dtype=float,
+                                               mask=deepcopy(self.ecl_case.init.mask))
+                self.pem._filter()
+
+                # 4D response
+                self.pem_result = []
+                for i, elem in enumerate(vintage):
+                    self.pem_result.append(elem - deepcopy(self.pem.bulkimp))
             else:
-                pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
-
-            pem_input['RS'] = None
-            for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
-                try:
-                    tmp = self.ecl_case.cell_data(var, base_time)
-                except:
-                    pass
-                # only active, and conv. to float
-                pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
-
-            if 'press_conv' in self.pem_input:
-                pem_input['PRESSURE'] = pem_input['PRESSURE'] * \
-                    self.pem_input['press_conv']
-
-            saturations = [1 - (pem_input['SWAT'] + pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)]
-                           for ph in phases]
-            # Get the pressure
-            self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
-                                ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
-                                ensembleMember=None)
-
-            # mask the bulkimp to get proper dimensions
-            tmp_value = np.zeros(self.ecl_case.init.shape)
-
-            tmp_value[self.ecl_case.init.actnum] = self.pem.bulkimp
-            # kill if values are inf or nan
-            assert not np.isnan(tmp_value).any()
-            assert not np.isinf(tmp_value).any()
-            self.pem.bulkimp = np.ma.array(data=tmp_value, dtype=float,
-                                           mask=deepcopy(self.ecl_case.init.mask))
-            self.pem._filter()
-
-            # 4D response
-            self.pem_result = []
-            for i, elem in enumerate(vintage):
-                self.pem_result.append(elem - deepcopy(self.pem.bulkimp))
-        else:
-            for i, elem in enumerate(vintage):
-                self.pem_result.append(elem)
+                for i, elem in enumerate(vintage):
+                    self.pem_result.append(elem)
 
         return success
 
@@ -418,12 +414,12 @@ class flow_rock(flow):
                         self.pred_data[prim_ind][key] = self.pem_result[v].data.flatten()
 
 class flow_barycenter(flow):
-    '''
+    """
     Couple the OPM-flow simulator with a rock-physics simulator such that both reservoir quantities and petro-elastic
     quantities can be calculated. Inherit the flow class, and use super to call similar functions. In the end, the
     barycenter and moment of interia for the bulkimpedance objects, are returned as observations. The objects are
     identified using k-means clustering, and the number of objects are determined using and elbow strategy.
-    '''
+    """
 
     def __init__(self, input_dict=None, filename=None, options=None):
         super().__init__(input_dict, filename, options)
@@ -574,77 +570,76 @@ class flow_barycenter(flow):
                     self.pem._filter()
                     vintage.append(deepcopy(self.pem.bulkimp))
 
-        if hasattr(self.pem, 'baseline'):  # 4D measurement
-            base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
-                                    self.startDate['day']) + dt.timedelta(days=self.pem.baseline)
-            # pem_input = {}
-            # get active porosity
-            tmp = self.ecl_case.cell_data('PORO')
+            if hasattr(self.pem, 'baseline'):  # 4D measurement
+                base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
+                                        self.startDate['day']) + dt.timedelta(days=self.pem.baseline)
+                # pem_input = {}
+                # get active porosity
+                tmp = self.ecl_case.cell_data('PORO')
 
-            if 'compaction' in self.pem_input:
-                multfactor = self.ecl_case.cell_data('PORV_RC', base_time)
+                if 'compaction' in self.pem_input:
+                    multfactor = self.ecl_case.cell_data('PORV_RC', base_time)
 
-                pem_input['PORO'] = np.array(
-                    multfactor[~tmp.mask] * tmp[~tmp.mask], dtype=float)
+                    pem_input['PORO'] = np.array(
+                        multfactor[~tmp.mask] * tmp[~tmp.mask], dtype=float)
+                else:
+                    pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
+
+                pem_input['RS'] = None
+                for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
+                    try:
+                        tmp = self.ecl_case.cell_data(var, base_time)
+                    except:
+                        pass
+                    # only active, and conv. to float
+                    pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
+
+                if 'press_conv' in self.pem_input:
+                    pem_input['PRESSURE'] = pem_input['PRESSURE'] * \
+                        self.pem_input['press_conv']
+
+                saturations = [1 - (pem_input['SWAT'] + pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)]
+                               for ph in phases]
+                # Get the pressure
+                self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
+                                    ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
+                                    ensembleMember=None)
+
+                # mask the bulkimp to get proper dimensions
+                tmp_value = np.zeros(self.ecl_case.init.shape)
+
+                tmp_value[self.ecl_case.init.actnum] = self.pem.bulkimp
+                # kill if values are inf or nan
+                assert not np.isnan(tmp_value).any()
+                assert not np.isinf(tmp_value).any()
+                self.pem.bulkimp = np.ma.array(data=tmp_value, dtype=float,
+                                               mask=deepcopy(self.ecl_case.init.mask))
+                self.pem._filter()
+
+                # 4D response
+                for i, elem in enumerate(vintage):
+                    self.pem_result.append(elem - deepcopy(self.pem.bulkimp))
             else:
-                pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
+                for i, elem in enumerate(vintage):
+                    self.pem_result.append(elem)
 
-            pem_input['RS'] = None
-            for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
-                try:
-                    tmp = self.ecl_case.cell_data(var, base_time)
-                except:
-                    pass
-                # only active, and conv. to float
-                pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
-
-            if 'press_conv' in self.pem_input:
-                pem_input['PRESSURE'] = pem_input['PRESSURE'] * \
-                    self.pem_input['press_conv']
-
-            saturations = [1 - (pem_input['SWAT'] + pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)]
-                           for ph in phases]
-            # Get the pressure
-            self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
-                                ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
-                                ensembleMember=None)
-
-            # mask the bulkimp to get proper dimensions
-            tmp_value = np.zeros(self.ecl_case.init.shape)
-
-            tmp_value[self.ecl_case.init.actnum] = self.pem.bulkimp
-            # kill if values are inf or nan
-            assert not np.isnan(tmp_value).any()
-            assert not np.isinf(tmp_value).any()
-            self.pem.bulkimp = np.ma.array(data=tmp_value, dtype=float,
-                                           mask=deepcopy(self.ecl_case.init.mask))
-            self.pem._filter()
-
-            # 4D response
-            for i, elem in enumerate(vintage):
-                self.pem_result.append(elem - deepcopy(self.pem.bulkimp))
-        else:
-            for i, elem in enumerate(vintage):
-                self.pem_result.append(elem)
-
-        #  Extract k-means centers and interias for each element in pem_result
-        if 'clusters' in self.pem_input:
-            npzfile = np.load(self.pem_input['clusters'], allow_pickle=True)
-            n_clusters_list = npzfile['n_clusters_list']
-            npzfile.close()
-        else:
-            n_clusters_list = len(self.pem_result)*[2]
-        kmeans_kwargs = {"init": "random", "n_init": 10, "max_iter": 300, "random_state": 42}
-        for i, bulkimp in enumerate(self.pem_result):
-            std = np.std(bulkimp)
-            features = np.argwhere(np.squeeze(np.reshape(np.abs(bulkimp), self.ecl_case.init.shape,)) > 3 * std)
-            scaler = StandardScaler()
-            scaled_features = scaler.fit_transform(features)
-            kmeans = KMeans(n_clusters=n_clusters_list[i], **kmeans_kwargs)
-            kmeans.fit(scaled_features)
-            kmeans_center = np.squeeze(scaler.inverse_transform(kmeans.cluster_centers_))  # data / measurements
-            self.bar_result.append(np.append(kmeans_center, kmeans.inertia_))
-
+            #  Extract k-means centers and interias for each element in pem_result
+            if 'clusters' in self.pem_input:
+                npzfile = np.load(self.pem_input['clusters'], allow_pickle=True)
+                n_clusters_list = npzfile['n_clusters_list']
+                npzfile.close()
+            else:
+                n_clusters_list = len(self.pem_result)*[2]
+            kmeans_kwargs = {"init": "random", "n_init": 10, "max_iter": 300, "random_state": 42}
+            for i, bulkimp in enumerate(self.pem_result):
+                std = np.std(bulkimp)
+                features = np.argwhere(np.squeeze(np.reshape(np.abs(bulkimp), self.ecl_case.init.shape,)) > 3 * std)
+                scaler = StandardScaler()
+                scaled_features = scaler.fit_transform(features)
+                kmeans = KMeans(n_clusters=n_clusters_list[i], **kmeans_kwargs)
+                kmeans.fit(scaled_features)
+                kmeans_center = np.squeeze(scaler.inverse_transform(kmeans.cluster_centers_))  # data / measurements
+                self.bar_result.append(np.append(kmeans_center, kmeans.inertia_))
 
         return success
 
