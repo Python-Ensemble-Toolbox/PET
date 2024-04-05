@@ -29,6 +29,6 @@ setup(
         'tomli-w',
         'pyyaml',
         'libecalc',
-        'sklearn'
+        'scikit-learn'
     ],
 )
