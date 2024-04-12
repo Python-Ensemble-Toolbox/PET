@@ -101,7 +101,7 @@ def ecalc_npv(pred_data, keys_opt, report):
         values.append(np.sum(value))
 
     # Save emissions for later analysis
-    np.savez('em_values.npz', em_values=np.array(em_values))
+    np.savez('em_values.npz', em_values=np.array([em_values]))
 
     if 'obj_scaling' in npv_const:
         return np.array(values) / npv_const['obj_scaling']

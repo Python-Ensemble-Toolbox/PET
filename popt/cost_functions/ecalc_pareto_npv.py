@@ -117,7 +117,7 @@ def ecalc_pareto_npv(pred_data, keys_opt, report):
 
         pareto_values.append([np.sum(Qem), value1, value2])
         if 'w' in npv_const:
-            values.append((1-npv_const['w'])*value1 + -1.0*npv_const['w']*value2)
+            values.append((1-npv_const['w'])*value1 + npv_const['w']*value2)
         else:
             values.append(value1 + value2)  # total objective function
 
