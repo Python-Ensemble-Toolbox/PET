@@ -553,9 +553,12 @@ class Ensemble:
             # Index list of ensemble members
             list_member_index = list(range(self.ne))
 
-            # Run prediction in parallel using p_map
-            en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                            list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
+            if no_tot_run==1: # if not in parallel we use regular loop
+                en_pred = [self.sim.run_fwd_sim(state, member_index) for state, member_index in
+                           tqdm(zip(list_state, list_member_index), total=len(list_state))]
+            else: # Run prediction in parallel using p_map
+                en_pred = p_map(self.sim.run_fwd_sim, list_state,
+                                list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
 
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
