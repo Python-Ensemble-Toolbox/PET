@@ -91,9 +91,9 @@ class es_approx(esMixIn, enkf_approx):
     pass
 
 
-class es_full(esMixIn, enkf_approx):
+class es_full(esMixIn, enkf_full):
     """
-    mixin of ES class and approx update.
+    mixin of ES class and full update.
     Note that since we do not iterate there is no difference between is full and approx.
     """
     pass
