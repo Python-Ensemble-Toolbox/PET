@@ -64,7 +64,10 @@ python3 -m pip install -e .
 
 ## Examples
 
-PET needs to be setup with a configuration file. See the example folder for inspiration.the
+PET needs to be set up with a configuration file. See the example folder for inspiration.
+
+## Tutorials
+A POPT tutorial is found [here]{https://github.com/Python-Ensemble-Toolbox/PET/blob/main/docs/tutorials/popt/tutorial_popt.ipynb}
 
 ## Suggested readings:
 
