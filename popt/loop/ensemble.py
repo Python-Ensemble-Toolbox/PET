@@ -103,9 +103,9 @@ class Ensemble(PETEnsemble):
                     self.bounds += num_state_var*[(0, 1)]
                 else:
                     self.bounds += num_state_var*[(lb, ub)]
-                self.cov = np.append(self.cov, value_cov)
             else:
                 self.bounds += num_state_var*[(None, None)]
+            self.cov = np.append(self.cov, value_cov)
 
         self._scale_state()
         self.cov = np.diag(self.cov)
@@ -189,7 +189,7 @@ class Ensemble(PETEnsemble):
             x = self.get_state()
         return x
 
-    def function(self, x, *args):
+    def function(self, x, *args, **kwargs):
         """
         This is the main function called during optimization.
 
@@ -215,7 +215,8 @@ class Ensemble(PETEnsemble):
         run_success = self.calc_prediction()  # calculate flow data
         self._scale_state()  # scale back to [0, 1]
         if run_success:
-            func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
+            func_values = self.obj_func(self.pred_data, input_dict=self.sim.input_dict,
+                                        true_order=self.sim.true_order, **kwargs)
         else:
             func_values = np.inf  # the simulations have crashed
 
@@ -226,7 +227,7 @@ class Ensemble(PETEnsemble):
         
         return func_values
 
-    def gradient(self, x, *args):
+    def gradient(self, x, *args, **kwargs):
         r"""
         Calculate the preconditioned gradient associated with ensemble, defined as:
 
@@ -277,7 +278,7 @@ class Ensemble(PETEnsemble):
         self.state = self._gen_state_ensemble()
         
         state_ens = at.aug_state(self.state, list(self.state.keys()))
-        self.function(state_ens)
+        self.function(state_ens, **kwargs)
 
         # If bias correction is used we need to calculate the bias factors, J(u_j,m_j)/J(u_j,m)
         if self.bias_file is not None:  # use bias corrections
@@ -356,7 +357,7 @@ class Ensemble(PETEnsemble):
         return self.genopt.ensemble_mutation_gradient(return_ensembles=kwargs['return_ensembles'])
     '''
 
-    def calc_ensemble_weights(self, x, *args):
+    def calc_ensemble_weights(self, x, *args, **kwargs):
         r"""
         Calculate weights used in sequential monte carlo optimization.
 
@@ -398,9 +399,12 @@ class Ensemble(PETEnsemble):
         self._invert_scale_state()  # ensure that state is in [lb,ub]
         self.calc_prediction()  # calculate flow data
         self._scale_state()  # scale back to [0, 1]
-        self.ens_func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
-        self.ens_func_values = np.array(self.ens_func_values)
+
+        #self.ens_func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
+        #self.ens_func_values = np.array(self.ens_func_values)
         state_ens = at.aug_state(self.state, list(self.state.keys()))
+        self.function(state_ens, **kwargs)
+
         self.particles = np.hstack((self.particles, state_ens))
         self.particle_values = np.hstack((self.particle_values,self.ens_func_values))
 
@@ -421,8 +425,8 @@ class Ensemble(PETEnsemble):
         index = np.argmin(self.particle_values)
         best_ens = self.particles[:, index]
         best_func = self.particle_values[index]
-        resample_index = np.random.choice(self.num_samples,int(np.round(self.num_samples-self.num_samples*self.survival_factor)),
-                                 replace=True,p=weights)
+        resample_index = np.random.choice(self.num_samples,int(np.round(self.num_samples-
+                                          self.num_samples*self.survival_factor)),replace=True,p=weights)
         self.particles = self.particles[:, resample_index]
         self.particle_values = self.particle_values[resample_index]
         return sens_matrix, best_ens, best_func

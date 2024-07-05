@@ -101,10 +101,15 @@ class Optimize:
         # Save restart information flag
         self.restartsave = __set__variable('restartsave', False)
 
-        # Initialize options, state variable and function values
+        # Optimze with external penalty function for constraints, provide r_0 as input
+        self.epf = __set__variable('epf', {})
+
+        # Initialize variables (set in subclasses)
         self.options = None
         self.mean_state = None
         self.obj_func_values = None
+        self.fun = None  # objective function
+        self.obj_func_tol = None  # objective tolerance limit
 
         # Initialize number of function and jacobi evaluations
         self.nfev = 0
@@ -136,33 +141,68 @@ class Optimize:
 
             self.iteration += 1
 
-        # Run a while loop until max iterations or convergence is reached
-        is_successful = True
-        while self.iteration <= self.max_iter and is_successful:
+        # Check if external penalty function (epf) for handling constraints should be used
+        epf_not_converged = True
+        epf_iteration = 1
+        previous_state = None
+        if self.epf:
+            previous_state = self.mean_state
+            logger.info(f'       -----> EPF-EnOpt: {epf_iteration}, {self.epf["r"]} (outer iteration, penalty factor)')  # print epf info
 
-            # Update control variable
-            is_successful = self.calc_update()
+        while epf_not_converged:  # outer loop using epf
 
-            # Save restart file (if requested)
-            if self.restartsave:
-                self.rnd = np.random.get_state()  # get the current random state
-                self.save()
+            # Run a while loop until max iterations or convergence is reached
+            is_successful = True
+            while self.iteration <= self.max_iter and is_successful:
 
-        # Check if max iterations was reached
-        if self.iteration > self.max_iter:
-            self.optimize_result['message'] = 'Iterations stopped due to max iterations reached!'
-        else:
-            self.optimize_result['message'] = 'Convergence was met :)'
+                # Update control variable
+                is_successful = self.calc_update()
 
-        # Logging some info to screen
-        logger.info('       Optimization converged in %d iterations ', self.iteration-1)
-        logger.info('       Optimization converged with final obj_func = %.4f',
-                    np.mean(self.optimize_result['fun']))
-        logger.info('       Total number of function evaluations = %d', self.optimize_result['nfev'])
-        logger.info('       Total number of jacobi evaluations = %d', self.optimize_result['njev'])
-        if self.start_time is not None:
-            logger.info('       Total elapsed time = %.2f minutes', (time.perf_counter()-self.start_time)/60)
-        logger.info('       ============================================')
+                # Save restart file (if requested)
+                if self.restartsave:
+                    self.rnd = np.random.get_state()  # get the current random state
+                    self.save()
+
+            # Check if max iterations was reached
+            if self.iteration > self.max_iter:
+                self.optimize_result['message'] = 'Iterations stopped due to max iterations reached!'
+            else:
+                self.optimize_result['message'] = 'Convergence was met :)'
+
+            # Logging some info to screen
+            logger.info('       Optimization converged in %d iterations ', self.iteration-1)
+            logger.info('       Optimization converged with final obj_func = %.4f',
+                        np.mean(self.optimize_result['fun']))
+            logger.info('       Total number of function evaluations = %d', self.optimize_result['nfev'])
+            logger.info('       Total number of jacobi evaluations = %d', self.optimize_result['njev'])
+            if self.start_time is not None:
+                logger.info('       Total elapsed time = %.2f minutes', (time.perf_counter()-self.start_time)/60)
+            logger.info('       ============================================')
+
+            # Test for convergence of outer epf loop
+            epf_not_converged = False
+            if self.epf:
+                if epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
+                    logger.info(
+                        f'       -----> EPF-EnOpt: maximum epf iterations reached')  # print epf info
+                    break
+                p = np.abs(previous_state-self.mean_state) / np.abs(previous_state)
+                conv_crit = self.epf['conv_crit']
+                if np.any(p > conv_crit):
+                    epf_not_converged = True
+                    previous_state = self.mean_state
+                    self.epf['r'] *= self.epf['r_factor']  # increase penalty factor
+                    self.obj_func_tol *= self.epf['tol_factor']  # decrease tolerance
+                    self.obj_func_values = self.fun(self.mean_state, **self.epf)
+                    self.nfev += 1
+                    self.iteration = 1
+                    epf_iteration += 1
+                    r = self.epf['r']
+                    logger.info(f'       -----> EPF-EnOpt: {epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
+                else:
+                    logger.info(f'       -----> EPF-EnOpt: converged, no variables changed more than {conv_crit*100} %')  # print epf info
+                    final_obj_no_penalty = str(round(self.fun(self.mean_state)[0],4))
+                    logger.info(f'       -----> EPF-EnOpt: objective value without penalty = {final_obj_no_penalty}') # print epf info
 
     def save(self):
         """

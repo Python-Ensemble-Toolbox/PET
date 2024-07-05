@@ -112,7 +112,7 @@ class EnOpt(Optimize):
         # Calculate objective function of startpoint
         if not self.restart:
             self.start_time = time.perf_counter()
-            self.obj_func_values = self.fun(self.mean_state)
+            self.obj_func_values = self.fun(self.mean_state, **self.epf)
             self.nfev += 1
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
@@ -155,9 +155,9 @@ class EnOpt(Optimize):
             # Calculate gradient
             if self.nesterov:
                 gradient = self.jac(self.mean_state + self.beta*self.state_step,
-                                    shrink*(self.cov + self.beta*self.cov_step))
+                                    shrink*(self.cov + self.beta*self.cov_step), **self.epf)
             else:
-                gradient = self.jac(self.mean_state, shrink*self.cov)
+                gradient = self.jac(self.mean_state, shrink*self.cov, **self.epf)
             self.njev += 1
 
             # Compute the hessian
@@ -180,7 +180,7 @@ class EnOpt(Optimize):
                 new_state = ot.clip_state(new_state, self.bounds)
 
                 # Calculate new objective function
-                new_func_values = self.fun(new_state)
+                new_func_values = self.fun(new_state, **self.epf)
                 self.nfev += 1
 
                 if np.mean(self.obj_func_values) - np.mean(new_func_values) > self.obj_func_tol:

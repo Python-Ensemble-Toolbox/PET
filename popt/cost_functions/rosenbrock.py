@@ -1,7 +1,7 @@
 """Rosenbrock objective function."""
 
 
-def rosenbrock(state, *args):
+def rosenbrock(state, *args, **kwargs):
     """
     Rosenbrock: http://en.wikipedia.org/wiki/Rosenbrock_function
     """

@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def ren_npv(pred_data, keys_opt, report):
+def ren_npv(pred_data, kwargs):
     """
     Net present value cost function with injection from RENewable energy
 
@@ -12,17 +12,24 @@ def ren_npv(pred_data, keys_opt, report):
     pred_data_en : ndarray
         Ensemble of predicted data.
 
-    keys_opt : list
-        Keys with economic data.
+    **kwargs : dict
+        Other arguments sent to the npv function
 
-    report : list
-        Report dates.
+        keys_opt : list
+            Keys with economic data.
+
+        report : list
+            Report dates.
 
     Returns
     -------
     objective_values : ndarray
         Objective function values (NPV) for all ensemble members.
     """
+
+    # Get the necessary input
+    keys_opt = kwargs.get('input_dict', {})
+    report = kwargs.get('true_order', [])
 
     # Economic values
     npv_const = {}

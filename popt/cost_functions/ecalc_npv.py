@@ -9,7 +9,7 @@ HERE = Path().cwd()  # fallback for ipynb's
 HERE = HERE.resolve()
 
 
-def ecalc_npv(pred_data, keys_opt, report):
+def ecalc_npv(pred_data, **kwargs):
     """
     Net present value cost function using eCalc to calculate emmisions
 
@@ -18,11 +18,14 @@ def ecalc_npv(pred_data, keys_opt, report):
     pred_data : array_like
         Ensemble of predicted data.
 
-    keys_opt : list
-        Keys with economic data.
+    **kwargs : dict
+        Other arguments sent to the npv function
 
-    report : list
-        Report dates.
+        keys_opt : list
+            Keys with economic data.
+
+        report : list
+            Report dates.
 
     Returns
     -------
@@ -33,6 +36,10 @@ def ecalc_npv(pred_data, keys_opt, report):
     from libecalc.application.energy_calculator import EnergyCalculator
     from libecalc.common.time_utils import Frequency
     from libecalc.presentation.yaml.model import YamlModel
+
+    # Get the necessary input
+    keys_opt = kwargs.get('input_dict', {})
+    report = kwargs.get('true_order', [])
 
     # Economic values
     npv_const = {}

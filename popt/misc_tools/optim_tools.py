@@ -230,7 +230,8 @@ def clip_state(x, bounds):
         The state after truncation
     """
 
-    if bounds is not None:
+    any_not_none = any(any(item) for item in bounds)
+    if any_not_none:
         lb = np.array(bounds)[:, 0]
         lb = np.where(lb is None, -np.inf, lb)
         ub = np.array(bounds)[:, 1]
