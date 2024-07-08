@@ -1,4 +1,5 @@
 import numpy as np
+from popt.cost_functions.epf import epf
 
 
 def quadratic(state, *args, **kwargs):
@@ -23,7 +24,7 @@ def quadratic(state, *args, **kwargs):
 		if r >= 0:
 			c_eq = g(x[:, i])
 			c_iq = h(x[:, i])
-			f[i] += r*0.5*( np.sum(c_eq**2) + np.sum(np.maximum(-c_iq,0)**2) )
+			f[i] += epf(r, c_eq=c_eq, c_iq=c_iq) 
 
 	return f
 
