@@ -103,6 +103,7 @@ class Optimize:
 
         # Optimze with external penalty function for constraints, provide r_0 as input
         self.epf = __set__variable('epf', {})
+        self.epf_iteration = 1
 
         # Initialize variables (set in subclasses)
         self.options = None
@@ -143,11 +144,10 @@ class Optimize:
 
         # Check if external penalty function (epf) for handling constraints should be used
         epf_not_converged = True
-        epf_iteration = 1
         previous_state = None
         if self.epf:
             previous_state = self.mean_state
-            logger.info(f'       -----> EPF-EnOpt: {epf_iteration}, {self.epf["r"]} (outer iteration, penalty factor)')  # print epf info
+            logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {self.epf["r"]} (outer iteration, penalty factor)')  # print epf info
 
         while epf_not_converged:  # outer loop using epf
 
@@ -182,7 +182,7 @@ class Optimize:
             # Test for convergence of outer epf loop
             epf_not_converged = False
             if self.epf:
-                if epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
+                if self.epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
                     logger.info(
                         f'       -----> EPF-EnOpt: maximum epf iterations reached')  # print epf info
                     break
@@ -196,9 +196,9 @@ class Optimize:
                     self.obj_func_values = self.fun(self.mean_state, **self.epf)
                     self.nfev += 1
                     self.iteration = 1
-                    epf_iteration += 1
+                    self.epf_iteration += 1
                     r = self.epf['r']
-                    logger.info(f'       -----> EPF-EnOpt: {epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
+                    logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
                 else:
                     logger.info(f'       -----> EPF-EnOpt: converged, no variables changed more than {conv_crit*100} %')  # print epf info
                     final_obj_no_penalty = str(round(self.fun(self.mean_state)[0],4))

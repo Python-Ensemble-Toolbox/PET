@@ -258,6 +258,9 @@ def get_optimize_result(obj):
     # Initialize dictionary of variables to save
     save_dict = OptimizeResult({'success': True, 'x': obj.mean_state, 'fun': np.mean(obj.obj_func_values),
                                 'nit':  obj.iteration, 'nfev': obj.nfev, 'njev': obj.njev})
+    if hasattr(obj, 'epf'):
+        save_dict['epf_iteration'] = obj.epf_iteration
+
     if 'savedata' in obj.options:
 
         # Make sure "SAVEDATA" gives a list
@@ -265,7 +268,7 @@ def get_optimize_result(obj):
             savedata = obj.options['savedata']
         else:
             savedata = [ obj.options['savedata']]
-
+      
         # Loop over variables to store in save list
         for save_typ in savedata:
             if 'mean_state' in save_typ:
@@ -311,4 +314,7 @@ def save_optimize_results(intermediate_result):
         suffix = now.strftime("%m_%d_%Y_%H_%M_%S")
 
     # Save the variables
-    np.savez(save_folder + '/optimize_result_{0}'.format(suffix), **intermediate_result)
+    if 'epf_iteration' in intermediate_result:
+        np.savez(save_folder + '/optimize_result_{0}_{1}'.format(suffix, str(intermediate_result['epf_iteration'])), **intermediate_result)
+    else:
+        np.savez(save_folder + '/optimize_result_{0}'.format(suffix), **intermediate_result)
