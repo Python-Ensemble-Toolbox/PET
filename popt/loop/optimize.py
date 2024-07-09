@@ -1,3 +1,6 @@
+# Internal imports
+from popt.misc_tools import optim_tools as ot
+
 # External imports
 import os
 import numpy as np
@@ -103,7 +106,7 @@ class Optimize:
 
         # Optimze with external penalty function for constraints, provide r_0 as input
         self.epf = __set__variable('epf', {})
-        self.epf_iteration = 1
+        self.epf_iteration = 0
 
         # Initialize variables (set in subclasses)
         self.options = None
@@ -194,9 +197,12 @@ class Optimize:
                     self.epf['r'] *= self.epf['r_factor']  # increase penalty factor
                     self.obj_func_tol *= self.epf['tol_factor']  # decrease tolerance
                     self.obj_func_values = self.fun(self.mean_state, **self.epf)
-                    self.nfev += 1
-                    self.iteration = 1
+                    self.iteration = 0
                     self.epf_iteration += 1
+                    optimize_result = ot.get_optimize_result(self)
+                    ot.save_optimize_results(optimize_result)
+                    self.nfev += 1
+                    self.iteration = +1
                     r = self.epf['r']
                     logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
                 else:

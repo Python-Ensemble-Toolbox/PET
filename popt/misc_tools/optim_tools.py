@@ -258,7 +258,7 @@ def get_optimize_result(obj):
     # Initialize dictionary of variables to save
     save_dict = OptimizeResult({'success': True, 'x': obj.mean_state, 'fun': np.mean(obj.obj_func_values),
                                 'nit':  obj.iteration, 'nfev': obj.nfev, 'njev': obj.njev})
-    if hasattr(obj, 'epf'):
+    if hasattr(obj, 'epf') and obj.epf:
         save_dict['epf_iteration'] = obj.epf_iteration
 
     if 'savedata' in obj.options:
