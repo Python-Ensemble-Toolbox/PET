@@ -77,6 +77,8 @@ class OptimizerKeras:
             Keyword arguments
                 - save_name : Folder where info from ecah iterations is stored. Defaults to './iterations'
                 - normalize : If True, the gradient is normalized with the inf-norm. Defaults to False
+                - f0 : Value of func(u0)
+                - g0 : Value of grad(u0)
         
         Returns
         -------
@@ -86,6 +88,8 @@ class OptimizerKeras:
         # Read **kwargs
         save_name = kwargs.get('save_name', './iterations')
         normalize = kwargs.get('normalize', False)
+        f0 = kwargs.get('f0', None)
+        g0 = kwargs.get('g0', None)
 
         # Check if line-seacrh (backtracking should be applied)
         if max_cuts == 0:
@@ -119,7 +123,12 @@ class OptimizerKeras:
 
         # Initial values
         u = Variable(u0, constraint=_truncate)  # tensorflow object
-        f_current = _func(u0)                   # initial objective value
+
+        # initial objective value
+        if f0:
+            f_current = f0
+        else:
+            f_current = _func(u0)                   
 
         # Save initial state
         np.savez(f'{save_name}/iter_0', 
@@ -134,8 +143,13 @@ class OptimizerKeras:
         for t in range(1, max_iter+1):
             u_current = u.numpy() # current iterate 
             
-            # Calculate gradient and make step
-            gradient = _grad(u_current)
+            # Calculate gradient
+            if t==1 and g0:
+                gradient = g0
+            else:
+                gradient = _grad(u_current)
+
+            # Make update
             self.optimizer.apply_gradients(zip([gradient],[u]))
 
             # Get new values
