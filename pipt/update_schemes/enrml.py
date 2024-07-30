@@ -15,13 +15,17 @@ import numpy as np
 import copy as cp
 from scipy.linalg import cholesky, solve
 
+import importlib.util
+
 # List all available packages in the namespace package
 # Import those that are present
 import pipt.update_schemes.update_methods_ns as ns_pkg
 tot_ns_pkg = []
 # extract all class methods from namespace
 for finder, name, ispkg in pkgutil.walk_packages(ns_pkg.__path__):
-    _module = finder.find_module(name).load_module(f'{name}')
+    spec = finder.find_spec(name)
+    _module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(_module)
     tot_ns_pkg.extend(inspect.getmembers(_module, inspect.isclass))
 
 # import standard libraries
