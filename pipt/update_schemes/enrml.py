@@ -3,7 +3,7 @@ EnRML type schemes
 """
 # External imports
 import pipt.misc_tools.analysis_tools as at
-from pipt.geostat.decomp import Cholesky
+from geostat.decomp import Cholesky
 from pipt.loop.ensemble import Ensemble
 from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
 from pipt.update_schemes.update_methods_ns.full_update import full_update

@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from pipt.geostat.decomp import Cholesky
+from geostat.decomp import Cholesky
 
 
 class TestDecompChol(unittest.TestCase):

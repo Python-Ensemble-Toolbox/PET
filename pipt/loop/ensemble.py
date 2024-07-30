@@ -11,13 +11,13 @@ from copy import deepcopy, copy
 from scipy.linalg import solve, cholesky
 from scipy.spatial import distance
 import itertools
+from geostat.decomp import Cholesky
 
 # Internal import
 from ensemble.ensemble import Ensemble as PETEnsemble
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
 from pipt.misc_tools import cov_regularization
-from pipt.geostat.decomp import Cholesky
 import pipt.misc_tools.analysis_tools as at
 
 
