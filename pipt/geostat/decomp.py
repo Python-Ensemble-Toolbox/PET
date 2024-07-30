@@ -232,11 +232,11 @@ class Cholesky:
         ST 18/6-15: Wholesale copy of code written by Kristian Fossum. Some modifications have been made...
         """
         # Rotation matrix
-        rot_mat = np.matrix([[np.cos((rotate / 180) * np.pi), -np.sin((rotate / 180) * np.pi)],
+        rot_mat = np.array([[np.cos((rotate / 180) * np.pi), -np.sin((rotate / 180) * np.pi)],
                             [np.sin((rotate / 180) * np.pi), np.cos((rotate / 180) * np.pi)]])
 
         # Compressing matrix (since aspect>=1)
-        rescale_mat = np.matrix([[1, 0], [0, aspect]])
+        rescale_mat = np.array([[1, 0], [0, aspect]])
 
         # Coordinates
         dp = v1 - v2

@@ -20,7 +20,7 @@ setup(
         'psutil',
         'pdoc @ git+https://github.com/patnr/pdoc@main',
         'pytest',
-        'pandas>=1.5,<2', # libecalc 8.9.0 has requirement pandas<2,>=1
+        'pandas', # libecalc 8.9.0 has requirement pandas<2,>=1
         'p_tqdm',
         'mat73',
         'opencv-python',
