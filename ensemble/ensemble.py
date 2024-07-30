@@ -15,9 +15,9 @@ import datetime as dt
 from tqdm.auto import tqdm
 from p_tqdm import p_map
 import logging
+from geostat.decomp import Cholesky  # Making realizations
 
 # Internal imports
-from pipt.geostat.decomp import Cholesky  # Making realizations
 from pipt.misc_tools import cov_regularization
 from pipt.misc_tools import wavelet_tools as wt
 from misc import read_input_csv as rcsv

@@ -5,10 +5,10 @@ EnKF type schemes
 import numpy as np
 from scipy.linalg import solve
 from copy import deepcopy
+from geostat.decomp import Cholesky                     # Making realizations
 
 # Internal imports
 from pipt.loop.ensemble import Ensemble
-from pipt.geostat.decomp import Cholesky                     # Making realizations
 # Misc. tools used in analysis schemes
 from pipt.misc_tools import analysis_tools as at
 

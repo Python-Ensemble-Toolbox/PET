@@ -19,6 +19,7 @@ setup(
         'PyWavelets',
         'psutil',
         'pdoc @ git+https://github.com/patnr/pdoc@main',
+        'geostat @ git+https://github.com/Python-Ensemble-Toolbox/Geostatistics@main',
         'pytest',
         'pandas', # libecalc 8.9.0 has requirement pandas<2,>=1
         'p_tqdm',

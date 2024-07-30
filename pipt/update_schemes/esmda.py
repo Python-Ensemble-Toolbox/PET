@@ -6,10 +6,10 @@ ES-MDA type schemes
 import scipy.linalg as scilinalg
 from copy import deepcopy
 import numpy as np
+from geostat.decomp import Cholesky
 
 # Internal imports
 from pipt.loop.ensemble import Ensemble
-from pipt.geostat.decomp import Cholesky
 import pipt.misc_tools.analysis_tools as at
 
 # import update schemes
