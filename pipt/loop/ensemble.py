@@ -28,9 +28,41 @@ class Ensemble(PETEnsemble):
     """
 
     def __init__(self, keys_da, keys_en, sim):
+        """
+        Parameters
+        ----------
+        keys_da : dict
+            Options for the data assimilation class
+
+            - daalg: spesification of the method, first the main type (e.g., "enrml"), then the solver (e.g., "gnenrml")
+            - analysis: update flavour ("approx", "full" or "subspace")
+            - energy: percent of singular values kept after SVD
+            - obsvarsave: save the observations as a file (default false)
+            - restart: restart optimization from a restart file (default false)
+            - restartsave: save a restart file after each successful iteration (defalut false)
+            - analysisdebug: specify which class variables to save to the result files
+            - truedataindex: order of the simulated data (for timeseries this is points in time)
+            - obsname: unit for truedataindex (for timeseries this is days or hours or seconds, etc.)
+            - truedata: the data, e.g., provided as a .csv file
+            - assimindex: index for the data that will be used for assimilation
+            - datatype: list with the name of the datatypes
+            - staticvar: name of the static variables
+            - datavar: data variance, e.g., provided as a .csv file
+
+        keys_en : dict
+            Options for the ensemble class
+
+            - ne: number of perturbations used to compute the gradient
+            - state: name of state variables passed to the .mako file
+            - prior_<name>: the prior information the state variables, including mean, variance and variable limits
+
+        sim : callable
+            The forward simulator (e.g. flow)
+        """
+
 
         # do the initiallization of the PETensemble
-        super(Ensemble, self).__init__(keys_da, sim)
+        super(Ensemble, self).__init__(keys_en, sim)
 
         # set logger
         self.logger = logging.getLogger('PET.PIPT')
@@ -91,7 +123,7 @@ class Ensemble(PETEnsemble):
                 self.local_analysis = at.init_local_analysis(
                     init=self.keys_da['localanalysis'], state=self.state.keys())
 
-            self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_en['datatype']}
+            self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_da['datatype']}
                               for _ in self.obs_data]
 
             self.cell_index = None  # default value for extracting states

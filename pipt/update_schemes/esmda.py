@@ -24,22 +24,26 @@ class esmdaMixIn(Ensemble):
     illustrate how a algorithm using the Mda loop can be implemented.
     """
 
-    def __init__(self, keys_da, keys_fwd, sim):
+    def __init__(self, keys_da, keys_en, sim):
         """
-        The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
-        `input_output` ... `pipt_init.ReadInitFile`.
+        The class is initialized by passing the keywords and simulator object upwards in the hierarchy.
 
         Parameters
         ----------
-        init_file: str
-            PIPT init. file containing info. to run the inversion algorithm
+        keys_da['mda']: list
+            - tot_assim_steps: total number of iterations in MDA, e.g., 3
+            - inflation_param: covariance inflation factors, e.g., [2, 4, 4]
+
+        keys_en : dict
+
+        sim : callable
 
         References
         ----------
         [1] A. Emerick & A. Reynods, Computers & Geosciences, 55, p. 3-15, 2013
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da, keys_fwd, sim)
+        super().__init__(keys_da, keys_en, sim)
 
         self.prev_data_misfit = None
 

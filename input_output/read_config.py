@@ -354,16 +354,11 @@ def check_mand_keywords_da(keys_da):
     """Check for mandatory keywords in `DATAASSIM` part, and output error if they are not present"""
 
     # Mandatory keywords in DATAASSIM
-    assert 'ne' in keys_da, 'NE not in DATAASSIM!'
     assert 'truedataindex' in keys_da, 'TRUEDATAINDEX not in DATAASSIM!'
     assert 'assimindex' in keys_da, 'ASSIMINDEX not in DATAASSIM!'
     assert 'truedata' in keys_da, 'TRUEDATA not in DATAASSIM!'
-    assert 'state' in keys_da, 'STATE not in DATAASSIM!'
     assert 'datavar' in keys_da, 'DATAVAR not in DATAASSIM!'
     assert 'obsname' in keys_da, 'OBSNAME not in DATAASSIM!'
-    if 'importstaticvar' not in keys_da:
-        assert filter(list(keys_da.keys()),
-                      'prior_*') != [], 'No PRIOR_<STATICVAR> in DATAASSIM'
     assert 'energy' in keys_da, 'ENERGY not in DATAASSIM!'
 
 
@@ -378,7 +373,9 @@ def check_mand_keywords_en(keys_en):
     # Mandatory keywords in ENSEMBLE
     assert 'ne' in keys_en, 'NE not in ENSEMBLE!'
     assert 'state' in keys_en, 'STATE not in ENSEMBLE!'
-
+    if 'importstaticvar' not in keys_en:
+        assert filter(list(keys_en.keys()),
+                      'prior_*') != [], 'No PRIOR_<STATICVAR> in DATAASSIM'
 
 def change_file_extension(filename, new_extension):
     if '.' in filename:

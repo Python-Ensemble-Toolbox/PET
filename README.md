@@ -67,7 +67,8 @@ python3 -m pip install -e .
 PET needs to be set up with a configuration file. See the example folder for inspiration.
 
 ## Tutorials
-A POPT tutorial is found [here](https://github.com/Python-Ensemble-Toolbox/PET/blob/main/docs/tutorials/popt/tutorial_popt.ipynb)
+- A POPT tutorial is found [here](https://github.com/Python-Ensemble-Toolbox/PET/blob/main/docs/tutorials/popt/tutorial_popt.ipynb)
+- A PIPT tutorial is found [here](https://github.com/Python-Ensemble-Toolbox/PET/blob/main/docs/tutorials/pipt/tutorial_pipt.ipynb)
 
 ## Suggested readings:
 

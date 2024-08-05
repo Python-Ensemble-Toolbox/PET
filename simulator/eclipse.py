@@ -49,6 +49,10 @@ class eclipse:
                 - reportpoint: these are the dates the simulator reports results
                 - reporttype: this key states that the report poins are given as dates
                 - datatype: the data types the simulator reports
+                - replace: replace failed simulations with randomly selected successful ones
+                - rerun: in case of failure, try to rerun the simulator the given number of times
+                - startdate: simulaton start date
+                - saveforecast: save the predicted measurements for each iteration
 
         filename : str, optional
             Name of the .mako file utilized to generate the ECL input .DATA file. Must be in uppercase for the
