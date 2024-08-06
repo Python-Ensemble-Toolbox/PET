@@ -13,16 +13,13 @@ restartsave = "no"
 analysisdebug = ["pred_data", "state", "data_misfit", "prev_data_misfit"]
 restart = "no"
 obsname = "days"
-
 truedataindex = [400, 800, 1200, 1600, 2000, 2400, 2800, 3200, 3600, 4000]
 truedata = "true_data.csv"
 assimindex = [0,1,2,3,4,5,6,7,8,9]
 datatype = ["WOPR PRO1", "WOPR PRO2", "WOPR PRO3", "WWPR PRO1", "WWPR PRO2",
             "WWPR PRO3", "WWIR INJ1", "WWIR INJ2", "WWIR INJ3"]
 staticvar = "permx"
-
 datavar = "var.csv"
-
 mda = [ ["tot_assim_steps", 3], ['inflation_param', [2, 4, 4]] ]
 
 [fwdsim]
