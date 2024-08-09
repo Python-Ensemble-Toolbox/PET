@@ -117,6 +117,7 @@ class EnOpt(Optimize):
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
             if self.logger is not None:
+                self.logger.info('\n\n')
                 self.logger.info('       ====== Running optimization - EnOpt ======')
                 self.logger.info('\n'+pprint.pformat(self.options))
                 info_str = '       {:<10} {:<10} {:<15} {:<15} {:<15} '.format('iter', 'alpha_iter',

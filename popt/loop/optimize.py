@@ -186,10 +186,9 @@ class Optimize:
             epf_not_converged = False
             if self.epf:
                 if self.epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
-                    logger.info(
-                        f'       -----> EPF-EnOpt: maximum epf iterations reached')  # print epf info
+                    logger.info(f'       -----> EPF-EnOpt: maximum epf iterations reached')  # print epf info
                     break
-                p = np.abs(previous_state-self.mean_state) / np.abs(previous_state)
+                p = np.abs(previous_state-self.mean_state) / (np.abs(previous_state) + 1.0e-9)
                 conv_crit = self.epf['conv_crit']
                 if np.any(p > conv_crit):
                     epf_not_converged = True
@@ -207,7 +206,7 @@ class Optimize:
                     logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
                 else:
                     logger.info(f'       -----> EPF-EnOpt: converged, no variables changed more than {conv_crit*100} %')  # print epf info
-                    final_obj_no_penalty = str(round(self.fun(self.mean_state)[0],4))
+                    final_obj_no_penalty = str(round(self.fun(self.mean_state),4))
                     logger.info(f'       -----> EPF-EnOpt: objective value without penalty = {final_obj_no_penalty}') # print epf info
 
     def save(self):
