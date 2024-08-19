@@ -144,7 +144,7 @@ class OptimizerKeras:
             u_current = u.numpy() # current iterate 
             
             # Calculate gradient
-            if t==1 and g0:
+            if t==1 and g0 is not None:
                 gradient = g0
             else:
                 gradient = _grad(u_current)
