@@ -58,8 +58,7 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
             size = self.num_samples
 
         enZ = np.random.multivariate_normal(np.zeros(self.dim), self.corr, size=size)
-        enU = stats.norm.cdf(enZ)
-        enX = self.ppf(enU)
+        enX = self.margs.ppf(stats.norm.cdf(enZ), self.theta, mean=self.get_state())
 
         return enX, enZ
     
@@ -84,9 +83,9 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
         if self.enJ is None:
             self.enJ = self.function(self._trafo_ensemble(x).T)
 
-        avg_hess = np.zeros((dim,dim))
-        avg_grad = np.zeros(dim)
-        nat_grad = np.zeros_like(self.theta)
+        self.avg_hess = np.zeros((dim,dim))
+        self.avg_grad = np.zeros(dim)
+        self.nat_grad = np.zeros_like(self.theta)
 
         H = np.linalg.inv(self.corr)-np.eye(dim)
         O = np.ones((dim,dim))-np.eye(dim)
@@ -96,23 +95,33 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
             X = self.enX[n]
             Z = self.enZ[n]
             
-            rho  = self.pdf(X)/stats.norm.pdf(Z)   # p(X)/φ(Z)
-            G, K = self.grad_and_hess_log_p(X)     # ∇log(p) and ∇²log(p) 
-            D = - rho*np.matmul(H,Z)               # ∇log(c)
+            rho = self.margs.pdf(X, self.theta, mean=x)/stats.norm.pdf(Z)   # p(X)/φ(Z)
+            G = self.margs.grad_log_pdf(X, self.theta, mean=x)              # ∇log(p)
+            K = self.margs.hess_log_pdf(X, self.theta, mean=x)              # ∇²log(p) 
+            D = - rho*np.matmul(H,Z)                                        # ∇log(c)
 
             M_ii = (G+rho*Z)*D - np.diag(H)*rho**2
             M_ij = - np.outer(rho,rho)*H
-            M = np.diag(M_ii) + M_ij*O              # ∇²log(c) 
+            M = np.diag(M_ii) + M_ij*O                                      # ∇²log(c) 
             
             # calc grad and hess
-            avg_grad += (self.enJ[n]-self.enJ.mean()) * (G + D) / (ne-1)
-            avg_hess += (self.enJ[n]-self.enJ.mean()) * (np.outer(G+D,G+D) + K+M) / (ne-1)
+            self.avg_grad += (self.enJ[n]-self.enJ.mean()) * (G + D) / (ne-1)
+            self.avg_hess += (self.enJ[n]-self.enJ.mean()) * (np.outer(G+D,G+D) + K+M) / (ne-1)
         
-        return -avg_grad*self.grad_scale
+        return -self.avg_grad*self.grad_scale
 
     def hessian(self, x, *args, **kwargs):
-        pass
 
+        # Set the ensemble state equal to the input control vector x
+        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
+
+        sample = kwargs.get('sample', False)
+
+        if sample: 
+            self.gradient(x, *args, **kwargs)
+        
+        return self.avg_hess*self.hess_scale
+        
     def var2eps(self):
         var = np.diag(self.cov)
         a = self.theta[:,0]
@@ -125,7 +134,7 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
     def _trafo_ensemble(self, x):
 
         if self.margs.name == 'Beta':
-            return x+2*self.eps*(self.enX-0.5)
+            return epsilon_trafo(x, self.enX, self.eps)
         else:
             return self.enX
 
@@ -149,7 +158,8 @@ class Beta:
     def hess_log_pdf(self, x, theta, **kwargs):
         a, b = theta.T
         return -(a-1)/x**2 - (b-1)/(1-x)**2
-    
+
+
 class Logistic:
 
     name = 'Logistic'
@@ -180,3 +190,26 @@ class Logistic:
         return np.sqrt( 3*var/(np.pi**2) )
         
         
+
+def epsilon_trafo(x, enX, eps):
+
+    enY = np.zeros_like(enX)
+    
+    # loop over dimenstion   
+    for d, xd in enumerate(x):
+        eps = eps[d]
+
+        # lower bound of ensemble
+        a = (xd-eps) - ( (xd-eps)*(xd-eps < 0) ) \
+                        - ( (xd+eps-1)*(xd+eps > 1) ) \
+                        + (xd+eps-1)*(xd-eps < 0)*(xd+eps > 1) 
+        
+        # upper bound of ensemble
+        b = (xd+eps) - ( (xd-eps)*(xd-eps < 0) ) \
+                        - ( (xd+eps-1)*(xd+eps > 1) ) \
+                        + (xd-eps)*(xd-eps < 0)*(xd+eps > 1) 
+
+        # component-wise trafo.
+        enY[:,d] =  a + enX[:, d]*(b-a)  
+    
+    return enY
