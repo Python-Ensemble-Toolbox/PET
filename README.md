@@ -111,3 +111,23 @@ Lorentzen, R.J., Bhakta, T., Fossum, K. et al. Ensemble-based history matching o
   url={https://doi.org/10.1007/s10596-024-10275-0}
 }
 ```
+
+###  Offshore wind farm layout optimization using ensemble methods
+#### Cite as
+
+Eikrem, K.S., Lorentzen, R.J., Faria, R. et al. Offshore wind farm layout optimization using ensemble methods. Renewable Energy 216, 119061 (2023). https://www.sciencedirect.com/science/article/pii/S0960148123009758
+
+```
+@article{Eikrem2023offshore,
+title = {Offshore wind farm layout optimization using ensemble methods},
+journal = {Renewable Energy},
+volume = {216},
+pages = {119061},
+year = {2023},
+issn = {0960-1481},
+doi = {https://doi.org/10.1016/j.renene.2023.119061},
+url = {https://www.sciencedirect.com/science/article/pii/S0960148123009758},
+author = {Kjersti Solberg Eikrem and Rolf Johan Lorentzen and Ricardo Faria and Andreas St{\o}rksen Stordal and Alexandre Godard},
+keywords = {Wind farm layout optimization, Ensemble optimization (EnOpt and EPF-EnOpt), Constrained optimization, Levelized cost of energy (LCOE), Floating offshore wind},
+}
+```
