@@ -35,28 +35,42 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
         self.corr = self.cov/np.outer(std, std)
 
         # choose marginal
-        self._supported = ['beta', 'logistic']
-        marginal = kwargs_ens.get('marginal', 'beta')
+        marginal = kwargs_ens.get('marginal', 'Beta')
 
-        if marginal in self._supported:
+        if marginal in ['Beta', 'BetaMC', 'Logistic']:
 
-            if marginal == 'beta':
+            if marginal == 'Beta':
                 self.margs = Beta()
-                self.theta = kwargs_ens.get('theta', np.array([[20.0, 20.0] for _ in self.dim]))
+                self.theta = kwargs_ens.get('theta', np.array([[20.0, 20.0] for _ in range(self.dim)]))
                 self.eps = self.var2eps()
                 self.grad_scale = 1/(2*self.eps)
                 self.hess_scale = 1/(4*self.eps**2)
-            else:
+
+            elif marginal == 'BetaMC':
+                lb, ub = np.array(self.bounds).T
+                self.margs = BetaMC(lb, ub)
+                default_theta = self.margs.var_to_concentration(np.diag(self.cov), self.get_state())
+                self.theta = kwargs_ens.get('theta', default_theta)
+                self.grad_scale = 1.0
+                self.hess_scale = 1.0
+                
+            elif marginal == 'Logistic':
                 self.margs = Logistic()
                 self.theta = kwargs_ens.get('theta', self.margs.var_to_scale(np.diag(self.cov)))
                 self.grad_scale = 1.0
                 self.hess_scale = 1.0
     
+    def get_theta(self):
+        return self.theta
+    
+    def get_corr(self):
+        return self.corr
+    
     def sample(self, size=None):
 
         if size is None:
             size = self.num_samples
-
+        #enZ = stats.qmc.MultivariateNormalQMC(np.zeros(self.dim), self.corr).random(n=size)
         enZ = np.random.multivariate_normal(np.zeros(self.dim), self.corr, size=size)
         enX = self.margs.ppf(stats.norm.cdf(enZ), self.theta, mean=self.get_state())
 
@@ -66,6 +80,9 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
 
         # Set the ensemble state equal to the input control vector x
         self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
+
+        if args:
+            self.theta, self.corr = args
 
         self.enZ = kwargs.get('enZ', None)
         self.enX = kwargs.get('enX', None)
@@ -89,6 +106,7 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
 
         H = np.linalg.inv(self.corr)-np.eye(dim)
         O = np.ones((dim,dim))-np.eye(dim)
+        enJ = self.enJ - np.array(np.repeat(self.state_func_values, nr))
 
         for n in range(self.ne):
 
@@ -99,28 +117,28 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
             G = self.margs.grad_log_pdf(X, self.theta, mean=x)              # ∇log(p)
             K = self.margs.hess_log_pdf(X, self.theta, mean=x)              # ∇²log(p) 
             D = - rho*np.matmul(H,Z)                                        # ∇log(c)
-
             M_ii = (G+rho*Z)*D - np.diag(H)*rho**2
             M_ij = - np.outer(rho,rho)*H
             M = np.diag(M_ii) + M_ij*O                                      # ∇²log(c) 
             
             # calc grad and hess
-            self.avg_grad += (self.enJ[n]-self.enJ.mean()) * (G + D) / (ne-1)
-            self.avg_hess += (self.enJ[n]-self.enJ.mean()) * (np.outer(G+D,G+D) + K+M) / (ne-1)
-        
-        return -self.avg_grad*self.grad_scale
+            self.avg_grad += enJ[n] * (G + D)
+            self.avg_hess += enJ[n] * (np.outer(G+D,G+D) + np.diag(K)+M)
+
+        self.avg_grad = -self.avg_grad*self.grad_scale/ne
+        self.avg_hess = self.avg_hess*self.hess_scale/ne
+
+        return self.avg_grad
 
     def hessian(self, x, *args, **kwargs):
 
         # Set the ensemble state equal to the input control vector x
         self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
 
-        sample = kwargs.get('sample', False)
-
-        if sample: 
+        if kwargs.get('sample', False): 
             self.gradient(x, *args, **kwargs)
         
-        return self.avg_hess*self.hess_scale
+        return self.avg_hess
         
     def var2eps(self):
         var = np.diag(self.cov)
@@ -134,9 +152,78 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
     def _trafo_ensemble(self, x):
 
         if self.margs.name == 'Beta':
-            return epsilon_trafo(x, self.enX, self.eps)
+            lb, ub = np.array(self.bounds).T
+            return epsilon_trafo(x, self.enX, self.eps, lb, ub)
         else:
             return self.enX
+
+
+class BetaMC:
+
+    def __init__(self, lb=0, ub=1):
+        self.name = 'BetaMC'
+        self.lb = lb
+        self.ub = ub
+
+    def pdf(self, x, theta, **kwargs):
+        mode = kwargs.get('mean')
+        mode = (mode-self.lb)/(self.ub-self.lb)
+        concentration = theta
+
+        a = mode*concentration+1
+        b = (1-mode)*concentration+1
+
+        return stats.beta(a,b, loc=self.lb, scale=self.ub-self.lb).pdf(x)
+
+    def ppf(self, x, theta, **kwargs):
+        mode = kwargs.get('mean')
+        mode = (mode-self.lb)/(self.ub-self.lb)
+        concentration = theta
+
+        a = mode*concentration+1
+        b = (1-mode)*concentration+1
+        return stats.beta(a,b, loc=self.lb, scale=self.ub-self.lb).ppf(x)
+    
+    def grad_log_pdf(self, x, theta, **kwargs):
+
+        mode = kwargs.get('mean')
+        mode = (mode-self.lb)/(self.ub-self.lb)
+        concentration = theta
+
+        a = mode*concentration+1
+        b = (1-mode)*concentration+1
+
+        u = (x-self.lb)/(self.ub-self.lb)
+        d_log_p = (a-1)/u - (b-1)/(1-u)
+        return d_log_p/(self.ub-self.lb)
+    
+    def hess_log_pdf(self, x, theta, **kwargs):
+
+        mode = kwargs.get('mean')
+        mode = (mode-self.lb)/(self.ub-self.lb)
+        concentration = theta
+
+        a = mode*concentration+1
+        b = (1-mode)*concentration+1
+
+        u = (x-self.lb)/(self.ub-self.lb)
+        h_log_p = -(a-1)/u**2 - (b-1)/(1-u)**2
+        return h_log_p/((self.ub-self.lb)**2)
+    
+    def var_to_concentration(self, var, mode):
+        from scipy.optimize import fsolve
+        kappa = []
+        for i, v in enumerate(var):
+            m = (mode[i]-self.lb[i])/(self.ub[i]-self.lb[i])
+            v = v/(self.ub[i]-self.lb[i])**2
+            def func(k):
+                a = m*k+1
+                b = (1-m)*k+1
+                return v - a*b/((a+b)**2 * (a+b+1))
+            
+            kappa.append(fsolve(func, 50)[0])
+
+        return np.array(kappa)
 
 
 class Beta:
@@ -151,7 +238,7 @@ class Beta:
         a, b = theta.T
         return stats.beta(a,b).ppf(u)
     
-    def grad_log_pdf(self, x, theta,**kwargs):
+    def grad_log_pdf(self, x, theta, **kwargs):
         a, b = theta.T
         return (a-1)/x - (b-1)/(1-x)
 
@@ -166,24 +253,24 @@ class Logistic:
 
     def pdf(self, x, theta, **kwargs):
         scale = theta
-        mean  = kwargs.get('mean', 0)
-        return stats.logistic(loc=mean, scale=scale).pdf(x)
+        loc = kwargs.get('mean', 0)
+        return stats.logistic(loc=loc, scale=scale).pdf(x)
     
     def ppf(self, u, theta, **kwargs):
         scale = theta
-        mean  = kwargs.get('mean', 0)
-        return stats.logistic(loc=mean, scale=scale).ppf(u)
+        loc = kwargs.get('mean', 0)
+        return stats.logistic(loc=loc, scale=scale).ppf(u)
 
     def grad_log_pdf(self, x, theta,**kwargs):
         scale = theta
-        mean  = kwargs.get('mean', 0)
-        u = (x-mean)/(2*scale)
+        loc = kwargs.get('mean', 0)
+        u = (x-loc)/(2*scale)
         return - np.tanh(u)/scale
     
     def hess_log_pdf(self, x, theta,**kwargs):
         scale = theta
-        mean  = kwargs.get('mean', 0)
-        u = (x-mean)/(2*scale)
+        loc = kwargs.get('mean', 0)
+        u = (x-loc)/(2*scale)
         return -(1/np.cosh(u))**2/(2*scale**2)
     
     def var_to_scale(self, var):
@@ -191,25 +278,12 @@ class Logistic:
         
         
 
-def epsilon_trafo(x, enX, eps):
+def epsilon_trafo(x, enX, eps, lower=None, upper=None):
 
-    enY = np.zeros_like(enX)
-    
-    # loop over dimenstion   
-    for d, xd in enumerate(x):
-        eps = eps[d]
-
-        # lower bound of ensemble
-        a = (xd-eps) - ( (xd-eps)*(xd-eps < 0) ) \
-                        - ( (xd+eps-1)*(xd+eps > 1) ) \
-                        + (xd+eps-1)*(xd-eps < 0)*(xd+eps > 1) 
-        
-        # upper bound of ensemble
-        b = (xd+eps) - ( (xd-eps)*(xd-eps < 0) ) \
-                        - ( (xd+eps-1)*(xd+eps > 1) ) \
-                        + (xd-eps)*(xd-eps < 0)*(xd+eps > 1) 
-
-        # component-wise trafo.
-        enY[:,d] =  a + enX[:, d]*(b-a)  
+    if not (lower is None and upper is None):
+        Psi = x + (enX-0.5)*np.minimum(2*eps, upper-lower)
+        enY = Psi + np.maximum(0, lower-(x-eps)) - np.maximum(0, x+eps - upper)
+    else:
+        enY = x + 2*eps*(enX-0.5)
     
     return enY
