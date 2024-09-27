@@ -22,12 +22,6 @@ class LineSearch(Optimize):
         # init PETEnsemble
         super(LineSearch, self).__init__(**options)
 
-        def __set__variable(var_name=None, defalut=None):
-            if var_name in options:
-                return options[var_name]
-            else:
-                return defalut
-
         # Set input as class variables
         self.options    = options   # options
         self.fun        = fun       # objective function
@@ -39,18 +33,17 @@ class LineSearch(Optimize):
         self.pk_from_ls = None
         
         # Set other optimization parameters
-        self.alpha_iter_max = __set__variable('alpha_maxiter', 5)
-        self.alpha_cov      = __set__variable('alpha_cov', 0.001)
-        self.normalize      = __set__variable('normalize', True)
-        self.max_resample   = __set__variable('resample', 0)
-        self.normalize      = __set__variable('normalize', True)
-        self.cov_factor     = __set__variable('cov_factor', 0.5)
-        self.alpha          = 0.0
+        self.alpha_iter_max  = options.get('alpha_maxiter', 5)
+        self.alpha_cov       = options.get('alpha_cov', 0.01)
+        self.normalize       = options.get('normalize', True)
+        self.iter_resamp_max = options.get('resample', 0)
+        self.cov_factor      = options.get('cov_factor', 0.5)
+        self.alpha           = 0.0
 
         # Initialize line-search parameters (scipy defaults for c1, and c2)
-        self.alpha_max  = __set__variable('alpha_max', 1.0)
-        self.ls_options = {'c1': __set__variable('c1', 0.0001),
-                           'c2': __set__variable('c2', 0.9)}
+        self.alpha_max  = options.get('alpha_max', 1.0)
+        self.ls_options = {'c1': options.get('c1', 0.0001),
+                           'c2': options.get('c2', 0.9)}
         
         
         # Calculate objective function of startpoint
@@ -86,8 +79,9 @@ class LineSearch(Optimize):
 
         # Initialize variables for this step
         success = False
+        iter_resamp = 0
 
-        # define dummy functions for scipy.line_search
+        # Dummy functions for scipy.line_search
         def _jac(x):
             self.njev += 1
             x = ot.clip_state(x, self.bounds) # ensure bounds are respected
@@ -101,37 +95,37 @@ class LineSearch(Optimize):
             f = self.fun(x, self.cov).mean()
             return f
 
-        #compute gradient. If a line_search is already done, the new grdient is alread returned as slope by the function
+        #Compute gradient. If a line_search is already done, the new grdient is alread returned as slope by the function
         if self.pk_from_ls is None:
             pk = _jac(self.mean_state)
         else:
             pk = self.pk_from_ls
     
-        # Compute the hessian
+        # Compute the hessian (Not Used Currently)
         hessian = self.hess()
         if self.normalize:
             hessian /= np.maximum(la.norm(hessian, np.inf), 1e-12)  # scale the hessian with inf-norm
             
 
-        # perform line search
-        self.logger.info('Performing line search...')  
-        ls_results = line_search(f=_fun, 
-                                 myfprime=_jac, 
-                                 xk=self.mean_state, 
-                                 pk=-pk, 
-                                 gfk=pk,
-                                 old_fval=self.obj_func_values.mean(),
-                                 c1=self.ls_options['c1'],
-                                 c2=self.ls_options['c2'],
-                                 amax=self.alpha_max,
-                                 maxiter=self.alpha_iter_max)
+        # Perform Line Search
+        self.logger.info('Performing line search...')
+        line_search_kwargs = {'f'        : _fun,
+                              'myfprime' : _jac,
+                              'xk'       : self.mean_state,
+                              'pk'       : -pk,
+                              'gfk'      : pk,
+                              'old_fval' : self.obj_func_values.mean(),
+                              'c1'       : self.ls_options['c1'],
+                              'c2'       : self.ls_options['c2'],
+                              'amax'     : self.alpha_max,
+                              'maxiter'  : self.alpha_iter_max}
         
-        step_size, nfev, njev, fnew, fold, slope = ls_results
+        step_size, _, _, fnew, _, slope = line_search(**line_search_kwargs)
         
         if isinstance(step_size, float):
             self.logger.info('Strong Wolfie conditions satisfied')
 
-            # update state
+            # Update state
             self.mean_state      = ot.clip_state(self.mean_state - step_size*pk, self.bounds)
             self.obj_func_values = fnew
             self.alpha           = step_size
@@ -141,7 +135,7 @@ class LineSearch(Optimize):
             self.cov = self.cov - self.alpha_cov * hessian
             self.cov = ot.get_sym_pos_semidef(self.cov)
 
-            # update status
+            # Update status
             success = True
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
@@ -157,7 +151,13 @@ class LineSearch(Optimize):
             self.iteration += 1
         
         else:
-            self.logger.info('Strong Wolfie conditions not satisfied!')
-            success = False
+            self.logger.info('Strong Wolfie conditions not satisfied')
+
+            if iter_resamp < self.iter_resamp_max:
+                self.logger.info('Resampling Gradient')
+                iter_resamp += 1
+                success = True
+            else:
+                success = False
 
         return success
