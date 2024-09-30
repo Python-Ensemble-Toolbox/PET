@@ -86,7 +86,6 @@ class LineSearch(Optimize):
             self.njev += 1
             x = ot.clip_state(x, self.bounds) # ensure bounds are respected
             g = self.jac(x, self.cov)
-            g = g/la.norm(g, np.inf) if self.normalize else g 
             return g
         
         def _fun(x):
@@ -103,10 +102,13 @@ class LineSearch(Optimize):
     
         # Compute the hessian (Not Used Currently)
         hessian = self.hess()
+
         if self.normalize:
             hessian /= np.maximum(la.norm(hessian, np.inf), 1e-12)  # scale the hessian with inf-norm
+            alpha_max = self.alpha_max/la.norm(pk, np.inf)
+        else:
+            alpha_max = self.alpha_max
             
-
         # Perform Line Search
         self.logger.info('Performing line search...')
         line_search_kwargs = {'f'        : _fun,
@@ -117,7 +119,7 @@ class LineSearch(Optimize):
                               'old_fval' : self.obj_func_values.mean(),
                               'c1'       : self.ls_options['c1'],
                               'c2'       : self.ls_options['c2'],
-                              'amax'     : self.alpha_max,
+                              'amax'     : alpha_max,
                               'maxiter'  : self.alpha_iter_max}
         
         step_size, _, _, fnew, _, slope = line_search(**line_search_kwargs)
