@@ -752,6 +752,10 @@ class eclipse:
             for key in self.report:
                 state[key] = self.report[key]
 
+        if 'mako_kwargs' in self.input_dict:
+            mako_kwargs = dict(self.input_dict['mako_kwargs'])
+            state.update(mako_kwargs)
+
         # Convert drilling order (float) to drilling queue (integer) - drilling order optimization
         # if "drillingorder" in en_dict:
         #     dorder = en_dict['drillingorder']

@@ -37,7 +37,7 @@ class LineSearch(Optimize):
         self.alpha_cov       = options.get('alpha_cov', 0.01)
         self.normalize       = options.get('normalize', True)
         self.iter_resamp_max = options.get('resample', 0)
-        self.cov_factor      = options.get('cov_factor', 0.5)
+        self.shrink_factor   = options.get('shrink_factor', 0.25)
         self.alpha           = 0.0
 
         # Initialize line-search parameters (scipy defaults for c1, and c2)
@@ -63,23 +63,11 @@ class LineSearch(Optimize):
 
         
         self.run_loop() 
-    
-    def set_amax(self, xk, dk):
-        '''not used currently'''
-        amax = np.zeros_like(xk)
-        for i, xi in enumerate(xk):
-            lower, upper = self.bounds[i]
-            if np.sign(dk[i]) == 1:
-                amax[i] = (upper-xi)/dk[i]
-            else:
-                amax[i] = (lower-xi)/dk[i]
-        return np.min(amax)
                 
-    def calc_update(self):
+    def calc_update(self, iter_resamp=0):
 
         # Initialize variables for this step
         success = False
-        iter_resamp = 0
 
         # Dummy functions for scipy.line_search
         def _jac(x):
@@ -105,21 +93,21 @@ class LineSearch(Optimize):
 
         if self.normalize:
             hessian /= np.maximum(la.norm(hessian, np.inf), 1e-12)  # scale the hessian with inf-norm
-            alpha_max = self.alpha_max/la.norm(pk, np.inf)
+            pk_norm = la.norm(pk, np.inf)
         else:
-            alpha_max = self.alpha_max
+            pk_norm = 1
             
         # Perform Line Search
         self.logger.info('Performing line search...')
         line_search_kwargs = {'f'        : _fun,
                               'myfprime' : _jac,
                               'xk'       : self.mean_state,
-                              'pk'       : -pk,
+                              'pk'       : -pk/pk_norm,
                               'gfk'      : pk,
                               'old_fval' : self.obj_func_values.mean(),
                               'c1'       : self.ls_options['c1'],
                               'c2'       : self.ls_options['c2'],
-                              'amax'     : alpha_max,
+                              'amax'     : self.alpha_max,
                               'maxiter'  : self.alpha_iter_max}
         
         step_size, _, _, fnew, _, slope = line_search(**line_search_kwargs)
@@ -128,12 +116,14 @@ class LineSearch(Optimize):
             self.logger.info('Strong Wolfie conditions satisfied')
 
             # Update state
-            self.mean_state      = ot.clip_state(self.mean_state - step_size*pk, self.bounds)
+            self.mean_state      = ot.clip_state(self.mean_state - step_size*pk/pk_norm, self.bounds)
             self.obj_func_values = fnew
             self.alpha           = step_size
             self.pk_from_ls      = slope
 
-            # Update covariance
+            # Update covariance 
+            #TODO: This sould be mande into an callback function for generality 
+            #      (in case of non ensemble gradients or GenOpt gradient)
             self.cov = self.cov - self.alpha_cov * hessian
             self.cov = ot.get_sym_pos_semidef(self.cov)
 
@@ -149,17 +139,26 @@ class LineSearch(Optimize):
                             self.alpha, self.cov[0, 0])
                 self.logger.info(info_str_iter)
 
-            # update iteration
+            # Update iteration
             self.iteration += 1
         
         else:
             self.logger.info('Strong Wolfie conditions not satisfied')
 
             if iter_resamp < self.iter_resamp_max:
+
                 self.logger.info('Resampling Gradient')
                 iter_resamp += 1
-                success = True
+                self.pk_from_ls = None
+
+                # Shrink cov matrix
+                self.cov = self.cov*self.shrink_factor
+
+                # Recursivly call function
+                success = self.calc_update(iter_resamp=iter_resamp)
+
             else:
                 success = False
-
+    
         return success
+
