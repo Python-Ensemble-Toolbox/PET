@@ -760,6 +760,10 @@ class EclipseRestart (EclipseData):
 
         # convert Eclipse date field to a Python date object
         return _intehead_date(intehead)
+    
+    def arrays(self):
+        ecl_file = EclipseFile(self.root, self.ext)
+        return [list(ecl_file.cat.keys())[i][0] for i, _ in enumerate(ecl_file.cat)]
 
 
 class EclipseSummary (EclipseData):
@@ -1074,6 +1078,9 @@ class EclipseCase (object):
 
         # offload this routine to the grid object
         return self._grid.grid()
+
+    def arrays(self, when):
+        return self.at(when).arrays()
 
 
 class EclipseRFT (object):
