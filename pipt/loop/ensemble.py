@@ -170,20 +170,23 @@ class Ensemble(PETEnsemble):
         Also, the pred_data variable (predicted data or forward simulation) will be initialized here with the same
         structure as the obs_data variable.
 
-        .. warning:: An "N/A" entry in "TRUEDATA" is treated as a None-entry; that is, there is NOT an observed data at this
-        assimilation step.
+        !!! warning
+            An "N/A" entry in "TRUEDATA" is treated as a None-entry; that is, there is NOT an observed data at this
+            assimilation step.
 
-        .. warning:: The array associated with the first string inputted in "TRUEDATAINDEX" is assumed to be the "main"
-        index, that is, the length of this array will determine the length of the obs_data list! There arrays
-        associated with the subsequent strings in "TRUEDATAINDEX" are then assumed to be a subset of the first
-        string.  An example: the first string is SOURCE (e.g., sources in CSEM), where the array will be a list of numbering
-        for the sources; and the second string is FREQ, where the array associated will be a list of frequencies.
+        !!! warning
+            The array associated with the first string inputted in "TRUEDATAINDEX" is assumed to be the "main"
+            index, that is, the length of this array will determine the length of the obs_data list! There arrays
+            associated with the subsequent strings in "TRUEDATAINDEX" are then assumed to be a subset of the first
+            string.  An example: the first string is SOURCE (e.g., sources in CSEM), where the array will be a list of numbering
+            for the sources; and the second string is FREQ, where the array associated will be a list of frequencies.
 
-        .. note:: It is assumed that the number of data associated with a subset is the same for each index in the subset.
-        For example: If two frequencies are inputted in FREQ, then the number of data for one SOURCE index and one
-        frequency is 1/2 of the total no. of data for that SOURCE index. If three frequencies are inputted, the number
-        of data for one SOURCE index and one frequencies is 1/3 of the total no of data for that SOURCE index,
-        and so on.
+        !!! note
+            It is assumed that the number of data associated with a subset is the same for each index in the subset.
+            For example: If two frequencies are inputted in FREQ, then the number of data for one SOURCE index and one
+            frequency is 1/2 of the total no. of data for that SOURCE index. If three frequencies are inputted, the number
+            of data for one SOURCE index and one frequencies is 1/3 of the total no of data for that SOURCE index,
+            and so on.
         """
 
         # # Check if keys_da['datatype'] is a string or list, and make it a list if single string is given
@@ -355,14 +358,15 @@ class Ensemble(PETEnsemble):
         If we want to specify the whole covariance matrix, this can also be done. The user must supply a Numpy save file
         which is loaded here.
 
-        .. warning:: When relative variance is given as input, we set the variance as (true_obs_data*rel_perc*0.01)**2
-        BECAUSE we often want this alternative in cases where we "add some percentage of Gaussian noise to the
-        observed data". Hence, we actually want some percentage of the true observed data as STANDARD DEVIATION since
-        it ultimately is the standard deviation (through square-root decompostion of Cd) that is used when adding
-        noise to observed data.Note that this is ONLY a matter of definition, but we feel that this way of defining
-        relative variance is most common.
+        !!! warning
+            When relative variance is given as input, we set the variance as (true_obs_data*rel_perc*0.01)**2
+            BECAUSE we often want this alternative in cases where we "add some percentage of Gaussian noise to the
+            observed data". Hence, we actually want some percentage of the true observed data as STANDARD DEVIATION since
+            it ultimately is the standard deviation (through square-root decompostion of Cd) that is used when adding
+            noise to observed data.Note that this is ONLY a matter of definition, but we feel that this way of defining
+            relative variance is most common.
         """
-        # TODO: Change when sub-assim. indices have been re-implemented.
+            # TODO: Change when sub-assim. indices have been re-implemented.
 
         # Check if keys_da['datatype'] is a string or list, and make it a list if single string is given
         if isinstance(self.keys_da['datatype'], str):
@@ -600,7 +604,8 @@ class Ensemble(PETEnsemble):
         Save a snapshot of state at current iteration. It is stored in a list with length equal to max. iteration
         length + 1 (due to prior state being 0). The list of temporary states are also stored as a .npz file.
 
-        .. warning:: Max. iterations must be defined before invoking this method.
+        !!! warning
+            Max. iterations must be defined before invoking this method.
 
         Parameters
         ----------
@@ -621,7 +626,8 @@ class Ensemble(PETEnsemble):
         equal to the tot. no. of assimilations + 1 (init. ensemble saved in 0 entry). The list of temporary states
         are also stored as a .npz file.
 
-        .. warning:: Tot. no. of assimilations must be defined before invoking this method.
+        !!! warning
+            Tot. no. of assimilations must be defined before invoking this method.
 
         Parameter
         ---------
@@ -643,7 +649,8 @@ class Ensemble(PETEnsemble):
         equal to the tot. no. of assimilations + 1 (init. ensemble saved in 0 entry). The list of temporary states
         are also stored as a .npz file.
 
-        .. warning:: Tot. no. of assimilations must be defined before invoking this method.
+        !!! warning
+            Tot. no. of assimilations must be defined before invoking this method.
 
         Parameters
         ----------

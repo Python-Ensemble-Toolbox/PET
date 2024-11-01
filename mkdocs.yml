@@ -1,0 +1,177 @@
+site_name: PET
+site_author: Patrick N. Raanes
+site_url: https://python-ensemble-toolbox.github.io/PET
+repo_url: https://github.com/Python-Ensemble-Toolbox/PET
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+watch: [mkdocs.yml, README.md, docs, misc, docs, ensemble, input_output, misc, pipt, popt, simulator, tests]
+
+nav:
+  - Home: index.md
+  - Reference: reference/
+  # - Examples: examples/
+  # - Bibliography: references.md
+  - dev_guide.md
+
+validation:
+  absolute_links: relative_to_docs
+  # Disabled coz it complains about relative links that work just fine
+  # (and enable interlinking READMEs even on GitHub).
+  # Set to "warn" to help find non-working links.
+  unrecognized_links: ignore
+
+theme:
+  name: material
+  logo: https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png?raw=true
+  favicon: https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png?raw=true
+  palette:
+    primary: custom
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil 
+    view: material/eye
+  features:
+    - content.code.copy # copy button
+    # - content.code.select # [insiders only]
+    - content.action.edit
+    - content.code.annotate # clickable toggler for code comments
+    - navigation.indexes # enable subdir/index.md
+    - toc.follow # ?
+    # - toc.integrate # render ToC as part of left sidebar [not compat with navigation.indexes]
+    - navigation.tabs # top-level sections rendered in header tabs (for wide screens) instead of left sidebar
+    # - navigation.tabs.sticky # don't hide tabs when scrolled
+    # - navigation.expand # expand sections
+    # - navigation.sections # group (rather than collapse) top-level sections 
+    - navigation.path # breadcrumbs
+    # - navigation.prune # for large projects
+    - navigation.tracking # update URL to current section
+    # - navigation.footer # "Next/Prev"
+    - navigation.instant # SSA
+    - navigation.instant.progress # Progbar on top
+    - navigation.top # "back to top when scrolling up"
+    - header.autohide
+    - search.highlight # highlight matches on page
+    - search.share # deep link to search
+    - search.suggest # search suggestions
+
+  custom_dir: docs/overrides
+
+plugins:
+  - glightbox # zoom functionality
+  # - roamlinks
+  # - blog
+  - search
+  - autorefs # enable anchor/heading links without specifying its page
+  # - meta # [insiders only] enable front-matter defaults as in Jekyll
+  # - mkdocs-jupyter:
+  #     include: ["*.ipynb"] # Default: ["*.py", "*.ipynb"]
+  #     ignore:
+  #       - ".ipynb_checkpoints/*"
+  #     execute: false
+  # - bibtex:
+  #     # NB: does not work with mkdocstrings (https://github.com/shyamd/mkdocs-bibtex/issues/246)
+  #     # PS: requires pandoc installed on system and markdown_extensions: footnotes
+  #     bib_file: docs/bib/refs.bib
+  #     bib_by_default: true
+  #     csl_file: docs/bib/data-science-journal.csl
+
+  # Autodoc from docstrings:
+  - gen-files: # Genrate .md reflecting .py hierarchy:
+      scripts:
+        - docs/gen_ref_pages.py
+  - literate-nav: # Auto-generate nav
+      nav_file: SUMMARY.md
+  - section-index
+  - mkdocstrings: # Parse docstrings
+      handlers:
+        python:
+          # load_external_modules: true
+          paths: [., pipt, popt, simulator, ensemble, misc, input_output, tests]
+          import:
+            - https://docs.python.org/3/objects.inv
+            - https://mkdocstrings.github.io/objects.inv
+          options:
+            # Overview at https://mkdocstrings.github.io/python/usage/?h=show_source#globallocal-options
+            # See sidebar for details.
+            docstring_style: numpy
+            # TODO: activate `show_source` when these [insiders!?] are done
+            # - https://github.com/mkdocstrings/mkdocstrings/issues/525
+            # - https://github.com/mkdocstrings/mkdocstrings/issues/249
+            show_source: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_root_heading: false
+            summary:
+                modules: true
+                classes: false
+                attributes: false
+                functions: false # class methods
+            show_labels: false
+
+# Mostly from
+# https://squidfunk.github.io/mkdocs-material/setup/extensions/#recommended-configuration
+markdown_extensions:
+  # Python Markdown official extensions
+  - abbr
+  - admonition
+  - def_list
+  - footnotes
+  - toc:
+      title: On this page
+      permalink: ⚓︎
+      toc_depth: 3
+  # Adds the ability to align images, add captions to images (rendering them as figures), and mark large images for lazy-loading:
+  - attr_list
+  - md_in_html
+
+  # Extensions part of Pymdown
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+      use_pygments: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - !relative  # dir of current Markdown file
+        # NB: does not work with the virtual files generated by mkdocs-gen-files,
+        # ref https://github.com/oprypin/mkdocs-gen-files/issues/25
+        - !relative $docs_dir  # dir of docs
+        - !relative $config_dir  # dir of mkdocs.yml
+  - pymdownx.superfences
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# hooks:
+#   - list_logos.py
+
+extra_javascript:
+  - javascripts/extra.js
+  # For MathJax
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - stylesheets/code_select.css
+  - stylesheets/jupyter.css
+  - stylesheets/extra.css
+
+
+extra:
+  generator: false # "Made with Material for MkDocs"

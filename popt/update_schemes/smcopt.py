@@ -6,7 +6,7 @@ import pprint
 # Internal imports
 from popt.loop.optimize import Optimize
 import popt.update_schemes.optimizers as opt
-from popt.misc_tools import optim_tools as ot
+from popt.nisc_tools import optim_tools as ot
 
 
 class SmcOpt(Optimize):

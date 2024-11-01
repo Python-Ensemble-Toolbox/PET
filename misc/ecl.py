@@ -933,7 +933,9 @@ class EclipseCase (object):
         >>> for rstp in case.report_dates ():
                 print (case.at (rstp).this_date)
 
-        .. seealso:: at
+        See also
+        --------
+        [`ecl.EclipseCase.at`][]
         """
         return sorted(self.by_date.keys())
 
@@ -1016,7 +1018,8 @@ class EclipseCase (object):
         :returns:     Loaded array for the property.
         :rtype:       :class:`numpy.ndarray`
 
-        :example:
+        Examples
+        --------
         >>> case = EclipseCase (cmd_args.filename)
         >>> zmf2 = case.cell_data ('ZMF2', datetime.datetime (2054, 7, 1))
         """

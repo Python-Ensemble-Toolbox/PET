@@ -394,7 +394,8 @@ class Assimilate:
         """
         Moved Old analysis debug here to retain consistency.
 
-        .. danger:: only class variables can be stored now.
+        !!! danger
+            only class variables can be stored now.
         """
         # Init dict. of variables to save
         save_dict = {}
@@ -450,14 +451,16 @@ class Assimilate:
         Parallel run in "ampersand" mode means that it will be started in the background and run independently of the
         Python script. Hence, check for simulation finished or error must be conducted!
 
-        .. info:: It is only necessary to get the results from the forward simulations that corresponds to the observed
-        data at the particular assimilation step. That is, results from all data types are not necessary to
-        extract at step iv; if they are not present in the obs_data (indicated by a None type) then this result does
-        not need to be extracted.
+        !!! info
+            It is only necessary to get the results from the forward simulations that corresponds to the observed
+            data at the particular assimilation step. That is, results from all data types are not necessary to
+            extract at step iv; if they are not present in the obs_data (indicated by a None type) then this result does
+            not need to be extracted.
 
-        .. info:: It is assumed that no underscore is inputted in DATATYPE. If there are underscores in DATATYPE
-        entries, well, then we may have a problem when finding out which response to extract in get_sim_results below.
-        """
+        !!! info
+            It is assumed that no underscore is inputted in DATATYPE. If there are underscores in DATATYPE
+            entries, well, then we may have a problem when finding out which response to extract in get_sim_results below.
+            """
         # Add an option to load existing sim results. The user must actively create the restart file by renaming an
         # existing sim_results.p file to restart_sim_results.p.
         if os.path.exists('restart_sim_results.p'):

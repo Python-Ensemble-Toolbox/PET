@@ -1,7 +1,7 @@
 """Model wrappers.
 
-.. include:: ./README.md
+--8<-- "simulator/README.md"
 
-
-.. note:: Test
+!!! note "Test"
+    This is a notice!
 """

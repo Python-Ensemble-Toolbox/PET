@@ -1,4 +1,4 @@
 """Optimisation methods.
 
-.. include:: ./README.md
+--8<-- "popt/README.md"
 """

@@ -8,7 +8,7 @@ from numpy import linalg as la
 from scipy.optimize import line_search
 
 # Internal imports
-from popt.misc_tools import optim_tools as ot
+from popt.nisc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
 
 # ignore line_search did not converge message

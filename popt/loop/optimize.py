@@ -1,5 +1,5 @@
 # Internal imports
-from popt.misc_tools import optim_tools as ot
+from popt.nisc_tools import optim_tools as ot
 
 # External imports
 import os

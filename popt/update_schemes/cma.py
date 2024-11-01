@@ -1,5 +1,5 @@
 import numpy as np
-from popt.misc_tools import optim_tools as ot
+from popt.nisc_tools import optim_tools as ot
 
 class CMA:
 
