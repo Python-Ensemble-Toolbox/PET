@@ -51,4 +51,8 @@ for path in sorted(src.rglob("*.py")):
 # > So basically, you can use the literate-nav plugin just for its ability to
 # > infer only sub-directories, without ever writing any actual "literate navs".
 with mkdocs_gen_files.open("reference/SUMMARY.md", "w") as nav_file:
-    nav_file.writelines(nav.build_literate_nav())
+    # nav_file.writelines(nav.build_literate_nav())
+    nav_file.writelines(
+        "# Code reference\nUse links in sidebar to navigate the code docstrings.\n"
+        + "".join(list(nav.build_literate_nav()))
+    )
