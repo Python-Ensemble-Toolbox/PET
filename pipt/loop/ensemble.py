@@ -672,12 +672,12 @@ class Ensemble(PETEnsemble):
 
         Parameters
         ----------
-        data:
+        data : 
             data to be compressed
             If data is `None`, all data (true and simulated) is re-compressed (used if leading indices are updated)
-        vintage: int
+        vintage : int
             the time index for the data
-        aug_coeff: bool
+        aug_coeff : bool
             - False: in this case the leading indices for wavelet coefficients are computed
             - True: in this case the leading indices are augmented using information from the ensemble
             - None: in this case simulated data is compressed

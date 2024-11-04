@@ -30,7 +30,7 @@ class enkfMixIn(Ensemble):
 
         Parameters
         ----------
-        init_file: str
+        init_file : str
             PIPT init. file containing info. to run the inversion algorithm
 
         """

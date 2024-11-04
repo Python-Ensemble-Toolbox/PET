@@ -28,7 +28,7 @@ class esMixIn():
 
         Parameters
         ----------
-        init_file: str
+        init_file : str
             PIPT init. file containing info. to run the inversion algorithm
         """
         # Pass init. file to Simultaneous parent class (Python searches parent classes from left to right).

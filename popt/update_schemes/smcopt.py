@@ -19,19 +19,19 @@ class SmcOpt(Optimize):
         """
         Parameters
         ----------
-        fun: callable
+        fun : callable
             objective function
 
-        x: ndarray
+        x : ndarray
             Initial state
 
-        sens: callable
+        sens : callable
             Ensemble sensitivity
 
-        bounds: list, optional
+        bounds : list, optional
             (min, max) pairs for each element in x. None is used to specify no bound.
 
-        options: dict
+        options : dict
             Optimization options
 
             - maxiter: maximum number of iterations (default 10)

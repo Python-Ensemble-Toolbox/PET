@@ -77,12 +77,12 @@ class GenOptDistribution:
 
         Parameters
         ----------
-        size: int
+        size : int
             Ensemble size (ne). Size of the sample to be drawn.
         
         Returns
         -------
-        out: tuple, (enZ, enX)
+        out : tuple, (enZ, enX)
 
             enZ : array_like, shape (ne,d)
                 Zero-mean Gaussain ensemble, drawn with the correlation matrix, corr
@@ -236,7 +236,7 @@ class GenOptDistribution:
 
         Parameters
         ----------
-        kwargs:
+        kwargs :
             return_ensemble : bool
                 If True, all the ensemble matrices are also returned in a dictionary.
         
@@ -309,9 +309,9 @@ def var2eps(var, theta):
     return epsilon
 
 def delA(theta):
-    '''
-    Calculates the expression psi(a) - psi(a+b),
-    where psi() is the digamma function.
+    r'''
+    Calculates the expression  $\psi(a) - \psi(a+b)$,
+    where  $\psi$  is the digamma function.
 
     Parameters
     --------------------------------------------

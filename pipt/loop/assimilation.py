@@ -44,7 +44,7 @@ class Assimilate:
 
         Parameters
         ----------
-        init_file: str
+        init_file : str
             PIPT init. filename
         """
         # Internalize ensemble and simulator class instances
@@ -292,6 +292,7 @@ class Assimilate:
         ----------
         keys_da : dict
             A dictionary containing all keywords from DATAASSIM part.
+
             - 'iteration' : object
                 Information for iterative methods.
 
@@ -368,7 +369,7 @@ class Assimilate:
 
         Parameters
         ----------
-        tempsave: list
+        tempsave : list
             Info. from the TEMPSAVE keyword
         """
         self.ensemble.logger.info(
@@ -444,7 +445,7 @@ class Assimilate:
         Parameters
         ----------
         assim_step : int
-                     Current assimilation step.
+            Current assimilation step.
 
         Notes
         -----

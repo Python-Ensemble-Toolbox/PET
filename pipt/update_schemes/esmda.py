@@ -30,7 +30,7 @@ class esmdaMixIn(Ensemble):
 
         Parameters
         ----------
-        keys_da['mda']: list
+        keys_da['mda'] : list
             - tot_assim_steps: total number of iterations in MDA, e.g., 3
             - inflation_param: covariance inflation factors, e.g., [2, 4, 4]
 
@@ -91,7 +91,7 @@ class esmdaMixIn(Ensemble):
         assim_step : int
             Current assimilation step
 
-        Notes:
+        Notes
         -----
         ES-MDA is an iterative ensemble smoother with a predefined number of iterations, where the updates is done with
         the EnKF update equations but where the data covariance matrix have been inflated:
@@ -273,9 +273,9 @@ class esmdaMixIn(Ensemble):
 
         Parameters
         ----------
-        keys_da: dict
+        keys_da : dict
             all keywords from DATAASSIM part
-        mda': info
+        mda : info
             for MDA methods
 
         Returns
@@ -345,7 +345,7 @@ class esmda_geo(esmda_approx):
 
         Parameters
         ----------
-        init_file: str
+        init_file : str
             PIPT init. file containing info. to run the inversion algorithm
 
         References
@@ -364,18 +364,18 @@ class esmda_geo(esmda_approx):
 
         Parameters
         ----------
-        pert_preddata: ndarray
+        pert_preddata : ndarray
             Predicted data (fwd. run) ensemble matrix perturbed with its mean
-        cov_data: ndarray
+        cov_data : ndarray
             Data covariance matrix
-        energy: float, optional
+        energy : float, optional
             Percentage of energy kept in (T)SVD decompostion of 'sensitivity' matrix (default is 99%)
 
         Returns
         -------
-        alpha: float
+        alpha : float
             Inflation factor
-        beta: float
+        beta : float
             Geometric factor
         """
         # Need the square-root of the data covariance matrix

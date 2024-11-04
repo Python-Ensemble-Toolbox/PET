@@ -731,7 +731,8 @@ def _calc_distance(data_pos, index_unique, current_data_list, assim_index, obs_d
     param_pos : list of tuple
         List of tuples representing the position of the parameters.
 
-    Returns:
+    Returns
+    -------
         - dist: list of euclidean distance between the data/parameter pair.
     """
     # distance to data if distance based localization

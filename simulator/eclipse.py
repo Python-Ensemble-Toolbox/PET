@@ -218,10 +218,10 @@ class eclipse:
 
         Parameters
         ----------
-        assimIndex: int
+        assimIndex : int
             Gives the index-type (e.g. step,time,etc.) and the index for the
             data to be assimilated
-        trueOrder:
+        trueOrder : 
             Gives the index-type (e.g. step,time,etc.) and the index of the true data
         """
         self.__dict__.update(kwargs)  # parse kwargs input into class attributes

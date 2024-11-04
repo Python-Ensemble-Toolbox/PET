@@ -18,28 +18,28 @@ class GenOpt(Optimize):
         """
         Parameters
         ----------
-        fun: callable
+        fun : callable
             objective function
 
-        x: ndarray
+        x : ndarray
             Initial state
 
-        args: tuple
+        args : tuple
             Initial covariance
 
-        jac: callable
+        jac : callable
             Gradient function
 
-        jac_mut: callable
+        jac_mut : callable
             Mutation gradient function
         
         corr_adapt : callable
             Function for correalation matrix adaption
 
-        bounds: list, optional
+        bounds : list, optional
             (min, max) pairs for each element in x. None is used to specify no bound.
 
-        options: dict
+        options : dict
                 Optimization options
         """
 

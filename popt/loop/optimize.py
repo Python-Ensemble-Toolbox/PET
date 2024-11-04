@@ -70,8 +70,8 @@ class Optimize:
         """
         Parameters
         ----------
-        options: dict
-                Optimization options
+        options : dict
+            Optimization options
         """
 
         def __set__variable(var_name=None, defalut=None):

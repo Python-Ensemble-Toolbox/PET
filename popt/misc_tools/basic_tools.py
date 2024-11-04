@@ -11,7 +11,8 @@ def index2d(list2d, value):
     Search in a 2D list for pattern or value and return is (i, j) index. If the
     pattern/value is not found, (None, None) is returned
 
-    Example:
+    Examples
+    --------
 
     >>> l = [['string1', 1], ['string2', 2]]
     >>> print index2d(l, 'string1')
@@ -36,15 +37,21 @@ def index2d(list2d, value):
 def read_file(val_type, filename):
     """
     Read an eclipse file with specified keyword.
-    Example:
-        read_file('PERMX','filename.permx')
+    Examples
+    --------
+    >>> read_file('PERMX','filename.permx')
 
-    Input:
-        - val_type:         keyword or property
-        - filename:         the file that is read
+    Parameters
+    ----------
+    val_type :
+        keyword or property
+    filename :
+        the file that is read
 
-    Output:
-        - values:           a vector with values for each cell
+    Returns
+    -------
+    values :
+        a vector with values for each cell
     """
 
     file = open(filename, 'r')
@@ -90,15 +97,20 @@ def read_file(val_type, filename):
 
 
 def write_file(filename, val_type, data):
-    """
-    Write an eclipse file with specified keyword.
-    Example:
-        write_file('filename.permx','PERMX',data_vec)
+    """Write an eclipse file with specified keyword.
 
-    Input:
-        - filename:         the file that is read
-        - val_type:         keyword or property
-        - data    :         data written to file
+    Examples
+    --------
+    >>> write_file('filename.permx','PERMX',data_vec)
+
+    Parameters
+    ----------
+    filename :
+        the file that is read
+    val_type:
+        keyword or property
+    data :
+        data written to file
     """
 
     file = open(filename, 'w')

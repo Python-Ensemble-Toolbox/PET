@@ -25,33 +25,33 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
 
     Parameters
     ----------
-    list_state: list
+    list_state : list
         List of state names
-    prior_info: dict
+    prior_info : dict
         INSERT DESCRIPTION
-    states_dict: dict
+    states_dict : dict
         Dict. of state arrays
-    X: ndarray
+    X : ndarray
         INSERT DESCRIPTION
-    local_mask_info: dict
+    local_mask_info : dict
         INSERT DESCRIPTION
-    obs_data: ndarray
+    obs_data : ndarray
         Observed data
-    pred_data: ndarray
+    pred_data : ndarray
         Predicted data
-    parallel: int
+    parallel : int
         Number of parallel runs
-    actnum: ndarray, optional
+    actnum : ndarray, optional
         Active cells
-    field_dim: list, optional
+    field_dim : list, optional
         Number of grid cells in each direction
-    act_data_list: list, optional
+    act_data_list : list, optional
         List of active data names
-    scale_data: ndarray, optional
+    scale_data : ndarray, optional
         Scaling array for data
-    num_states: int, optional
+    num_states : int, optional
         Number of states
-    emp_d_cov: bool
+    emp_d_cov : bool
         INSERT DESCRIPTION
 
     Notes
@@ -238,7 +238,7 @@ def _calc_row_upd(inp):
 
     Parameters
     ----------
-    inp: list    
+    inp : list    
         List of [state, param_coordinates, metadata file name]
     """
 
@@ -331,18 +331,18 @@ def _calc_region(loc_info, states, field_dim, actnum):
 
     Parameters
     ----------
-    loc_info: dict
+    loc_info : dict
         Information for localization
-    states: dict 
+    states : dict 
         State variables
-    field_dim: list
+    field_dim : list
         Dimension of grid
-    actnum: ndarray
+    actnum : ndarray
         Active cells
 
     Returns
     -------
-    regions: dict
+    regions : dict
         Region-box
     """
     regions = {}
@@ -374,15 +374,15 @@ def _get_region(reg, field_dim=None, actnum=None):
 
     Parameters
     ----------
-    reg:
-    field_dim: list
+    reg : 
+    field_dim : list
         Dimension of grid
-    actnum: ndarray
+    actnum : ndarray
         Active cells
 
     Returns
     -------
-    act_g: ndarray
+    act_g : ndarray
     """
 
     # Get the files
@@ -440,16 +440,16 @@ def _calc_loc(grid_pos=[0, 0, 0], loc_info=None, ne=1):
 
     Parameters
     ----------
-    grid_pos: list, optional
+    grid_pos : list, optional
      Grid coordinates. Defaults to [0,0,0].
-    loc_info: dict, optional
+    loc_info : dict, optional
         Localization inf. Defaults to None.
-    ne: int, optional
+    ne : int, optional
         Number of ensemble members. Defaults to 1.
 
     Returns
     -------
-    mask: ndarray
+    mask : ndarray
         Localization mask
     """
     # given the parameter type (to get the prior info) and the range to the data points we can calculate the
@@ -489,7 +489,7 @@ def _calc_dist(x1, x2):
 
     Returns
     -------
-    dist: ndarray
+    dist : ndarray
         (Euclidean) distance between `x1` and `x2`
 
     """
@@ -507,12 +507,12 @@ def calc_autocov(pert):
 
     Parameters
     ----------
-    pert: ndarray
+    pert : ndarray
         Perturbation matrix (matrix of variables perturbed with their mean)
 
     Returns
     -------
-    cov_auto: ndarray
+    cov_auto : ndarray
         Sample auto-covariance matrix
     """
     # TODO: Implement sqrt-covariance matrices
@@ -569,7 +569,7 @@ def calc_crosscov(pert1, pert2):
 
     Returns
     -------
-    cov_cross: ndarray
+    cov_cross : ndarray
         Sample cross-covariance matrix
     """
     # TODO: Implement sqrt-covariance matrices
@@ -648,9 +648,9 @@ def save_analysisdebug(ind_save, **kwargs):
 
     Parameters
     ----------
-    ind_save: int
+    ind_save : int
         Index of analysis step
-    **kwargs: dict
+    **kwargs : dict
         Variables that will be saved to npz file
 
     Notes
@@ -672,16 +672,16 @@ def get_list_data_types(obs_data, assim_index):
 
     Parameters
     ----------
-    obs_data: dict
+    obs_data : dict
         Observed data
-    assim_index: int
+    assim_index : int
         Current assimilation index
 
     Returns
     -------
-    l_all: list
+    l_all : list
         List of all data types
-    l_act: list
+    l_act : list
         List of the data types that are active (that are not `None`)
     """
     # List the primary indices
@@ -718,17 +718,17 @@ def gen_covdata(datavar, assim_index, list_data):
 
     Parameters
     ----------
-    datavar: list
+    datavar : list
         List of dictionaries containing variance for the observed data. The structure of this list is the same as for
         `obs_data`
-    assim_index: int
+    assim_index : int
         Current assimilation index
-    list_data: list
+    list_data : list
         List of the data types
 
     Returns
     -------
-    cd: ndarray
+    cd : ndarray
         Data auto-covariance matrix
 
     Notes
@@ -804,20 +804,20 @@ def screen_data(cov_data, pred_data, obs_data_vector, keys_da, iteration):
 
     Parameters
     ----------
-    cov_data: ndarray
+    cov_data : ndarray
         Data covariance matrix
-    pred_data: ndarray
+    pred_data : ndarray
         Predicted data
-    obs_data_vector: 
+    obs_data_vector : 
         Observed data (1D array)
-    keys_da: dict
+    keys_da : dict
         Dictionary with every input in `DATAASSIM`
-    iteration: int
+    iteration : int
         Current iteration
 
     Returns
     -------
-    cov_data: ndarray
+    cov_data : ndarray
         Updated data covariance matrix
     """
 
@@ -870,18 +870,18 @@ def extract_tot_empirical_cov(data_var, assim_index, list_data, ne):
 
     Parameters
     ----------
-    data_var: list
+    data_var : list
         List of dictionaries containing the varianse as read from the input
-    assim_index: int
+    assim_index : int
         Index of the assimilation
-    list_data: list
+    list_data : list
         List of data types
-    ne: int
+    ne : int
         Ensemble size
 
     Returns
     -------
-    E: ndarray
+    E : ndarray
         Sorted (according to assim_index and list_data) matrix of data realization noise.
     """
 
@@ -918,17 +918,17 @@ def aug_obs_pred_data(obs_data, pred_data, assim_index, list_data):
 
     Parameters
     ----------
-    obs_data: list
+    obs_data : list
         List of dictionaries containing observed data
-    pred_data: list
+    pred_data : list
         List of dictionaries where each entry of the list is the forward simulation results at an assimilation step. The
         dictionary has keys equal to the data type (given in `OBSNAME`).
 
     Returns
     -------
-    obs: ndarray 
+    obs : ndarray 
         Augmented vector of observed data
-    pred: ndarray
+    pred : ndarray
         Ensemble matrix of predicted data
     """
     # TODO: Change if sub-assim. ind. are implemented.
@@ -996,13 +996,13 @@ def calc_kalmangain(cov_cross, cov_auto, cov_data, opt=None):
 
     Parameters
     ----------
-    cov_cross: ndarray
+    cov_cross : ndarray
         Cross-covariance matrix between state and predicted data
-    cov_auto: ndarray
+    cov_auto : ndarray
         Auto-covariance matrix of predicted data
-    cov_data: ndarray
+    cov_data : ndarray
         Variance on observed data (diagonal matrix)
-    opt: str
+    opt : str
         Which method should we use to calculate Kalman gain
         <ul>
             <li>'lu': LU decomposition (default)</li>
@@ -1011,7 +1011,7 @@ def calc_kalmangain(cov_cross, cov_auto, cov_data, opt=None):
 
     Returns
     -------
-    kalman_gain: ndarray
+    kalman_gain : ndarray
         Kalman gain
 
     Notes
@@ -1063,16 +1063,16 @@ def calc_subspace_kalmangain(cov_cross, data_pert, cov_data, energy):
     to retain. For more info regarding the implementation, see Chapter 14 in [1].
 
     Parameters
-    cov_cross: ndarray
+    cov_cross : ndarray
         Cross-covariance matrix between state and predicted data
-    data_pert: ndarray
+    data_pert : ndarray
             Predicted data - mean of predicted data
-    cov_data: ndarray
+    cov_data : ndarray
         Variance on observed data (diagonal matrix)
 
     Returns
     -------
-    k_g: ndarray
+    k_g : ndarray
         Subspace Kalman gain
 
     References
@@ -1120,17 +1120,17 @@ def compute_x(pert_preddata, cov_data, keys_da, alfa=None):
 
     Parameters
     ----------
-    pert_preddata: ndarray
+    pert_preddata : ndarray
         Perturbed predicted data
-    cov_data: ndarray
+    cov_data : ndarray
         Data covariance matrix
-    keys_da: dict
+    keys_da : dict
         Dictionary with every input in `DATAASSIM`
-    alfa: None, optional
+    alfa : None, optional
         INSERT DESCRIPTION
 
-    Returns:
-    X: ndarray
+    Returns : 
+    X : ndarray
         INSERT DESCRIPTION
     """
     X = []
@@ -1195,16 +1195,16 @@ def aug_state(state, list_state, cell_index=None):
 
     Parameters
     ----------
-    state: dict
+    state : dict
         Dictionary of initial ensemble of (joint) state variables (static parameters and dynamic variables) to be
         assimilated.
-    list_state: list
+    list_state : list
         Fixed list of keys in state dict.
-    cell_index: list of vector indexes to be extracted
+    cell_index : list of vector indexes to be extracted
 
     Returns
     -------
-    aug: ndarray
+    aug : ndarray
         Ensemble matrix of augmented state variables
     """
     # TODO: In some rare cases, it may not be desirable to update every state variable at each assimilation step.
@@ -1241,16 +1241,16 @@ def calc_scaling(state, list_state, prior_info):
 
     Parameters
     ----------
-    state: dict
+    state : dict
         Dictionary containing the state
-    list_state: list
+    list_state : list
         List of states for augmenting
-    prior_info: dict
+    prior_info : dict
         Nested dictionary containing prior information
 
     Returns
     -------
-    scaling: numpy array
+    scaling : numpy array
         scaling
     """
 
@@ -1276,18 +1276,18 @@ def update_state(aug_state, state, list_state, cell_index=None):
 
     Parameters
     ----------
-    aug_state: ndarray
+    aug_state : ndarray
         Augmented array of UPDATED state variables
-    state: dict
+    state : dict
         Dict. of state variables NOT updated.
-    list_state: list
+    list_state : list
         List of state keys that have been updated
-    cell_index: list
+    cell_index : list
         List of indexes that gives the where the aug state should be placed
 
     Returns
     -------
-    state: dict
+    state : dict
         Dict. of UPDATED state variables
     """
     if cell_index is None:
@@ -1326,18 +1326,18 @@ def resample_state(aug_state, state, list_state, new_en_size):
 
     Parameters
     ----------
-    aug_upd_state: ndarray
+    aug_upd_state : ndarray
         Augmented matrix of state variables
-    state: dict
+    state : dict
         Dict. af state variables
-    list_state: list
+    list_state : list
         List of state variable
-    new_en_size: int
+    new_en_size : int
         Size of the new ensemble
 
     Returns
     -------
-    state: dict
+    state : dict
         Dict. of resampled members
     """
 
@@ -1367,14 +1367,14 @@ def block_diag_cov(cov, list_state):
 
     Parameters
     ----------
-    cov: dict
+    cov : dict
         Dict. with cov. matrices
-    list_state: list
+    list_state : list
         Fixed list of keys in state dict.
 
     Returns
     -------
-    cov_out: ndarray
+    cov_out : ndarray
         Block diag. matrix with prior covariance matrices for each state.
     """
     # TODO: Change if there are cross-correlation between different states
@@ -1400,18 +1400,18 @@ def calc_kalman_filter_eq(aug_state, kalman_gain, obs_data, pred_data):
 
     Parameters
     ----------
-    aug_state: ndarray
+    aug_state : ndarray
         Augmented state variable (all the parameters defined in `STATICVAR` augmented in one array)
-    kalman_gain: ndarray
+    kalman_gain : ndarray
         Kalman gain
-    obs_data: ndarray
+    obs_data : ndarray
         Augmented observed data vector (all `OBSNAME` augmented in one array)
-    pred_data: ndarray
+    pred_data : ndarray
         Augmented predicted data vector (all `OBSNAME` augmented in one array)
 
     Returns
     -------
-    aug_state_upd: ndarray
+    aug_state_upd : ndarray
         Updated augmented state variable using the Kalman filter equations
     """
     # TODO: Implement svd updating algorithm
@@ -1436,14 +1436,14 @@ def limits(state, prior_info):
 
     Parameters
     ----------
-    state: dict
+    state : dict
         Dictionary containing the states
-    prior_info: dict
+    prior_info : dict
         Dictionary containing prior information for all the states.
 
     Returns
     -------
-    state: dict
+    state : dict
         Valid state
     """
     for var in state.keys():
@@ -1461,16 +1461,16 @@ def subsample_state(index, aug_state, pert_state):
 
     Parameters
     ----------
-    index: ndarray
+    index : ndarray
         Index of parameters to draw.
-    aug_state: ndarray
+    aug_state : ndarray
         Original augmented state.
-    pert_state: ndarray
+    pert_state : ndarray
         Perturbed augmented state, for error covariance.
 
     Returns
     -------
-    new_state: dict
+    new_state : dict
         Subsample of state.
     """
 
@@ -1489,11 +1489,11 @@ def init_local_analysis(init, state):
     Initialize the local analysis by reading the input variables, defining the parameter classes and search ranges. Build
     the map of data/parameter positions.
 
-    Args:
-        init: dictionary containing the parsed information form the input file.
-        state: list of states that will be updated
-    Returns:
-        local: dictionary of initialized values.
+    Args : 
+        init : dictionary containing the parsed information form the input file.
+        state : list of states that will be updated
+    Returns : 
+        local : dictionary of initialized values.
     """
 
     local = {}
