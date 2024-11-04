@@ -310,8 +310,9 @@ class Ensemble(PETEnsemble):
         where $X$ and $J$ are ensemble matrices of $x$ (or control variables) and objective function
         perturbed by their respective means.
 
-        Note: state and ens_func_values are assumed to already exist from computation of the gradient.
-        Save time by not running them again.
+        !!! note
+            state and ens_func_values are assumed to already exist from computation of the gradient.
+            Save time by not running them again.
 
         Parameters
         ----------

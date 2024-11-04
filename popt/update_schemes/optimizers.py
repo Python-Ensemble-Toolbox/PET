@@ -68,7 +68,9 @@ class GradientAscent:
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
-        NOTE: This is the steepest decent update: x_new = x_old - x_step.
+
+        !!! note
+            This is the steepest decent update: x_new = x_old - x_step.
 
         Parameters
         -------------------------------------------------------------------------------------
@@ -239,7 +241,9 @@ class Adam:
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
-        NOTE: This is the steepest decent update: x_new = x_old - x_step.
+
+        !!! note
+            This is the steepest decent update: x_new = x_old - x_step.
 
         Parameters
         -------------------------------------------------------------------------------------

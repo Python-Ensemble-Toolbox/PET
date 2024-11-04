@@ -14,13 +14,17 @@ def aug_optim_state(state, list_state):
     """
     Augment the state variables to get one augmented array.
 
-    Input:
-            - state:                Dictionary of state variable for optimization. OBS: 1D arrays!
-            - list_state:           Fixed list of keys in state dict.
+    Parameters
+    ----------
+    state : dict
+        Dictionary of state variables for optimization. OBS: 1D arrays!
+    list_state : list
+        Fixed list of keys in the state dictionary.
 
-    Output:
-            - aug_state:            Augmented 1D array of state variables.
-
+    Returns
+    -------
+    aug_state : numpy.ndarray
+        Augmented 1D array of state variables.
     """
     # Start with ensemble of first state variable
     aug = state[list_state[0]]
@@ -35,17 +39,23 @@ def aug_optim_state(state, list_state):
 
 def update_optim_state(aug_state, state, list_state):
     """
-    Extract the separate state variables from an augmented state array. It is assumed that the augmented state
-    array is made in aug_optim_state method, hence this is the reverse method.
+    Extract the separate state variables from an augmented state array.
 
-    Input:
-            - aug_state:                Augmented state array. OBS: 1D array.
-            - state:                    Dictionary of state variable for optimization.
-            - list_state:               Fixed list of keys in state dict.
+    It is assumed that the augmented state array is made in the aug_optim_state method, hence this is the reverse method.
 
-    Output:
-            - state:                    State dictionary updated with aug_state.
+    Parameters
+    ----------
+    aug_state : numpy.ndarray
+        Augmented state array. OBS: 1D array.
+    state : dict
+        Dictionary of state variables for optimization.
+    list_state : list
+        Fixed list of keys in the state dictionary.
 
+    Returns
+    -------
+    state : dict
+        State dictionary updated with aug_state.
     """
 
     # Loop over all entries in list_state and extract an array with same number of rows as the key in state

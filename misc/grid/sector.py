@@ -23,14 +23,18 @@ tuple_format = re.compile(r'\(?([0-9]+)\ *\,\ *([0-9]+)\ *\,\ *([0-9]+)\)?')
 
 
 def parse_tuple(corner):
-    """\
-    Parse a parenthesized tuple into three constituent coordinates.
+    """
+    Parse a coordinate specification string into a tuple of zero-based coordinates.
 
-    :param corner:  Coordinate specification on the format "(i1,j1,k1)"
-    :type  corner:  str
-    :returns:       The parsed tuple, converted into zero-based coordinates
-                    and in Python-matrix order: (k, j, i)
-    :rtype  :       (int, int, int)
+    Parameters
+    ----------
+    corner : str
+        Coordinate specification in the format "(i1,j1,k1)".
+
+    Returns
+    -------
+    tuple of int
+        The parsed tuple, converted into zero-based coordinates and in Python-matrix order: (k, j, i).
     """
     # let the regular expression engine parse the string
     match = re.match(tuple_format, corner.strip())
@@ -50,15 +54,18 @@ def parse_tuple(corner):
 
 
 def sort_tuples(corner, opposite):
-    """\
-    :param corner:    Coordinates of one corner
-    :type  corner:    (int, int, int)
-    :param opposite:  Coordinates of the opposite corner
-    :type  opposite:  (int, int, int)
-    :returns:         The two tuples, but with coordinates interchanged so that
-                      one corner is always in the lower, left, back and the
-                      other is in the upper, right, front
-    :rtype:           ((int, int, int), (int, int, int))
+    """
+    Parameters
+    ----------
+    corner : tuple of int
+        Coordinates of one corner.
+    opposite : tuple of int
+        Coordinates of the opposite corner.
+
+    Returns
+    -------
+    tuple of tuple of int
+        The two tuples, but with coordinates interchanged so that one corner is always in the lower, left, back and the other is in the upper, right, front.
     """
     # pick out the most extreme variant in either direction, into each its own
     # variable; this may be the same as the input or not, but at least we know
@@ -73,15 +80,20 @@ def sort_tuples(corner, opposite):
 
 
 def extract_dimens(least, most):
-    """\
-    Build a new dimension tuple for a submodel
+    """
+    Build a new dimension tuple for a submodel.
 
-    :param least:  Lower, left-most, back corner of submodel, (k1, j1, i1)
-    :type  least:  (int, int, int)
-    :param most:   Upper, right-most, front corner of submodel, (k2, j2, i2)
-    :type  most:   (int, int, int)
-    :returns:      Dimensions of the submodel
-    :rtype:        numpy.ndarray((3,))
+    Parameters
+    ----------
+    least : tuple of int
+        Lower, left-most, back corner of submodel, (k1, j1, i1).
+    most : tuple of int
+        Upper, right-most, front corner of submodel, (k2, j2, i2).
+
+    Returns
+    -------
+    numpy.ndarray
+        Dimensions of the submodel.
     """
     # split the corners into constituents
     k1, j1, i1 = least
@@ -93,17 +105,22 @@ def extract_dimens(least, most):
 
 
 def extract_coord(coord, least, most):
-    """\
-    Extract the coordinate pillars for a submodel
+    """
+    Extract the coordinate pillars for a submodel.
 
-    :param coord:  Coordinate pillars for the entire grid
-    :type  coord:  numpy.ndarray((nj+1, ni+1, 2, 3))
-    :param least:  Lower, left-most, back corner of submodel, (k1, j1, i1)
-    :type  least:  (int, int, int)
-    :param most:   Upper, right-most, front corner of submodel, (k2, j2, i2)
-    :type  most:   (int, int, int)
-    :returns:      Coordinate pilars for the submodel
-    :rtype:        numpy.ndarray((j2-j1+2, i2-i1+2, 2, 3))
+    Parameters
+    ----------
+    coord : numpy.ndarray
+        Coordinate pillars for the entire grid with shape (nj+1, ni+1, 2, 3).
+    least : tuple of int
+        Lower, left-most, back corner of submodel, (k1, j1, i1).
+    most : tuple of int
+        Upper, right-most, front corner of submodel, (k2, j2, i2).
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinate pillars for the submodel with shape (j2-j1+2, i2-i1+2, 2, 3).
     """
     # split the corners into constituents
     k1, j1, i1 = least
@@ -117,17 +134,22 @@ def extract_coord(coord, least, most):
 
 
 def extract_zcorn(zcorn, least, most):
-    """\
-    Extract the hinge depth values for a submodel
+    """
+    Extract hinge depth values for a submodel from the entire grid.
 
-    :param zcorn:  Hinge depth values for the entire grid
-    :type  zcorn:  numpy.ndarray((nk, 2, nj, 2, ni, 2))
-    :param least:  Lower, left-most, back corner of submodel, (k1, j1, i1)
-    :type  least:  (int, int, int)
-    :param most:   Upper, right-most, front corner of submodel, (k2, j2, i2)
-    :type  most:   (int, int, int)
-    :returns:      Hinge depth values for the submodel
-    :rtype:        numpy.ndarray((k2-k1+1, 2, j2-j1+1, 2, i2-i1+1))
+    Parameters
+    ----------
+    zcorn : numpy.ndarray
+        Hinge depth values for the entire grid with shape (nk, 2, nj, 2, ni, 2).
+    least : tuple of int
+        Lower, left-most, back corner of submodel, (k1, j1, i1).
+    most : tuple of int
+        Upper, right-most, front corner of submodel, (k2, j2, i2).
+
+    Returns
+    -------
+    numpy.ndarray
+        Hinge depth values for the submodel with shape (k2-k1+1, 2, j2-j1+1, 2, i2-i1+1).
     """
     # split the corners into constituents
     k1, j1, i1 = least
@@ -141,17 +163,22 @@ def extract_zcorn(zcorn, least, most):
 
 
 def extract_cell_prop(prop, least, most):
-    """\
-    Extract the property values for a submodel
+    """
+    Extract the property values for a submodel.
 
-    :param prop:   Property values for each cell in the the entire grid
-    :type  prop:   numpy.ndarray((nk, nj, ni))
-    :param least:  Lower, left-most, back corner of submodel, (k1, j1, i1)
-    :type  least:  (int, int, int)
-    :param most:   Upper, right-most, front corner of submodel, (k2, j2, i2)
-    :type  most:   (int, int, int)
-    :returns:      Property values for each cell in the submodel
-    :rtype:        numpy.ndarray((k2-k1+1, j2-j1+1, i2-i1+1))
+    Parameters
+    ----------
+    prop : numpy.ndarray
+        Property values for each cell in the entire grid with shape (nk, nj, ni).
+    least : tuple of int
+        Lower, left-most, back corner of submodel, (k1, j1, i1).
+    most : tuple of int
+        Upper, right-most, front corner of submodel, (k2, j2, i2).
+
+    Returns
+    -------
+    numpy.ndarray
+        Property values for each cell in the submodel with shape (k2-k1+1, j2-j1+1, i2-i1+1).
     """
     # split the corners into constituents
     k1, j1, i1 = least
@@ -164,17 +191,22 @@ def extract_cell_prop(prop, least, most):
 
 
 def extract_grid(grid, least, most):
-    """\
-    Extract a submodel from a full grid
+    """
+    Extract a submodel from a full grid.
 
-    :param grid:   Attributes of the full grid, like COORD, ZCORN, ACTNUM
-    :type  grid:   dict
-    :param least:  Lower, left-most, back corner of submodel, (k1, j1, i1)
-    :type  least:  (int, int, int)
-    :param most:   Upper, right-most, front corner of submodel, (k2, j2, i2)
-    :type  most:   (int, int, int)
-    :returns:      Attributes of the sector model
-    :rtype:        dict
+    Parameters
+    ----------
+    grid : dict
+        Attributes of the full grid, such as COORD, ZCORN, ACTNUM.
+    least : tuple of int
+        Lower, left-most, back corner of the submodel, (k1, j1, i1).
+    most : tuple of int
+        Upper, right-most, front corner of the submodel, (k2, j2, i2).
+
+    Returns
+    -------
+    dict
+        Attributes of the sector model.
     """
     # create a new grid and fill extract standard properties
     sector = collections.OrderedDict()

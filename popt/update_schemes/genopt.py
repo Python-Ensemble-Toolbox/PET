@@ -40,7 +40,7 @@ class GenOpt(Optimize):
             (min, max) pairs for each element in x. None is used to specify no bound.
 
         options : dict
-                Optimization options
+            Optimization options
         """
 
         # init PETEnsemble

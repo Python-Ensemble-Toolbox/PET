@@ -37,6 +37,7 @@ def index2d(list2d, value):
 def read_file(val_type, filename):
     """
     Read an eclipse file with specified keyword.
+
     Examples
     --------
     >>> read_file('PERMX','filename.permx')

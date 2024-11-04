@@ -1129,7 +1129,8 @@ def compute_x(pert_preddata, cov_data, keys_da, alfa=None):
     alfa : None, optional
         INSERT DESCRIPTION
 
-    Returns : 
+    Returns
+    -------
     X : ndarray
         INSERT DESCRIPTION
     """
@@ -1489,11 +1490,14 @@ def init_local_analysis(init, state):
     Initialize the local analysis by reading the input variables, defining the parameter classes and search ranges. Build
     the map of data/parameter positions.
 
-    Args : 
-        init : dictionary containing the parsed information form the input file.
-        state : list of states that will be updated
-    Returns : 
-        local : dictionary of initialized values.
+    Args
+    ----
+    init : dictionary containing the parsed information form the input file.
+    state : list of states that will be updated
+
+    Returns
+    -------
+    local : dictionary of initialized values.
     """
 
     local = {}
