@@ -1,3 +1,4 @@
+"""Gradient acceleration."""
 import numpy as np
 
 
@@ -6,11 +7,10 @@ class GradientAscent:
     A class for performing gradient ascent optimization with momentum and backtracking.
     The gradient descent update equation with momentum is given by:
 
-    .. math::
-        \begin{align}
-            v_t &= \beta * v_{t-1} + \alpha * gradient \\\
-            x_t &= x_{t-1} - v_t
-        \end{align}
+    $$ \begin{align}
+        v_t &= \beta * v_{t-1} + \alpha * gradient \\\
+        x_t &= x_{t-1} - v_t
+    \end{align} $$
 
 
     Attributes

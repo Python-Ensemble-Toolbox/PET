@@ -1,10 +1,10 @@
-import numpy as np
-import sys
-
 """
 Collection of simple, yet useful Python tools
 """
 
+
+import numpy as np
+import sys
 
 def index2d(list2d, value):
     """

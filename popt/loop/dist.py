@@ -1,10 +1,11 @@
+"""Descriptive description."""
 # External imports 
 import numpy as np
 from scipy import stats
 from scipy.special import polygamma, digamma
 
 # Internal imports
-from popt.nisc_tools import optim_tools as ot
+from popt.misc_tools import optim_tools as ot
 
 
 class GenOptDistribution:

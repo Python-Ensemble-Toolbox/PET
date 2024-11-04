@@ -99,9 +99,8 @@ def time_correlation(a, state, n_timesteps, dt=1.0):
     Constructs correlation matrix with time correlation
     using an autoregressive model.
 
-    .. math::
-        Corr(t_1, t_2) = a^{|t_1 - t_2|}
-    
+    $$ Corr(t_1, t_2) = a^{|t_1 - t_2|} $$
+
     Assumes that each varaible in state is time-order such that
     `x = [x1, x2,..., xi,..., xn]`, where `i` is the time index, 
     and `xi` is d-dimensional.

@@ -5,7 +5,7 @@ repo_url: https://github.com/Python-Ensemble-Toolbox/PET
 edit_uri: edit/main/docs/
 
 docs_dir: docs
-watch: [mkdocs.yml, README.md, docs, misc, docs, ensemble, input_output, misc, pipt, popt, simulator, tests]
+watch: [.]
 
 nav:
   - Home: index.md
@@ -87,7 +87,9 @@ plugins:
       handlers:
         python:
           # load_external_modules: true
-          paths: [., pipt, popt, simulator, ensemble, misc, input_output, tests]
+          paths: [.]
+          # NB: The following does not work coz pipt and popt contain submodules with the same name.
+          # paths: [pipt, popt, simulator, ensemble, misc, input_output, tests]
           import:
             - https://docs.python.org/3/objects.inv
             - https://mkdocstrings.github.io/objects.inv

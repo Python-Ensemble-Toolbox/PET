@@ -86,29 +86,27 @@ class esmdaMixIn(Ensemble):
         covariance matrix is inflated with an inflation parameter alpha. The update is done as an iterative smoother
         where all data is assimilated at once.
 
-        Parameters:
-        -------------------------------------------------------------
-            assim_step: int
-                Current assimilation step
+        Parameters
+        ----------
+        assim_step : int
+            Current assimilation step
 
         Notes:
         -----
         ES-MDA is an iterative ensemble smoother with a predefined number of iterations, where the updates is done with
         the EnKF update equations but where the data covariance matrix have been inflated:
 
-        .. math::
-            d_{obs} = d_{true} + \sqrt{\alpha}C_d^{1/2}Z \\
-            m = m_{prior} + C_{md}(C_g + \alpha C_d)^{-1}(g(m) - d_{obs})
-
+        $$ \begin{align}
+        d_{obs} &= d_{true} + \sqrt{\alpha}C_d^{1/2}Z \\
+        m &= m_{prior} + C_{md}(C_g + \alpha C_d)^{-1}(g(m) - d_{obs})
+        \end{align} $$
 
         where $d_{true}$ is the true observed data, $\alpha$ is the inflation factor, $C_d$ is the data covariance
         matrix, $Z$ is a standard normal random variable, $C_{md}$ and $C_{g}$ are sample covariance matrices,
         $m$ is the model parameter, and $g(\)$ is the predicted data. Note that $\alpha$ can have a different
         value in each assimilation step and must fulfill:
 
-        .. math::
-            \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1
-
+        $$ \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1 $$
 
         where $N_a$ being the total number of assimilation steps.
         """
@@ -222,8 +220,7 @@ class esmdaMixIn(Ensemble):
         Extract the data covariance inflation parameter from the MDA keyword in DATAASSIM part. Also, we check that
         the criterion:
 
-        .. math::
-            \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1
+        $$ \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1 $$
 
         is fulfilled for the inflation factor, alpha. If the keyword for inflation parameter -- INFLATION_PARAM -- is
         not provided, we set the default $\alpha_i = N_a$, where $N_a$ is the tot. no. of MDA assimilation steps (the

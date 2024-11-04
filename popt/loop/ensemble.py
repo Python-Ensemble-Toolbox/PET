@@ -1,3 +1,4 @@
+"""Descriptive description."""
 # External imports
 import numpy as np
 import sys
@@ -7,7 +8,7 @@ from copy import deepcopy
 
 
 # Internal imports
-from popt.nisc_tools import optim_tools as ot
+from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as PETEnsemble
 from popt.loop.dist import GenOptDistribution
@@ -231,14 +232,12 @@ class Ensemble(PETEnsemble):
         r"""
         Calculate the preconditioned gradient associated with ensemble, defined as:
 
-        .. math::
-            S \approx C_x \times G^T
+        $$ S \approx C_x \times G^T $$
 
         where :math:`C_x` is the state covariance matrix, and :math:`G` is the standard
         gradient. The ensemble sensitivity matrix is calculated as:
 
-        .. math::
-            S = X \times J^T /(N_e-1)
+        $$ S = X \times J^T /(N_e-1) $$
 
         where :math:`X` and :math:`J` are ensemble matrices of :math:`x` (or control variables) and objective function
         perturbed by their respective means. In practice (and in this method), :math:`S` is calculated by perturbing the
@@ -306,8 +305,7 @@ class Ensemble(PETEnsemble):
         r"""
         Calculate the hessian matrix associated with ensemble, defined as:
 
-        .. math::
-            H = J(XX^T - \Sigma)/ (N_e-1)
+        $$ H = J(XX^T - \Sigma)/ (N_e-1) $$
 
         where :math:`X` and :math:`J` are ensemble matrices of :math:`x` (or control variables) and objective function
         perturbed by their respective means.
