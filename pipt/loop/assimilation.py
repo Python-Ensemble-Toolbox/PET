@@ -41,11 +41,6 @@ class Assimilate:
     def __init__(self, ensemble: Ensemble):
         """
         Initialize by passing the PIPT init. file up the hierarchy.
-
-        Parameters
-        ----------
-        init_file : str
-            PIPT init. filename
         """
         # Internalize ensemble and simulator class instances
         self.ensemble = ensemble
@@ -441,11 +436,6 @@ class Assimilate:
                 > run_fwd_sim
                 > check_sim_end
                 > get_sim_results
-
-        Parameters
-        ----------
-        assim_step : int
-            Current assimilation step.
 
         Notes
         -----

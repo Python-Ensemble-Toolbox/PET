@@ -107,23 +107,23 @@ class CMA:
 
         Parameters
         --------------------------------------------------
-            cov : array_like, of shape (d, d)
-                Current covariance or correlation matrix.
-            
-            step : array_like, of shape (d,)
-                New step of control vector.
-                Used to update the evolution path.
+        cov : array_like, of shape (d, d)
+            Current covariance or correlation matrix.
+        
+        step : array_like, of shape (d,)
+            New step of control vector.
+            Used to update the evolution path.
 
-            X : array_like, of shape (n, d)
-                Control ensemble of size n.
-            
-            J : array_like, of shape (n,)
-                Objective ensemble of size n.
+        X : array_like, of shape (n, d)
+            Control ensemble of size n.
+        
+        J : array_like, of shape (n,)
+            Objective ensemble of size n.
         
         Returns
         --------------------------------------------------
-            out : array_like, of shape (d, d)
-                CMA updated covariance (correlation) matrix.
+        out : array_like, of shape (d, d)
+            CMA updated covariance (correlation) matrix.
         '''
         a_mu  = self.alpha_mu
         a_one = self.alpha_1 

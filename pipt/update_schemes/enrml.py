@@ -50,11 +50,6 @@ class lmenrmlMixIn(Ensemble):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
-
-        Parameters
-        ----------
-        init_file : str
-            PIPT init. file containing info. to run the inversion algorithm
         """
         # Pass the init_file upwards in the hierarchy
         super().__init__(keys_da, keys_fwd, sim)
@@ -310,11 +305,6 @@ class gnenrmlMixIn(Ensemble):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
-
-        Parameters
-        ----------
-        init_file : str
-            PIPT init. file containing info. to run the inversion algorithm
         """
         # Pass the init_file upwards in the hierarchy
         super().__init__(keys_da, keys_fwd, sim)
@@ -668,11 +658,6 @@ class co_lm_enrml(lmenrmlMixIn, approx_update):
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
 
-        Parameters
-        ----------
-        init_file : str
-            PIPT init. file containing info. to run the inversion algorithm
-
         References
         ----------
         [1] Chen Y. & Oliver D.S. 2013, Levenberg-Marquardt Forms of the Iterative Ensemble Smoother for Efficient
@@ -685,7 +670,7 @@ class co_lm_enrml(lmenrmlMixIn, approx_update):
         """
         Calculate the update step in approximate LM-EnRML code.
 
-        Parameters
+        Attributes
         ----------
         iteration : int
             Iteration number
@@ -821,11 +806,6 @@ class gn_enrml(lmenrmlMixIn):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
-
-        Parameters
-        ----------
-        init_file : str
-            PIPT init. file containing info. to run the inversion algorithm
 
         References
         ----------
@@ -1004,17 +984,6 @@ class gn_enrml(lmenrmlMixIn):
         """
         Check if GN-EnRML have converged based on evaluation of change sizes of objective function, state and damping
         parameter. Very similar to original function, but exit if there is no reduction in obj. function.
-
-        Parameters
-        ----------
-        prev_data_misfit : float
-            Data misfit calculated from the previous update.
-
-        step : float
-            Step size.
-
-        lam : float
-            LM damping parameter.
 
         Returns
         -------

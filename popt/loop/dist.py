@@ -315,8 +315,9 @@ def delA(theta):
 
     Parameters
     --------------------------------------------
-    a : float
-    b : float
+    theta : tuple
+        - a : float
+        - b : float
     
     Returns
     --------------------------------------------

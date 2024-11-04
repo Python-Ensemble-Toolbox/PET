@@ -86,11 +86,6 @@ class esmdaMixIn(Ensemble):
         covariance matrix is inflated with an inflation parameter alpha. The update is done as an iterative smoother
         where all data is assimilated at once.
 
-        Parameters
-        ----------
-        assim_step : int
-            Current assimilation step
-
         Notes
         -----
         ES-MDA is an iterative ensemble smoother with a predefined number of iterations, where the updates is done with
@@ -342,11 +337,6 @@ class esmda_geo(esmda_approx):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
-
-        Parameters
-        ----------
-        init_file : str
-            PIPT init. file containing info. to run the inversion algorithm
 
         References
         ----------

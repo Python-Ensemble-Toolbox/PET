@@ -1327,7 +1327,7 @@ def resample_state(aug_state, state, list_state, new_en_size):
 
     Parameters
     ----------
-    aug_upd_state : ndarray
+    aug_state : ndarray
         Augmented matrix of state variables
     state : dict
         Dict. af state variables
