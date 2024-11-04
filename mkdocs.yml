@@ -11,7 +11,7 @@ nav:
   - Home: index.md
   - Reference: reference/
   - Tutorials: tutorials/
-  # - Bibliography: references.md
+  - Bibliography: references.md
   - dev_guide.md
 
 validation:

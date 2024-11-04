@@ -29,7 +29,7 @@ for path in sorted(src.rglob("*.py")):
         # Generate index.md
         parts = parts[:-1] # name of parent dir
         path_md = path_md.with_name("index.md")
-    elif parts[-1] == str(Path(__file__).with_suffix("").name):
+    elif parts[0] == "docs":
         continue
 
     # PS: Uncomment (replace `mkdocs_gen_files.open`) to view actual .md files

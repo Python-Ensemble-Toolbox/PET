@@ -146,7 +146,8 @@ class GradientAscent:
 
 class Adam:
     """
-    A class implementing the Adam optimizer for gradient-based optimization.
+    A class implementing the Adam optimizer for gradient-based optimization [`kingma2014`][].
+
     The Adam update equation for the control x using gradient g,
     iteration t, and small constants ε is given by:
 
@@ -195,12 +196,6 @@ class Adam:
 
     restore_parameters() :
         Restore the original step size.
-
-    References
-    -------------------------------------------------------------------------------------
-    [1] Kingma, D. P., & Ba, J. (2014).
-        Adam: A Method for Stochastic Optimization.
-        arXiv preprint arXiv:1412.6980.
     """
 
     def __init__(self, step_size, beta1=0.9, beta2=0.999):
@@ -295,13 +290,7 @@ class Adam:
 
 class AdaMax(Adam):
     '''
-    AdaMax optimizer
-    
-    References
-    -------------------------------------------------------------------------------------
-    [1] Kingma, D. P., & Ba, J. (2014).
-        Adam: A Method for Stochastic Optimization.
-        arXiv preprint arXiv:1412.6980.
+    AdaMax optimizer [`kingma2014`][]
     '''
     def __init__(self, step_size, beta1=0.9, beta2=0.999):
         super().__init__(step_size, beta1, beta2)

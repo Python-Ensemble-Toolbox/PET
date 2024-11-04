@@ -6,7 +6,7 @@ class CMA:
 
     def __init__(self, ne, dim, alpha_mu=None, n_mu=None, alpha_1=None, alpha_c=None, corr_update=False, equal_weights=True):
         '''
-        This is a rather simple simple CMA class
+        This is a rather simple simple CMA class [`hansen2006`][].
 
         Parameters
         ----------------------------------------------------------------------------------------------------------
@@ -37,12 +37,6 @@ class CMA:
             If True, all n_mu members are assign equal weighting, `w_i = 1/n_mu`.
             If False, the weighting scheme proposed in [1], where `w_i = log(n_mu + 1)-log(i)`,
             and normalized such that they sum to one. Defualt is True.
-
-        References
-        ----------------------------------------------------------------------------------------------------------
-        [1] Hansen, N. (2006). The CMA evolution strategy: a comparing review. 
-            In J. Lozano, P. Larranaga, I. Inza & E. Bengoetxea (ed.), Towards a new evolutionary computation. 
-            Advances on estimation of distribution algorithms (pp. 75--102) . Springer .     
         '''
         self.alpha_mu       = alpha_mu
         self.n_mu           = n_mu

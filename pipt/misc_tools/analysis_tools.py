@@ -21,7 +21,7 @@ from scipy.spatial import cKDTree
 def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_data, pred_data, parallel, actnum=None,
                  field_dim=None, act_data_list=None, scale_data=None, num_states=1, emp_d_cov=False):
     """
-    Script to initialize and control a parallel update of the ensemble state following [1].
+    Script to initialize and control a parallel update of the ensemble state following [`emerick2016a`][].
 
     Parameters
     ----------
@@ -57,11 +57,6 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
     Notes
     -----
     Since the localization matrix is to large for evaluation, we instead calculate it row for row.
-
-    References
-    ----------
-    [1] Emerick, Alexandre A. 2016. “Analysis of the Performance of Ensemble-Based Assimilation of Production and
-    Seismic Data.” Journal of Petroleum Science and Engineering 139. Elsevier: 219-39. doi:10.1016/j.petrol.2016.01.029
     """
     if scale_data is None:
         scale_data = np.ones(obs_data.shape[0])
@@ -1060,7 +1055,7 @@ def calc_kalmangain(cov_cross, cov_auto, cov_data, opt=None):
 def calc_subspace_kalmangain(cov_cross, data_pert, cov_data, energy):
     """
     Compute the Kalman gain in a efficient subspace determined by how much energy (i.e. percentage of singluar values)
-    to retain. For more info regarding the implementation, see Chapter 14 in [1].
+    to retain. For more info regarding the implementation, see Chapter 14 in [`evensen2009a`][].
 
     Parameters
     cov_cross : ndarray
@@ -1074,10 +1069,6 @@ def calc_subspace_kalmangain(cov_cross, data_pert, cov_data, energy):
     -------
     k_g : ndarray
         Subspace Kalman gain
-
-    References
-    ----------
-    [1] G. Evensen (2009). Data Assimilation: The Ensemble Kalman Filter, Springer.
     """
     # No. ensemble members
     ne = data_pert.shape[1]

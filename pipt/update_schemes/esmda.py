@@ -20,7 +20,8 @@ from pipt.update_schemes.update_methods_ns.subspace_update import subspace_updat
 
 class esmdaMixIn(Ensemble):
     """
-    This is the implementation of the ES-MDA algorithm given in [1]. This algorithm have been implemented mostly to
+    This is the implementation of the ES-MDA algorithm given in [`emerick2013a`][].
+    This algorithm have been implemented mostly to
     illustrate how a algorithm using the Mda loop can be implemented.
     """
 
@@ -37,10 +38,6 @@ class esmdaMixIn(Ensemble):
         keys_en : dict
 
         sim : callable
-
-        References
-        ----------
-        [1] A. Emerick & A. Reynods, Computers & Geosciences, 55, p. 3-15, 2013
         """
         # Pass the init_file upwards in the hierarchy
         super().__init__(keys_da, keys_en, sim)
@@ -330,17 +327,13 @@ class esmda_geo(esmda_approx):
     """
     This is the implementation of the ES-MDA-GEO algorithm from [1]. The main analysis step in this algorithm is the
     same as the standard ES-MDA algorithm (implemented in the `es_mda` class). The difference between this and the
-    standard algorithm is the calculation of the inflation factor.
+    standard algorithm is the calculation of the inflation factor. Also see [`rafiee2017`][].
     """
 
     def __init__(self, keys_da):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
-
-        References
-        ----------
-        [1] J. Rafiee & A. Reynolds, Inverse Problems 33 (11), 2017
         """
         # Pass the init_file upwards in the hierarchy
         super().__init__(keys_da)
