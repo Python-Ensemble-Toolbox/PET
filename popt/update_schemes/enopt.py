@@ -16,12 +16,10 @@ class EnOpt(Optimize):
     This is an implementation of the ensemble steepest descent ensemble optimization algorithm - EnOpt.
     The update of the control variable is done with the simple steepest (or gradient) descent algorithm:
 
-    $$
-    x_l = x_{l-1} - \alpha \times C \times G
-    $$
+    $$ x_l = x_{l-1} - \alpha \times C \times G $$
 
-    where :math:`x` is the control variable, :math:`l` is the iteration index, :math:`\alpha` is the step size,
-    :math:`C` is a smoothing matrix (e.g., covariance matrix for :math:`x`), and :math:`G` is the ensemble gradient.
+    where $x$ is the control variable, $l$ is the iteration index, $\alpha$ is the step size,
+    $C$ is a smoothing matrix (e.g., covariance matrix for $x$), and $G$ is the ensemble gradient.
 
     Methods
     -------

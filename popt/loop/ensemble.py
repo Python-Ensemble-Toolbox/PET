@@ -234,17 +234,17 @@ class Ensemble(PETEnsemble):
 
         $$ S \approx C_x \times G^T $$
 
-        where :math:`C_x` is the state covariance matrix, and :math:`G` is the standard
+        where $C_x$ is the state covariance matrix, and $G$ is the standard
         gradient. The ensemble sensitivity matrix is calculated as:
 
         $$ S = X \times J^T /(N_e-1) $$
 
-        where :math:`X` and :math:`J` are ensemble matrices of :math:`x` (or control variables) and objective function
-        perturbed by their respective means. In practice (and in this method), :math:`S` is calculated by perturbing the
-        current control variable with Gaussian random numbers from :math:`N(0, C_x)` (giving :math:`X`), running
-        the generated ensemble (:math:`X`) through the simulator to give an ensemble of objective function values
-        (:math:`J`), and in the end calculate :math:`S`. Note that :math:`S` is an :math:`N_x \times 1` vector, where
-        :math:`N_x` is length of the control vector and the objective function is scalar.
+        where $X$ and $J$ are ensemble matrices of $x$ (or control variables) and objective function
+        perturbed by their respective means. In practice (and in this method), $S$ is calculated by perturbing the
+        current control variable with Gaussian random numbers from $N(0, C_x)$ (giving $X$), running
+        the generated ensemble ($X$) through the simulator to give an ensemble of objective function values
+        ($J$), and in the end calculate $S$. Note that $S$ is an $N_x \times 1$ vector, where
+        $N_x$ is length of the control vector and the objective function is scalar.
 
         Parameters
         ----------
@@ -252,7 +252,7 @@ class Ensemble(PETEnsemble):
             Control vector, shape (number of controls, )
 
         args : tuple
-            Covarice (:math:`C_x`), shape (number of controls, number of controls)
+            Covarice ($C_x$), shape (number of controls, number of controls)
 
         Returns
         -------
@@ -307,7 +307,7 @@ class Ensemble(PETEnsemble):
 
         $$ H = J(XX^T - \Sigma)/ (N_e-1) $$
 
-        where :math:`X` and :math:`J` are ensemble matrices of :math:`x` (or control variables) and objective function
+        where $X$ and $J$ are ensemble matrices of $x$ (or control variables) and objective function
         perturbed by their respective means.
 
         Note: state and ens_func_values are assumed to already exist from computation of the gradient.
@@ -365,7 +365,7 @@ class Ensemble(PETEnsemble):
             Control vector, shape (number of controls, )
 
         args : tuple
-            Inflation factor, covariance (:math:`C_x`, shape (number of controls, number of controls)) and survival factor
+            Inflation factor, covariance ($C_x$, shape (number of controls, number of controls)) and survival factor
 
         Returns
         -------
