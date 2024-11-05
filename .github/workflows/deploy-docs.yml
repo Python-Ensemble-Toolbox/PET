@@ -4,7 +4,7 @@ name: Publish mkDocs via GitHub Pages
 on:
   push:
     branches:
-      - master
+      - main
     # Alternative: only build for tags.
     # tags:
     #   - '*'
