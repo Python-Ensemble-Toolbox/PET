@@ -4,10 +4,11 @@
 
 The documentation is built with `mkdocs`.
 
-- It should generally be written in [the syntax of markdown](https://www.markdownguide.org/cheat-sheet/).
-- This markdown has been augmented by a bunch of things.
-  See a list [here](https://squidfunk.github.io/mkdocs-material/reference/).
-- Docstrings should use sections and parameter declarations in the [style of numpy](https://mkdocstrings.github.io/griffe/reference/docstrings/#numpydoc-style).
+- It should be written in [the syntax of markdown](https://www.markdownguide.org/cheat-sheet/).
+- The syntax is further augmented by [several pymdown plugins](https://squidfunk.github.io/mkdocs-material/reference/).
+- **Docstrings** are processed as above, but should also
+  declare parameters and return values in the [style of numpy](https://mkdocstrings.github.io/griffe/reference/docstrings/#numpydoc-style),
+  and `>>>` markers must follow the "Examples" section.
 
 !!! note
     You can preview the rendered html docs by running
