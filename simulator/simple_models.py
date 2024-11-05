@@ -141,9 +141,9 @@ class sevenmountains:
 
         Parameters
         ----------
-        input_dict: dict, optional
+        input_dict : dict, optional
             contains all information the run the simulator (may come from, e.g., an init file)
-        state: any, optional
+        state : any, optional
             Parameter to make predicted data
 
         Changelog

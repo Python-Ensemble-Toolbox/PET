@@ -9,16 +9,16 @@ def ren_npv(pred_data, kwargs):
 
     Parameters
     ----------
-    pred_data_en : ndarray
+    pred_data : ndarray
         Ensemble of predicted data.
 
     **kwargs : dict
         Other arguments sent to the npv function
 
-        keys_opt : list
+        - keys_opt (list)
             Keys with economic data.
 
-        report : list
+        - report (list)
             Report dates.
 
     Returns

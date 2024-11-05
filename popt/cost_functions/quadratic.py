@@ -1,12 +1,13 @@
+"""Descriptive description."""
+
 import numpy as np
 from popt.cost_functions.epf import epf
 
 
 def quadratic(state, *args, **kwargs):
-	r"""
-	Quadratic objective function
-	.. math::
-		f(x) = ||x - b||^2_A
+	r"""Quadratic objective function
+
+	$$ f(x) = ||x - b||^2_A $$
 	"""
 
 	r = kwargs.get('r', -1)

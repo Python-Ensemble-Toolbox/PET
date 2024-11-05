@@ -1,6 +1,6 @@
 """Inversion (estimation, data assimilation)
 
-.. include:: ./README.md
+--8<-- "pipt/README.md"
 """
 
 __pdoc__ = {}

@@ -1,3 +1,4 @@
+"""Gradient acceleration."""
 import numpy as np
 
 
@@ -6,11 +7,10 @@ class GradientAscent:
     A class for performing gradient ascent optimization with momentum and backtracking.
     The gradient descent update equation with momentum is given by:
 
-    .. math::
-        \begin{align}
-            v_t &= \beta * v_{t-1} + \alpha * gradient \\\
-            x_t &= x_{t-1} - v_t
-        \end{align}
+    $$ \begin{align}
+        v_t &= \beta * v_{t-1} + \alpha * gradient \\
+        x_t &= x_{t-1} - v_t
+    \end{align} $$
 
 
     Attributes
@@ -38,10 +38,10 @@ class GradientAscent:
     apply_update(control, gradient, **kwargs):
         Apply a gradient update to the control parameter.
 
-    apply_backtracking():
+    apply_backtracking() :
         Apply backtracking by reducing step size and momentum temporarily.
 
-    restore_parameters():
+    restore_parameters() :
         Restore the original step size and momentum values.
     """
 
@@ -68,7 +68,9 @@ class GradientAscent:
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
-        NOTE: This is the steepest decent update: x_new = x_old - x_step.
+
+        !!! note
+            This is the steepest decent update: x_new = x_old - x_step.
 
         Parameters
         -------------------------------------------------------------------------------------
@@ -144,7 +146,8 @@ class GradientAscent:
 
 class Adam:
     """
-    A class implementing the Adam optimizer for gradient-based optimization.
+    A class implementing the Adam optimizer for gradient-based optimization [`kingma2014`][].
+
     The Adam update equation for the control x using gradient g,
     iteration t, and small constants ε is given by:
 
@@ -188,17 +191,11 @@ class Adam:
     apply_update(control, gradient, **kwargs):
         Apply an Adam update to the control parameter.
 
-    apply_backtracking():
+    apply_backtracking() :
         Apply backtracking by reducing step size temporarily.
 
-    restore_parameters():
+    restore_parameters() :
         Restore the original step size.
-
-    References
-    -------------------------------------------------------------------------------------
-    [1] Kingma, D. P., & Ba, J. (2014).
-        Adam: A Method for Stochastic Optimization.
-        arXiv preprint arXiv:1412.6980.
     """
 
     def __init__(self, step_size, beta1=0.9, beta2=0.999):
@@ -239,7 +236,9 @@ class Adam:
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
-        NOTE: This is the steepest decent update: x_new = x_old - x_step.
+
+        !!! note
+            This is the steepest decent update: x_new = x_old - x_step.
 
         Parameters
         -------------------------------------------------------------------------------------
@@ -291,13 +290,7 @@ class Adam:
 
 class AdaMax(Adam):
     '''
-    AdaMax optimizer
-    
-    References
-    -------------------------------------------------------------------------------------
-    [1] Kingma, D. P., & Ba, J. (2014).
-        Adam: A Method for Stochastic Optimization.
-        arXiv preprint arXiv:1412.6980.
+    AdaMax optimizer [`kingma2014`][]
     '''
     def __init__(self, step_size, beta1=0.9, beta2=0.999):
         super().__init__(step_size, beta1, beta2)

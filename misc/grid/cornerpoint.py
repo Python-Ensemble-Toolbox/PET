@@ -15,22 +15,28 @@ log.addHandler(logging.NullHandler())
 
 
 def scatter(cell_field):
-    """\
+    """
     Duplicate all items in every dimension.
 
     Use this method to duplicate values associated with each cell to
     each of the corners in the cell.
 
-    :param cell_field:   Property per cell in the grid
-    :type  cell_field:   :class:`numpy.ndarray`, shape = (nk, nj, ni)
-    :return:             Property per corner in the cube
-    :rtype:              :class:`numpy.ndarray`, shape = (nk, 2, nj, 2, ni, 2)
+    Parameters
+    ----------
+    cell_field : numpy.ndarray
+        Property per cell in the grid, shape = (nk, nj, ni)
 
+    Returns
+    -------
+    numpy.ndarray
+        Property per corner in the cube, shape = (nk, 2, nj, 2, ni, 2)
+
+    Examples
+    --------
     >>> scatter(np.array([[[1, 2],
                            [3, 4]],
                           [[5, 6],
                            [7, 8]]]))
-
     array([[[[[[1, 1], [2, 2]],
               [[1, 1], [2, 2]]],
              [[[3, 3], [4, 4]],
@@ -68,21 +74,29 @@ def scatter(cell_field):
 
 
 def inner_dup(pillar_field):
-    """Duplicate all inner items in both dimensions.
+    """
+    Duplicate all inner items in both dimensions.
 
     Use this method to duplicate values associated with each pillar to
     the corners on each side(s) of the pillar; four corners for all
     interior pillars, two corners for all pillars on the rim and only
     one (element) corner for those pillars that are on the grid corners.
 
-    :param pillar_field: Property per pillar in the grid
-    :type  pillar_field: :class:`numpy.ndarray`, shape=(m+1, n+1)
-    :returns:            Property per corner in a grid plane
-    :rtype:              :class:`numpy.ndarray`, shape=(2*m, 2*n))
+    Parameters
+    ----------
+    pillar_field : numpy.ndarray
+        Property per pillar in the grid, shape = (m+1, n+1)
 
-    >>> inner_dup(np.array ([[1, 2, 3],
-                             [4, 5, 6],
-                             [7, 8, 9]]))
+    Returns
+    -------
+    numpy.ndarray
+        Property per corner in a grid plane, shape = (2*m, 2*n)
+
+    Examples
+    --------
+    >>> inner_dup(np.array([[1, 2, 3],
+                            [4, 5, 6],
+                            [7, 8, 9]]))
     array([[1, 2, 2, 3],
            [4, 5, 5, 6],
            [4, 5, 5, 6],
@@ -127,16 +141,23 @@ def inner_dup(pillar_field):
 
 
 def elem_vtcs_ndcs(nk, nj, ni):  # pylint: disable=invalid-name
-    """List zcorn indices used by every element in an nk*nj*ni grid
+    """
+    List zcorn indices used by every element in an nk*nj*ni grid.
 
-    :param nk: Number of layers in Z direction
-    :type nk:  int
-    :param nj: Number of elements in the Y direction
-    :type nj:  int
-    :param ni: Number of elements in the X direction
-    :type ni:  int
-    :returns:  Zero-based indices for the hexahedral element corners
-    :rtype:    :class:`numpy.ndarray`, shape=(nk*nj*ni, 8), dtype=int
+    Parameters
+    ----------
+    nk : int
+        Number of layers in Z direction.
+    nj : int
+        Number of elements in the Y direction.
+    ni : int
+        Number of elements in the X direction.
+
+    Returns
+    -------
+    ndarray
+        Zero-based indices for the hexahedral element corners, 
+        with shape (nk*nj*ni, 8) and dtype int.
     """
     # hex_perm is the order a hexahedron should be specified to the
     # gridding engine (it is the same for VTK and Ensight Gold formats)
@@ -178,14 +199,23 @@ def elem_vtcs_ndcs(nk, nj, ni):  # pylint: disable=invalid-name
 
 # pylint: disable=invalid-name, multiple-statements, too-many-locals
 def corner_coordinates(coord, zcorn):
-    """Generate (x, y, z) coordinates for each corner-point.
+    """
+    Generate (x, y, z) coordinates for each corner-point.
 
-    :param coord: Pillar geometrical information
-    :type coord:  :class:`numpy.ndarray`, shape=(nj+1, ni+1, 2, 3)
-    :param zcorn: Depth values along each pillar
-    :type zcorn:  :class:`numpy.ndarray`, shape=(nk, 2, nj, 2, ni, 2)
-    :returns:     Coordinate values for each corner
-    :rtype:       :class:`numpy.ndarray`, shape=(3, nk*2*nj*2*ni*2)
+    Parameters
+    ----------
+    coord : numpy.ndarray
+        Pillar geometrical information.
+        Shape: (nj+1, ni+1, 2, 3)
+    zcorn : numpy.ndarray
+        Depth values along each pillar.
+        Shape: (nk, 2, nj, 2, ni, 2)
+
+    Returns
+    -------
+    numpy.ndarray
+        Coordinate values for each corner.
+        Shape: (3, nk*2*nj*2*ni*2)
     """
     # indices to treat the pillar matrix as a record
     X = 0
@@ -257,15 +287,20 @@ def cp_cells(grid, face):
     Make a cell array from a cornerpoint grid. The cells will be in the
     same order as the Cartesian enumeration of the grid.
 
-    :param grid: Pillar coordinates and corner depths
-    :type grid:  dict, with 'coord' and 'zcorn' properties
-    :param face: Which face that should be extracted, e.g. Face.UP
-    :type face:  Face enum
-    :returns:    Set of geometrical objects that can be sent to rendering
-    :rtype:      dict with 'points', shape (nverts, 3), and 'cells', shape
-                 (nelems, ncorns), where ncorns is either 8 (hexahedron
-                 volume or 4 (quadrilateral face), depending on the face
-                 parameter.
+    Parameters
+    ----------
+    grid : dict
+        Pillar coordinates and corner depths. Must contain 'coord' and 'zcorn' properties.
+    face : Face enum
+        Which face that should be extracted, e.g. Face.UP.
+
+    Returns
+    -------
+    dict
+        Set of geometrical objects that can be sent to rendering. Contains:
+        - 'points': ndarray, shape (nverts, 3)
+        - 'cells': ndarray, shape (nelems, ncorns), where ncorns is either 8 
+          (hexahedron volume) or 4 (quadrilateral face), depending on the face parameter.
     """
     src = {}
 
@@ -287,16 +322,26 @@ def cp_cells(grid, face):
 
 
 def cell_filter(grid, func):
-    """Create a filter for a specific grid.
+    """
+    Create a filter for a specific grid.
 
-    :param grid:   Grid structure that should be filtered
-    :type  grid:   dict
-    :param func:   Lambda function that takes i, j, k indices (one-based)
-                   and returns boolean for whether the cells should be
-                   included or not. The function should be vectorized.
-    :type  func:   Callable[(int, int, int), bool]
+    Parameters
+    ----------
+    grid : dict
+        Grid structure that should be filtered.
+    func : Callable[(int, int, int), bool]
+        Lambda function that takes i, j, k indices (one-based) and returns
+        boolean for whether the cells should be included or not. The function
+        should be vectorized.
 
-    >>> layr = cell_filter (grid, lamba i, j, k: np.greater_equal (k, 56))
+    Returns
+    -------
+    layr : ndarray
+        Filtered grid layer.
+
+    Examples
+    --------
+    >>> layr = cell_filter(grid, lambda i, j, k: np.greater_equal(k, 56))
     """
     # extract the dimensions; notice that the i-dimensions is first
     # in this list, since it is directly from the grid
@@ -321,24 +366,32 @@ def cell_filter(grid, func):
 
 
 def face_coords(grid):
-    """Get (x, y, z) coordinates for each corner-point.
+    """
+    Get (x, y, z) coordinates for each corner-point.
 
-    :param grid:  Cornerpoint-grid
-    :type grid:   dict
-    :returns:     Coordinate values for each corner. Use the Face enum to index
-                  the first dimension, k, j, i coordinates to index the next
-                  three, and Dim enum to index the last dimension.
-                  Note that the first point in a face is not necessarily the
-                  point that is closest to the origin of the grid.
-    :rtype:       :class:`numpy.ndarray`, shape = (8, nk, nj, ni, 3)
+    Parameters
+    ----------
+    grid : dict
+        Cornerpoint-grid.
 
+    Returns
+    -------
+    numpy.ndarray
+        Coordinate values for each corner. Use the Face enum to index
+        the first dimension, k, j, i coordinates to index the next
+        three, and Dim enum to index the last dimension. Note that the
+        first point in a face is not necessarily the point that is
+        closest to the origin of the grid. Shape = (8, nk, nj, ni, 3).
+
+    Examples
+    --------
     >>> import numpy as np
     >>> import pyresito.io.ecl as ecl
     >>> import pyresito.grid.cornerpoint as cp
-    >>> case = ecl.EclipseCase ("FOO")
-    >>> coord_fijkd = cp.face_coords (case.grid ())
+    >>> case = ecl.EclipseCase("FOO")
+    >>> coord_fijkd = cp.face_coords(case.grid())
     >>> # get the midpoint of the upper face in each cell
-    >>> up_mid = np.average (coord_fijkd [cp.Face.UP, :, :, :, :], axis = 0)
+    >>> up_mid = np.average(coord_fijkd[cp.Face.UP, :, :, :, :], axis=0)
     """
     # get coordinates in native corner-point format
     xyz = corner_coordinates(grid['COORD'], grid['ZCORN'])
@@ -361,19 +414,25 @@ def face_coords(grid):
 
 
 def horizon(grid, layer=0, top=True):
-    """Extract the points that are in a certain horizon and average them so
+    """
+    Extract the points that are in a certain horizon and average them so
     that the result is per cell and not per pillar.
 
-    :param grid:   Grid structure
-    :type grid:    dict
-    :param layer:  The K index of the horizon. Default is the layer at the top.
-    :type layer:   int
-    :param top:    Whether the top face should be exported. If this is False,
-                   then the bottom face is exported instead.
-    :type top:     bool
-    :returns:      Depth at the specified horizon for each cell center
-    :rtype:        :class:`numpy.ma.array`, shape = (nk, nj, ni),
-                   dtype = numpy.float64
+    Parameters
+    ----------
+    grid : dict
+        Grid structure.
+    layer : int, optional
+        The K index of the horizon. Default is the layer at the top.
+    top : bool, optional
+        Whether the top face should be exported. If this is False,
+        then the bottom face is exported instead.
+
+    Returns
+    -------
+    numpy.ma.array
+        Depth at the specified horizon for each cell center, with shape (nk, nj, ni)
+        and dtype numpy.float64.
     """
     # get the dimensions of the grid. notice that this array is always given
     # in Fortran order (since Eclipse works that way) and not in native order
@@ -400,16 +459,24 @@ def horizon(grid, layer=0, top=True):
 
 def _reduce_corners(plane, red_op):
     """
-    :param plane:   Z-coordinates for a specific horizon in the grid
-    :type plane:    :class:`numpy.ndarray`, shape = (nj, 2, ni, 2)
-    :param red_op:  How coordinates are merged (reduction operator): either
-                    numpy.minimum or np.maximum, depending on top or bottom
-    :type red_op:   :class:`numpy.ufunc`
-    :returns:       Extremal value of each point around the corners.
-    :rtype:         :class:`numpy.ndarray`, shape = (nj+1, ni+1)
+    Reduce the corners of a plane using a specified reduction operator.
 
-    >> plane = np.reshape (np.arange (36) + 1, (3, 2, 3, 2))
-    >> _reduce_corners (plane, np.minimum)
+    Parameters
+    ----------
+    plane : numpy.ndarray
+        Z-coordinates for a specific horizon in the grid with shape (nj, 2, ni, 2).
+    red_op : numpy.ufunc
+        Reduction operator to merge coordinates, either numpy.minimum or numpy.maximum.
+
+    Returns
+    -------
+    numpy.ndarray
+        Extremal value of each point around the corners with shape (nj+1, ni+1).
+
+    Examples
+    --------
+    >>> plane = np.reshape(np.arange(36) + 1, (3, 2, 3, 2))
+    >>> _reduce_corners(plane, np.minimum)
     """
     # constants
     NORTH = 1
@@ -454,18 +521,23 @@ def _reduce_corners(plane, red_op):
 
 
 def horizon_pillars(grid, layer=0, top=True):
-    """Extract heights where a horizon crosses the pillars.
+    """
+    Extract heights where a horizon crosses the pillars.
 
-    :param grid:  Grid structure, containing both COORD and ZCORN properties.
-    :type grid:   dict
-    :param layer:  The K index of the horizon. Default is the layer at the top.
-    :type layer:   int
-    :param top:    Whether the top face should be exported. If this false is
-                   False, then the bottom face is exported instead.
-    :type top:     bool
-    :returns:     Heights of the horizon at each pillar, in the same format as
-                  the COORD matrix.
-    :rtype:       :class:`numpy.ndarray`, shape = (nj+1, ni+1, 2, 3)
+    Parameters
+    ----------
+    grid : dict
+        Grid structure, containing both COORD and ZCORN properties.
+    layer : int, optional
+        The K index of the horizon. Default is the layer at the top.
+    top : bool, optional
+        Whether the top face should be exported. If False, then the bottom face is exported instead.
+
+    Returns
+    -------
+    numpy.ndarray
+        Heights of the horizon at each pillar, in the same format as the COORD matrix.
+        Shape: (nj+1, ni+1, 2, 3)
     """
     # NumPy's average operations finds the average within arrays, but we want
     # an operation that can take the average across two arrays
@@ -484,18 +556,23 @@ def horizon_pillars(grid, layer=0, top=True):
 
 
 def snugfit(grid):
-    """Create coordinate pillars that matches exactly the top and bottom
-    horizon of the grid cells.
+    """
+    Create coordinate pillars that match exactly the top and bottom horizon of the grid cells.
 
-    This version assumes that the pillars in the grid are all strictly
-    vertical, i.e. the x- and y-coordinates will not be changed.
+    This version assumes that the pillars in the grid are all strictly vertical,
+    i.e., the x- and y-coordinates will not be changed.
 
-    :param grid:  Grid structure, containing both COORD and ZCORN properties.
-    :type grid:   dict
-    :returns:     Pillar coordinates, in the same format as the COORD matrix.
-                  Note that a new matrix is returned, the original grid is not
-                  altered/updated.
-    :rtype:       :class:`numpy.ndarray`, shape = (nj+1, ni+1, 2, 3)
+    Parameters
+    ----------
+    grid : dict
+        Grid structure, containing both COORD and ZCORN properties.
+
+    Returns
+    -------
+    numpy.ndarray
+        Pillar coordinates, in the same format as the COORD matrix.
+        Note that a new matrix is returned, the original grid is not altered/updated.
+        Shape: (nj+1, ni+1, 2, 3)
     """
     # placement in the plane of each pillar is unchanged
     x = grid['COORD'][:, :, 0, 0]
@@ -517,21 +594,28 @@ def snugfit(grid):
 
 
 def bounding_box(corn, filtr):
-    """\
-    Bounding box of the grid. This function will always assume that the grid
-    is aligned with the geographical axes.
+    """
+    Calculate the bounding box of the grid.
 
-    :param corn:    Coordinate values for each corner. This matrix can be
-                    constructed with the `corner_coordinates` function.
-    :type  corn:    :class:`numpy.ndarray`, shape=(3, nk*2*nj*2*ni*2)
-    :param filtr:   Active corners; use scatter of ACTNUM if no filtering
-    :type  filtr:   :class:`numpy.ndarray`, shape = (nk, 2, nj, 2, ni, 2),
-                    dtype = numpy.bool
-    :return:        Bottom front right corner and top back left corner. Since
-                    the matrix is returned with C ordering, it is specified the
-                    opposite way of what is natural for mathematical matrices.
-    :rtype:         :class:`numpy.ndarray`, shape = (2, 3), dtype = np.float64
+    This function assumes that the grid is aligned with the geographical axes.
 
+    Parameters
+    ----------
+    corn : numpy.ndarray
+        Coordinate values for each corner. This matrix can be constructed with the `corner_coordinates` function.
+        Shape: (3, nk*2*nj*2*ni*2)
+    filtr : numpy.ndarray
+        Active corners; use scatter of ACTNUM if no filtering.
+        Shape: (nk, 2, nj, 2, ni, 2), dtype: numpy.bool
+
+    Returns
+    -------
+    numpy.ndarray
+        Bottom front right corner and top back left corner. Since the matrix is returned with C ordering, it is specified the opposite way of what is natural for mathematical matrices.
+        Shape: (2, 3), dtype: numpy.float64
+
+    Examples
+    --------
     >>> corn = corner_coordinates(grid['COORD'], grid['ZCORN'])
     >>> bbox = bounding_box(corn, scatter(grid['ACTNUM']))
     >>> p, q = bbox[0, :], bbox[1, :]
@@ -553,19 +637,27 @@ def bounding_box(corn, filtr):
 
 
 def mass_center(corn, filtr):
-    """\
-    Mass center of the grid. This function will always assume that the density
-    is equal throughout the field.
+    """
+    Mass center of the grid.
 
-    :param corn:    Coordinate values for each corner. This matrix can be
-                    constructed with the `corner_coordinates` function.
-    :type  corn:    :class:`numpy.ndarray`, shape=(3, nk*2*nj*2*ni*2)
-    :param filtr:   Active corners; use scatter of ACTNUM if no filtering
-    :type  filtr:   :class:`numpy.ndarray`, shape = (nk, 2, nj, 2, ni, 2),
-                    dtype = numpy.bool
-    :return:        Center of mass. This should be the focal point of the grid.
-    :rtype:         :class:`numpy.ndarray`, shape = (3,), dtype = np.float64
+    This function will always assume that the density is equal throughout the field.
 
+    Parameters
+    ----------
+    corn : numpy.ndarray
+        Coordinate values for each corner. This matrix can be constructed with the 
+        `corner_coordinates` function. Shape = (3, nk*2*nj*2*ni*2).
+    filtr : numpy.ndarray
+        Active corners; use scatter of ACTNUM if no filtering. Shape = (nk, 2, nj, 2, ni, 2), 
+        dtype = numpy.bool.
+
+    Returns
+    -------
+    numpy.ndarray
+        Center of mass. This should be the focal point of the grid. Shape = (3,), dtype = np.float64.
+
+    Examples
+    --------
     >>> corn = cp.corner_coordinates(grid['COORD'], grid['ZCORN'])
     >>> focal_point = cp.mass_center(corn, cp.scatter(grid['ACTNUM']))
     """

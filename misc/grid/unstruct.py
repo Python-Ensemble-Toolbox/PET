@@ -1,11 +1,11 @@
-"""\
-Convert cornerpoint grids to unstructured grids
+"""
+Convert cornerpoint grids to unstructured grids.
 
-:example:
-    import pyresito.grid.unstruct as us
-    import pyresito.io.grdecl as grdecl
-
-    g = grdecl.read('~/proj/cmgtools/bld/overlap.grdecl')
+Examples
+--------
+>>> import pyresito.grid.unstruct as us
+>>> import pyresito.io.grdecl as grdecl
+>>> g = grdecl.read('~/proj/cmgtools/bld/overlap.grdecl')
 """
 # pylint: disable=too-few-public-methods, multiple-statements
 import numpy as np
@@ -23,14 +23,20 @@ class Ridge (object):
         self.right = right
 
     def is_not_below(self, other):
-        """Weak ordering of ridges based on vertical placement.
+        """
+        Weak ordering of ridges based on vertical placement.
 
-        :param other:  Ridge to be compared to this object.
-        :type other:   :class:`Ridge`
-        :returns:      True if no point on self is below any on the other,
-                       None if the ridges cross, and False if there is a point
-                       on the other ridge that is above any on self.
-        :rtype:        Boolean
+        Parameters
+        ----------
+        other : Ridge
+            Ridge to be compared to this object.
+
+        Returns
+        -------
+        bool or None
+            True if no point on self is below any on the other,
+            None if the ridges cross, and False if there is a point
+            on the other ridge that is above any on self.
         """
         # test each side separately. if self is at the same level as other,
         # this should count positively towards the test (i.e. it is regarded
@@ -58,13 +64,18 @@ class Face (object):
         self.btm = btm
 
     def is_above(self, other):
-        """Weak ordering of faces based on vertical placement.
+        """
+        Weak ordering of faces based on vertical placement.
 
-        :param other:   Face to be compared to this object.
-        :type other:    :class:`Face`
-        :returns:       True if all points in face self is above all points in
-                        face other, False otherwise
-        :rtype:         Boolean
+        Parameters
+        ----------
+        other : Face
+            Face to be compared to this object.
+
+        Returns
+        -------
+        bool
+            True if all points in face self are above all points in face other, False otherwise.
         """
         # if the bottom of self is aligned with the top of other, then the
         # face itself is considered to be above. since the ridge test also
@@ -73,12 +84,18 @@ class Face (object):
 
 
 def conv(grid):
-    """Convert a cornerpoint grid to an unstructured grid.
+    """
+    Convert a cornerpoint grid to an unstructured grid.
 
-    :param grid:  Cornerpoint grid to be converted.
-    :type grid:   dict, with 'COORD', 'ZCORN', 'ACTNUM'
-    :returns:     Unstructured grid
-    :rtype:       dict
+    Parameters
+    ----------
+    grid : dict
+        Cornerpoint grid to be converted. Should contain 'COORD', 'ZCORN', 'ACTNUM'.
+
+    Returns
+    -------
+    dict
+        Unstructured grid.
     """
     # extract the properties of interest from the cornerpoint grid
     zcorn = grid['ZCORN']

@@ -12,12 +12,15 @@ log.addHandler(logging.NullHandler())
 
 
 def read_grid(filename, cache_dir=None):
-    """\
-    :param filename:   Name of the grid file to read, including path
-    :type  filename:   str
-    :param cache_dir:  Path to a directory where a cache of the grid
-                       may be stored to ensure faster read next time.
-    :type  cache_dir:  str
+    """
+    Read a grid file and optionally cache it for faster future reads.
+
+    Parameters
+    ----------
+    filename : str
+        Name of the grid file to read, including path.
+    cache_dir : str
+        Path to a directory where a cache of the grid may be stored to ensure faster read next time.
     """
     # allow shortcut to home directories to be used in paths
     fullname = pth.expanduser(filename)
