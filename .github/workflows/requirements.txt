@@ -1,3 +1,6 @@
+# These are dependencies necessary to build docs.
+# Since we don't need compatibility with other dependencies when only producing the docs,
+# we can here afford the luxury of pinning them.
 jupytext==1.16.4
 latexcodec==3.0.0
 markdown==3.7
