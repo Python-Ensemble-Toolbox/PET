@@ -109,29 +109,6 @@ The `gh-pages` branch is no longer being used.
 Instead [actions/deploy-pages](https://github.com/actions/deploy-pages)
 creates an artefact that is deployed to Github Pages.
 
-
-### Run pdoc locally
-
-To *live preview* your changes, do
-
-```sh
-pdoc -t docs/templates --docformat=numpy --math pipt popt misc ensemble simulator input_output docs/dev_guide.py docs/tutorials.py
-```
-
-This should open a browser window with the rendered html.
-You can also ctrl/cmd-click the printed localhost link, or simply copy-paste it into your browser.
-
-If you want to reproduce errors that occur in **CI**, you'll want to include the option `-o docs-generated `.
-Since this actually generates html *files*, it will processes **all** of the files by default
-(without which you might not pick up on the error).
-
-.. note:: PS: it seems that the upstream `pdoc` does not report where parsing errors occur
-  (it simply quits with a traceback).
-  We therefore use my (`patnr`) fork which
-
-  - skips the markdown conversion for the erroneous docstring,
-  - prints the specific docstring that causes issues.
-
 ## Tests
 
 The test suite is orchestrated using `pytest`. Both in **CI** and locally.
