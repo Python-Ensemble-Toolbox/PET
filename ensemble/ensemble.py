@@ -553,6 +553,20 @@ class Ensemble:
             # Index list of ensemble members
             list_member_index = list(range(self.ne))
 
+            # modified by xluo, for including the simulation of the mean reservoir model
+            # as used in the RLM-MAC algorithm
+            if self.keys_da['daalg'][1] == 'gies':
+                list_state.append({})
+                list_member_index.append(self.ne)
+
+                for key in self.state.keys():
+                    tmp_state = np.zeros(list_state[0][key].shape[0])
+
+                    for i in range(self.ne):
+                        tmp_state += list_state[i][key]
+
+                    list_state[self.ne][key] = tmp_state / self.ne
+
             if no_tot_run==1: # if not in parallel we use regular loop
                 en_pred = [self.sim.run_fwd_sim(state, member_index) for state, member_index in
                            tqdm(zip(list_state, list_member_index), total=len(list_state))]
