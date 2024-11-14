@@ -134,6 +134,8 @@ class EnOpt(Optimize):
         elif optimizer == 'AdaMax':
             self.normalize = False
             self.optimizer = opt.AdaMax(self.alpha, self.beta)
+        elif optimizer == 'Steihaug':
+            self.optimizer = opt.Steihaug(delta0=3.0)
 
         # The EnOpt class self-ignites, and it is possible to send the EnOpt class as a callale method to scipy.minimize
         self.run_loop()  # run_loop resides in the Optimization class (super)
@@ -177,7 +179,8 @@ class EnOpt(Optimize):
 
             while improvement is False:  # backtracking loop
 
-                new_state, new_step = self.optimizer.apply_update(self.mean_state, gradient, iter=self.iteration)
+                new_state, new_step = self.optimizer.apply_update(self.mean_state, gradient,
+                                                                  hessian=hessian, iter=self.iteration)
                 new_state = ot.clip_state(new_state, self.bounds)
 
                 # Calculate new objective function
@@ -205,7 +208,7 @@ class EnOpt(Optimize):
                         self.logger.info(info_str_iter)
 
                     # Update step size in the one-dimensional case
-                    if new_state.size == 1:
+                    if new_state.size == 1 and hasattr(self.optimizer, 'step_size'):
                         self.optimizer.step_size /= 2
 
                     # Iteration was a success
