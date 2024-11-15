@@ -499,14 +499,14 @@ class Ensemble:
 
         Parameters
         ----------
-        input_state:
+        input_state :
             Use an input state instead of internal state (stored in self) to run predictions
-        save_prediction:
+        save_prediction :
             Save the predictions as a <save_prediction>.npz file (numpy compressed file)
 
         Returns
         -------
-        prediction:
+        prediction :
             List of dictionaries with keys equal to data types (in DATATYPE),
             containing the responses at each time step given in PREDICTION.
 

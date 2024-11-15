@@ -1,3 +1,4 @@
+"""Gradient acceleration."""
 import numpy as np
 
 
@@ -6,11 +7,10 @@ class GradientAscent:
     A class for performing gradient ascent optimization with momentum and backtracking.
     The gradient descent update equation with momentum is given by:
 
-    .. math::
-        \begin{align}
-            v_t &= \beta * v_{t-1} + \alpha * gradient \\\
-            x_t &= x_{t-1} - v_t
-        \end{align}
+    $$ \begin{align}
+        v_t &= \beta * v_{t-1} + \alpha * gradient \\
+        x_t &= x_{t-1} - v_t
+    \end{align} $$
 
 
     Attributes
@@ -38,10 +38,10 @@ class GradientAscent:
     apply_update(control, gradient, **kwargs):
         Apply a gradient update to the control parameter.
 
-    apply_backtracking():
+    apply_backtracking() :
         Apply backtracking by reducing step size and momentum temporarily.
 
-    restore_parameters():
+    restore_parameters() :
         Restore the original step size and momentum values.
     """
 
@@ -68,7 +68,9 @@ class GradientAscent:
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
-        NOTE: This is the steepest decent update: x_new = x_old - x_step.
+
+        !!! note
+            This is the steepest decent update: x_new = x_old - x_step.
 
         Parameters
         -------------------------------------------------------------------------------------
@@ -144,7 +146,8 @@ class GradientAscent:
 
 class Adam:
     """
-    A class implementing the Adam optimizer for gradient-based optimization.
+    A class implementing the Adam optimizer for gradient-based optimization [`kingma2014`][].
+
     The Adam update equation for the control x using gradient g,
     iteration t, and small constants ε is given by:
 
@@ -188,17 +191,11 @@ class Adam:
     apply_update(control, gradient, **kwargs):
         Apply an Adam update to the control parameter.
 
-    apply_backtracking():
+    apply_backtracking() :
         Apply backtracking by reducing step size temporarily.
 
-    restore_parameters():
+    restore_parameters() :
         Restore the original step size.
-
-    References
-    -------------------------------------------------------------------------------------
-    [1] Kingma, D. P., & Ba, J. (2014).
-        Adam: A Method for Stochastic Optimization.
-        arXiv preprint arXiv:1412.6980.
     """
 
     def __init__(self, step_size, beta1=0.9, beta2=0.999):
@@ -239,7 +236,9 @@ class Adam:
     def apply_update(self, control, gradient, **kwargs):
         """
         Apply a gradient update to the control parameter.
-        NOTE: This is the steepest decent update: x_new = x_old - x_step.
+
+        !!! note
+            This is the steepest decent update: x_new = x_old - x_step.
 
         Parameters
         -------------------------------------------------------------------------------------
@@ -291,13 +290,7 @@ class Adam:
 
 class AdaMax(Adam):
     '''
-    AdaMax optimizer
-    
-    References
-    -------------------------------------------------------------------------------------
-    [1] Kingma, D. P., & Ba, J. (2014).
-        Adam: A Method for Stochastic Optimization.
-        arXiv preprint arXiv:1412.6980.
+    AdaMax optimizer [`kingma2014`][]
     '''
     def __init__(self, step_size, beta1=0.9, beta2=0.999):
         super().__init__(step_size, beta1, beta2)
@@ -314,4 +307,185 @@ class AdaMax(Adam):
         step = alpha/(1-beta1**iter) * self.temp_vel1/self.temp_vel2
         new_control = control - step 
         return new_control, step
-    
+
+
+class Steihaug:
+    """
+    A class implementing the Steihaug conjugate-gradient trust region optimizer. This code is based on the
+    minfx optimisation library, https://gna.org/projects/minfx
+    """
+
+    def __init__(self, maxiter=1e6, epsilon=1e-8, delta_max=1e5, delta0=1.0):
+        """
+        Page 75 from 'Numerical Optimization' by Jorge Nocedal and Stephen J. Wright, 1999, 2nd ed.  The CG-Steihaug algorithm is:
+
+        - epsilon > 0
+        - p0 = 0, r0 = g, d0 = -r0
+        - if ||r0|| < epsilon:
+            - return p = p0
+        - while 1:
+            - if djT.B.dj <= 0:
+                - Find tau such that p = pj + tau.dj minimises m(p) in (4.9) and satisfies ||p|| = delta
+                - return p
+            - aj = rjT.rj / djT.B.dj
+            - pj+1 = pj + aj.dj
+            - if ||pj+1|| >= delta:
+                - Find tau such that p = pj + tau.dj satisfies ||p|| = delta
+                - return p
+            - rj+1 = rj + aj.B.dj
+            - if ||rj+1|| < epsilon.||r0||:
+                - return p = pj+1
+            - bj+1 = rj+1T.rj+1 / rjT.rj
+            - dj+1 = rj+1 + bj+1.dj
+
+        Parameters
+        -------------------------------------------------------------------------------------
+        maxiter : float, optional
+            Maximum number of iterations.
+
+        epsilon : float, optional
+            Tolerance for iterations.
+
+        delta_max : float, optional
+            Maximum thrust region size.
+
+        delta0 : float, optional
+            Initial thrust region size.
+        """
+
+        # Function arguments.
+        self.maxiter = maxiter
+        self.print_flag = 2
+        self.print_prefix = "Steihaug: "
+        self.epsilon = epsilon
+        self.delta_max = delta_max
+        self.delta0 = delta0
+        self.delta = delta0
+
+    def apply_update(self, xk, dfk, **kwargs):
+        """
+        Apply a Steihaug update to the control vector.
+
+        Parameters
+        -------------------------------------------------------------------------------------
+        xk : array_like
+            The current value of the parameter being optimized.
+
+        dfk : array_like
+            The gradient of the objective function with respect to the control parameter.
+
+        **kwargs : dict
+            Additional keyword arguments, including the hessian of the objective function
+            with respect to the control parameter.
+
+        Returns
+        -------------------------------------------------------------------------------------
+        new_control, step: tuple
+            The new value of the control parameter after the update, and the current state step.
+        """
+
+        # Initial values at j = 0.
+        d2fk = kwargs['hessian']
+        pj = np.zeros(len(xk), np.float64)
+        rj = dfk * 1.0
+        dj = -dfk * 1.0
+        B = d2fk * 1.0
+        len_r0 = np.sqrt(np.dot(rj, rj))
+        length_test = self.epsilon * len_r0
+
+        if self.print_flag >= 2:
+            print(self.print_prefix + "p0: " + repr(pj))
+            print(self.print_prefix + "r0: " + repr(rj))
+            print(self.print_prefix + "d0: " + repr(dj))
+
+        if len_r0 < self.epsilon:
+            if self.print_flag >= 2:
+                print(self.print_prefix + "len rj < epsilon.")
+            return xk, pj
+
+        # Iterate over j.
+        j = 0
+        while True:
+            # The curvature.
+            curv = np.dot(dj, np.dot(B, dj))
+            if self.print_flag >= 2:
+                print(self.print_prefix + "\nIteration j = " + repr(j))
+                print(self.print_prefix + "Curv: " + repr(curv))
+
+            # First test.
+            if curv <= 0.0:
+                tau = self.get_tau(rj, dj)
+                if self.print_flag >= 2:
+                    print(self.print_prefix + "curv <= 0.0, therefore tau = " + repr(tau))
+                pj_new = pj + tau * dj
+                xk_new = xk + pj_new
+                return xk_new, pj_new
+
+            aj = np.dot(rj, rj) / curv
+            pj_new = pj + aj * dj
+            if self.print_flag >= 2:
+                print(self.print_prefix + "aj: " + repr(aj))
+                print(self.print_prefix + "pj+1: " + repr(pj_new))
+
+            # Second test.
+            if np.sqrt(np.dot(pj_new, pj_new)) >= self.delta:
+                tau = self.get_tau(pj, dj)
+                if self.print_flag >= 2:
+                    print(self.print_prefix + "sqrt(dot(self.pj_new, self.pj_new)) >= self.delta, therefore tau = "
+                          + repr(tau))
+                pj_new = pj + tau * dj
+                xk_new = xk + pj_new
+                return xk_new, pj_new
+
+            rj_new = rj + aj * np.dot(B, dj)
+            if self.print_flag >= 2:
+                print(self.print_prefix + "rj+1: " + repr(rj_new))
+
+            # Third test.
+            if np.sqrt(np.dot(rj_new, rj_new)) < length_test:
+                if self.print_flag >= 2:
+                    print(self.print_prefix + "sqrt(dot(self.rj_new, self.rj_new)) < length_test")
+                xk_new = xk + pj_new
+                return xk_new, pj_new
+
+            bj_new = np.dot(rj_new, rj_new) / np.dot(rj, rj)
+            dj_new = -rj_new + bj_new * dj
+            if self.print_flag >= 2:
+                print(self.print_prefix + "len rj+1: " + repr(np.sqrt(np.dot(rj_new, rj_new))))
+                print(self.print_prefix + "epsilon.||r0||: " + repr(length_test))
+                print(self.print_prefix + "bj+1: " + repr(bj_new))
+                print(self.print_prefix + "dj+1: " + repr(dj_new))
+
+            # Update j+1 to j.
+            pj = pj_new * 1.0
+            rj = rj_new * 1.0
+            dj = dj_new * 1.0
+            if j > self.maxiter:
+                import sys
+                sys.exit()
+            j = j + 1
+
+    def get_tau(self, pj, dj):
+        """Function to find tau such that p = pj + tau.dj, and ||p|| = delta."""
+
+        dot_pj_dj = np.dot(pj, dj)
+        len_dj_sqrd = np.dot(dj, dj)
+
+        tau = -dot_pj_dj + np.sqrt(
+            dot_pj_dj ** 2 - len_dj_sqrd * (np.dot(pj, pj) - self.delta ** 2)) / len_dj_sqrd
+        return tau
+
+    def apply_backtracking(self):
+        """
+        Apply backtracking by reducing step size temporarily.
+        """
+        self.delta = 0.5 * self.delta
+
+    def restore_parameters(self):
+        """
+        Restore the original step size.
+        """
+        self.delta = self.delta0
+
+    def get_step_size(self):
+        return self.delta

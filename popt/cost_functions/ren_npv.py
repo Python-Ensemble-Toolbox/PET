@@ -9,16 +9,16 @@ def ren_npv(pred_data, kwargs):
 
     Parameters
     ----------
-    pred_data_en : ndarray
+    pred_data : ndarray
         Ensemble of predicted data.
 
     **kwargs : dict
         Other arguments sent to the npv function
 
-        keys_opt : list
+        - keys_opt (list)
             Keys with economic data.
 
-        report : list
+        - report (list)
             Report dates.
 
     Returns
@@ -57,7 +57,7 @@ def ren_npv(pred_data, kwargs):
         Qrenwi = np.sum(Qrenwi, axis=0)
         Qwi = np.sum(Qwi, axis=0)
 
-        delta_days = (report[1][i] - report[1][i - 1]).days
+        delta_days = (report[1][i] - report[1][0]).days
         val = (Qop * npv_const['wop'] + Qgp * npv_const['wgp'] - Qwp * npv_const['wwp'] - Qwi * npv_const['wwi'] -
                Qrenwi * npv_const['wrenwi']) / (
             (1 + npv_const['disc']) ** (delta_days / 365))

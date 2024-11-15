@@ -14,9 +14,8 @@ class OpenBlasSingleThread:
     and outside the statement is run using whatever the environment variable was set before the 'with'-statement.
     The environment variable setting threading in OpenBLAS is OMP_NUM_THREADS.
 
-    Example
-    -------
-
+    Examples
+    --------
     >>> from system_tools.environ_var import OpenBlasSingleThread
     ... import ctypes
     ... import multiprocessing as mp
@@ -47,7 +46,7 @@ class OpenBlasSingleThread:
         Init. the class with no inputs. Use this to initialize internal variables for storing number of threads an
         the Process context manager before the change to single thread.
 
-        Parameters
+        Attributes
         ----------
         num_threads:
             String with number of OpenBLAS threads before change to single

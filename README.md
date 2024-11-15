@@ -1,7 +1,7 @@
 # PET: Python Ensemble Toolbox
 
 <h1 align="center">
-<img src="https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png" width="300">
+<img src="https://github.com/Python-Ensemble-Toolbox/.github/blob/main/profile/pictures/logo.png?raw=true" width="300">
 </h1><br>
 
 PET is a toolbox for ensemble-based Data Assimilation and Optimisation.

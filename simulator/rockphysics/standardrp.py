@@ -18,8 +18,8 @@ class elasticproperties:
     Report 1 in Abul Fahimuddin's thesis at Universty of
     Bergen (2010) for other properties.
 
-    Example
-    -------
+    Examples
+    --------
     >>> porosity = 0.2
     ... pressure = 5
     ... phases = ["Oil","Water"]

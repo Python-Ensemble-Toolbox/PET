@@ -123,7 +123,7 @@ class QAQC:
         Notes
         -----
         - Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        - NOTE: Not available in current version of PIPT
+        - Not available in current version of PIPT
         """
 
     def calc_kg(self, options=None):
@@ -139,6 +139,7 @@ class QAQC:
         ----------
         options : dict
             Settings for the Kalman gain computations.
+
             - 'num_store' : int, optional
                 Number of elements to store. Default is 10.
             - 'unique_time' : bool, optional
@@ -150,12 +151,14 @@ class QAQC:
             - 'auto_ada_loc' : bool, optional
                 Use localization in computations. Default is True.
             - 'write_to_resinsight' : bool, optional
-                Pipe results to ResInsight. Default is False. (Note: this requires that ResInsight is open on the computer.)
+               Pipe results to ResInsight. Default is False.
+
+                !!! note "requires that ResInsight is open on the computer."
 
         Notes
         -----
         - Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        - NOTE: Not available in current version of PIPT
+        - Not available in current version of PIPT
         """
 
     def calc_mahalanobis(self, combi_list=(1, None)):
@@ -173,8 +176,10 @@ class QAQC:
             - combi_typ : str
                 Defines how data are combined. Default is no combine.
 
-        Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        NOTE: Not available in current version of PIPT
+        Notes
+        -----
+        - Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
+        - Not available in current version of PIPT
         """
 
     def calc_da_stat(self, options=None):
@@ -192,5 +197,5 @@ class QAQC:
         Notes
         -----
         - Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        - NOTE: Not available in current version of PIPT
+        - Not available in current version of PIPT
         """

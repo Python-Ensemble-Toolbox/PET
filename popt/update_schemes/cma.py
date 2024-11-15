@@ -1,3 +1,4 @@
+"""Covariance matrix adaptation (CMA)."""
 import numpy as np
 from popt.misc_tools import optim_tools as ot
 
@@ -5,7 +6,7 @@ class CMA:
 
     def __init__(self, ne, dim, alpha_mu=None, n_mu=None, alpha_1=None, alpha_c=None, corr_update=False, equal_weights=True):
         '''
-        This is a rather simple simple CMA class
+        This is a rather simple simple CMA class [`hansen2006`][].
 
         Parameters
         ----------------------------------------------------------------------------------------------------------
@@ -36,12 +37,6 @@ class CMA:
             If True, all n_mu members are assign equal weighting, `w_i = 1/n_mu`.
             If False, the weighting scheme proposed in [1], where `w_i = log(n_mu + 1)-log(i)`,
             and normalized such that they sum to one. Defualt is True.
-
-        References
-        ----------------------------------------------------------------------------------------------------------
-        [1] Hansen, N. (2006). The CMA evolution strategy: a comparing review. 
-            In J. Lozano, P. Larranaga, I. Inza & E. Bengoetxea (ed.), Towards a new evolutionary computation. 
-            Advances on estimation of distribution algorithms (pp. 75--102) . Springer .     
         '''
         self.alpha_mu       = alpha_mu
         self.n_mu           = n_mu
@@ -106,23 +101,23 @@ class CMA:
 
         Parameters
         --------------------------------------------------
-            cov : array_like, of shape (d, d)
-                Current covariance or correlation matrix.
-            
-            step : array_like, of shape (d,)
-                New step of control vector.
-                Used to update the evolution path.
+        cov : array_like, of shape (d, d)
+            Current covariance or correlation matrix.
+        
+        step : array_like, of shape (d,)
+            New step of control vector.
+            Used to update the evolution path.
 
-            X : array_like, of shape (n, d)
-                Control ensemble of size n.
-            
-            J : array_like, of shape (n,)
-                Objective ensemble of size n.
+        X : array_like, of shape (n, d)
+            Control ensemble of size n.
+        
+        J : array_like, of shape (n,)
+            Objective ensemble of size n.
         
         Returns
         --------------------------------------------------
-            out : array_like, of shape (d, d)
-                CMA updated covariance (correlation) matrix.
+        out : array_like, of shape (d, d)
+            CMA updated covariance (correlation) matrix.
         '''
         a_mu  = self.alpha_mu
         a_one = self.alpha_1 

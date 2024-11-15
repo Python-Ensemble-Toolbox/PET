@@ -1,3 +1,4 @@
+"""Descriptive description."""
 from simulator.opm import flow
 from importlib import import_module
 import datetime as dt
@@ -621,6 +622,7 @@ class flow_barycenter(flow):
                     if self.true_prim[1][prim_ind] in self.pem_input['vintage']:
                         v = self.pem_input['vintage'].index(self.true_prim[1][prim_ind])
                         self.pred_data[prim_ind][key] = self.bar_result[v].flatten()
+                        
 
 class flow_avo(flow_sim2seis):
     def __init__(self, input_dict=None, filename=None, options=None, **kwargs):

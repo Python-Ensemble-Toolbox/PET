@@ -45,13 +45,19 @@ _DataDescr = collections.namedtuple('_DataDescr', [
 
 
 def _read_descr(fileobj):
-    """Read the the opened file and build a descriptor record of the
-    following data array.
+    """
+    Read the opened file and build a descriptor record of the following data array.
 
-    :param fileobj: File object opened in binary reading mode.
-    :returns:       Tuple of keyword, file position, number of items,
-                    and their type.
-    :rtype:         (str, int, int, str)
+    Parameters
+    ----------
+    fileobj : file object
+        File object opened in binary reading mode.
+
+    Returns
+    -------
+    tuple
+        Tuple containing the keyword, file position, number of items, and their type.
+        (str, int, int, str)
     """
     # read the length of this record, as a signed quad; if we encounter
     # end of file, then return None as the sentinel descriptor
@@ -122,12 +128,22 @@ _TYPES = {
 
 
 def _skip_rec(fileobj, num, typ):
-    """Skip one or more records for a certain number of entries.
+    """
+    Skip one or more records for a certain number of entries.
 
-    :param fileobj: File object opened in binary read mode.
-    :param num:     Number of items that should be skipped.
-    :param typ:     Data type of the entries.
-    :returns:       Number of data records that were skipped.
+    Parameters
+    ----------
+    fileobj : io.BufferedReader
+        File object opened in binary read mode.
+    num : int
+        Number of items that should be skipped.
+    typ : numpy.dtype
+        Data type of the entries.
+
+    Returns
+    -------
+    int
+        Number of data records that were skipped.
     """
     # total number of bytes to be skipped
     remaining = num * _TYPES[typ].siz
@@ -156,11 +172,19 @@ def _skip_rec(fileobj, num, typ):
 
 
 def _build_cat(fileobj):
-    """Build a catalog over where in the data file each record is.
+    """
+    Build a catalog over where in the data file each record is.
 
-    :param fileobj:  File object opened in binary read mode.
-    :returns:        Tuple of dictionaries with the number of occurrences
-    :rtype:          (dict [str] -> int, dict [_DataKey] -> _DataDescr)
+    Parameters
+    ----------
+    fileobj : io.BufferedReader
+        File object opened in binary read mode.
+
+    Returns
+    -------
+    tuple of dict
+        Tuple of dictionaries with the number of occurrences.
+        The first dictionary maps strings to integers, and the second dictionary maps _DataKey to _DataDescr.
     """
     cnt = {}  # number of types we have seen each keyword
     cat = {}  # where is the file each keyword is located
@@ -187,11 +211,20 @@ def _build_cat(fileobj):
 
 
 def _read_rec(fileobj, descr):
-    """Read a set of records for a descriptor.
+    """
+    Read a set of records for a descriptor.
 
-    :param fileobj:  File object opened in binary read mode.
-    :param descr:    Descriptor for where the property is stored.
-    :type descr:     _DataDescr
+    Parameters
+    ----------
+    fileobj : io.BufferedReader
+        File object opened in binary read mode.
+    descr : _DataDescr
+        Descriptor for where the property is stored.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of records read from the file.
     """
     # seek to the appropriate place in the file
     fileobj.seek(descr.pos, os.SEEK_SET)
@@ -267,10 +300,19 @@ class EclipseFile (object):
     """
 
     def __init__(self, root, ext):
-        """Initialize file object from a path in the filesystem.
+        """
+        Initialize file object from a path in the filesystem.
 
-        :param root:  Stem of the file name (including directory)
-        :param ext:   Extension of the file to read from.
+        Parameters
+        ----------
+        root : str
+            Stem of the file name (including directory).
+        ext : str
+            Extension of the file to read from.
+
+        Returns
+        -------
+        None
         """
         # keep the file open (and locked) to read from it
         self.filename = '{0}.{1}'.format(root, ext.upper())
@@ -289,15 +331,20 @@ class EclipseFile (object):
         self.fileobj.__exit__(typ, val, traceback)
 
     def get(self, kwd, seq=0):
-        """Read a (potentially indexed) keyword from file.
+        """
+        Read a (potentially indexed) keyword from file.
 
-        :param kwd:  Keyword.
-        :type kwd:   str
-        :param seq:  Sequence number, starting from zero.
-        :type seq:   int
+        Parameters
+        ----------
+        kwd : str
+            Keyword to read.
+        seq : int
+            Sequence number, starting from zero.
 
-        >>> with EclipseFile ('foo', 'EGRID') as grid:
-        >>>     zcorn = grid.get ('ZCORN')
+        Examples
+        --------
+        >>> with EclipseFile('foo', 'EGRID') as grid:
+        >>>     zcorn = grid.get('ZCORN')
         """
         # make sure that the keyword is exactly 8 chars
         kwd = "{0:<8s}".format(kwd[:8].upper())
@@ -313,14 +360,18 @@ class EclipseFile (object):
             return None
 
     def dump(self, positional=False, fileobj=sys.stdout):
-        """Dump catalog contents of records in the datafile.
+        """
+        Dump catalog contents of records in the datafile.
 
-        :param positional:  True if the keywords should be sorted
-                            on position in the file.
-        :type positional:   bool
+        Parameters
+        ----------
+        positional : bool
+            If True, the keywords should be sorted on position in the file.
 
-        >>> f = EclipseFile ("foo", 'INIT')
-        >>> f.dump ()
+        Examples
+        --------
+        >>> f = EclipseFile("foo", 'INIT')
+        >>> f.dump()
         """
         if positional:
             # build a dictionary of positions and they record that
@@ -412,12 +463,16 @@ class EclipseGrid (object):
             log.info("Grid has %d active cells", self.num_active)
 
     def grid(self):
-        """\
+        """
         Create a grid structure from the information read from file.
 
-        :return:  Grid structure
-        :rtype:   dict
+        Returns
+        -------
+        dict
+            Grid structure.
 
+        Examples
+        --------
         >>> # convert from .EGRID to .grdecl:
         >>> import pyresito.io.ecl as ecl
         >>> import pyresito.io.grdecl as grdecl
@@ -537,14 +592,21 @@ class EclipseData (object):
         return mph
 
     def _get_prop_name(self, selector):  # pylint: disable=no-self-use
-        """Compose an internal name for the property as specified by a
-        high-level selector.
+        """
+        Compose an internal name for the property as specified by a high-level selector.
 
-        :param selector:  Selector tuple, e.g. (Prop.mole, 'CO2', Phase.gas)
-        :param names:     Dictionary of defined names in the case. There must
-                          be an entry "components" containing the names of the
-                          components in the case files.
-        :returns:         Name of the property to be queried, e.g. "ZMF2"
+        Parameters
+        ----------
+        selector : tuple
+            Selector tuple, e.g., (Prop.mole, 'CO2', Phase.gas).
+        names : dict
+            Dictionary of defined names in the case. There must be an entry "components" 
+            containing the names of the components in the case files.
+
+        Returns
+        -------
+        str
+            Name of the property to be queried, e.g., "ZMF2".
         """
         # if the selector is a tuple, then use the first member to get a
         # function that can parse the others
@@ -577,16 +639,25 @@ class EclipseData (object):
         return name
 
     def cell_data(self, selector):
-        """Get a field property for every cell at this restart step.
+        """
+        Get a field property for every cell at this restart step.
 
-        :param selector: Specification of the property to be loaded. This is a
-                         tuple starting with a Prop, and then some context-
-                         dependent items.
-        :returns:        Array of the data with inactive cells masked off.
+        Parameters
+        ----------
+        selector : tuple
+            Specification of the property to be loaded. This is a tuple starting with a Prop, 
+            and then some context-dependent items.
 
-        >>> pres = case.cell_data ((Prop.pres,))
-        >>> swat = case.cell_data ((Prop.sat, Phase.wat))
-        >>> xco2 = case.cell_data ((Prop.mole, 'CO2', Phase.gas))
+        Returns
+        -------
+        numpy.ndarray
+            Array of the data with inactive cells masked off.
+
+        Examples
+        --------
+        >>> pres = case.cell_data((Prop.pres,))
+        >>> swat = case.cell_data((Prop.sat, Phase.wat))
+        >>> xco2 = case.cell_data((Prop.mole, 'CO2', Phase.gas))
         """
         # get the internal name of the property requested
         propname = self._get_prop_name(selector)
@@ -616,25 +687,39 @@ class EclipseData (object):
                               mask=self.grid.mask)
 
     def field_data(self, propname):
-        """Get a property for the entire field at this restart step.
+        """
+        Get a property for the entire field at this restart step.
 
-        :param propname: Name of the property to be loaded.
-        :returns:        Array of the data.
+        Parameters
+        ----------
+        propname : str
+            Name of the property to be loaded.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of the data.
         """
         # load the data itself
         with EclipseFile(self.root, self.ext) as store:
             return store.get(propname)
 
     def summary_data(self, propname):
-        """Get a property from the summary file at this restart step.
+        """
+        Get a property from the summary file at this restart step.
 
-        :param propname: Name of the property to be loaded. This is on the form
-                         'mnemonic well', e.g. 'WWIR I05'. Alternatively, one
-                         propname can be either only well or only mnemonic.
-                         Then the value for all mnememonics or all wells are
-                         given, e.g., propname='WWIR' returns WWIR for all
-                         wells.
-        :returns:        Array of the data.
+        Parameters
+        ----------
+        propname : str
+            Name of the property to be loaded. This is in the form 'mnemonic well', 
+            e.g., 'WWIR I05'. Alternatively, propname can be either only well or 
+            only mnemonic. Then the value for all mnemonics or all wells are given, 
+            e.g., propname='WWIR' returns WWIR for all wells.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of the data.
         """
         # need to find the mneumonics and well info from the specification file
         with EclipseFile(self.root, 'SMSPEC') as store:
@@ -744,10 +829,18 @@ class EclipseRestart (EclipseData):
 
     def __init__(self, grid, seq):
         """
-        :param grid:  Initialization file which contains grid dimensions.
-        :type grid:   EclipseInit (or EclipseGrid)
-        :param seq:   Run number.
-        :type seq:    int
+        Initialize the restart file reader.
+
+        Parameters
+        ----------
+        grid : EclipseInit or EclipseGrid
+            Initialization file which contains grid dimensions.
+        seq : int
+            Run number.
+
+        Returns
+        -------
+        None
         """
         super(EclipseRestart, self).__init__(grid, grid.root,
                                              "X{0:04d}".format(seq))
@@ -760,6 +853,10 @@ class EclipseRestart (EclipseData):
 
         # convert Eclipse date field to a Python date object
         return _intehead_date(intehead)
+    
+    def arrays(self):
+        ecl_file = EclipseFile(self.root, self.ext)
+        return [list(ecl_file.cat.keys())[i][0] for i, _ in enumerate(ecl_file.cat)]
 
 
 class EclipseSummary (EclipseData):
@@ -767,10 +864,18 @@ class EclipseSummary (EclipseData):
 
     def __init__(self, grid, seq):
         """
-        :param grid:  Initialization file which contains grid dimensions.
-        :type grid:   EclipseInit (or EclipseGrid)
-        :param seq:   Run number.
-        :type seq:    int
+        Initialize the restart file reader.
+
+        Parameters
+        ----------
+        grid : EclipseInit or EclipseGrid
+            Initialization file which contains grid dimensions.
+        seq : int
+            Run number.
+
+        Returns
+        -------
+        None
         """
         super(EclipseSummary, self).__init__(grid, grid.root,
                                              "S{0:04d}".format(seq))
@@ -786,9 +891,13 @@ class EclipseSummary (EclipseData):
 
 
 def _quick_date(fileobj):
-    """Quick scan of a restart file to determine its date.
+    """
+    Quick scan of a restart file to determine its date.
 
-    :param fileobj:  File object opened in binary read mode.
+    Parameters
+    ----------
+    fileobj : io.BufferedReader
+        File object opened in binary read mode.
     """
     # INTEHEAD record is always placed first in the file; we have to read
     # four sectors; first sector contains the signature, second sector
@@ -829,8 +938,16 @@ class EclipseCase (object):
 
     def __init__(self, casename):
         """
-        :param casename:  Path to the case, with or without extension.
-        :type casename:   str
+        Initialize the Eclipse case.
+
+        Parameters
+        ----------
+        casename : str
+            Path to the case, with or without extension.
+
+        Returns
+        -------
+        None
         """
         # keys of this dictionary will be dates, the values are the sequence
         # numbers that are associated with those dates
@@ -872,11 +989,13 @@ class EclipseCase (object):
         self.comp = None
 
     def shape(self):
-        """\
+        """
         Get shape of returned field data.
 
-        :return:  (num_k, num_j, num_i)
-        :rtype:   (int, int, int)
+        Returns
+        -------
+        tuple of int
+            Shape of the field data as (num_k, num_j, num_i).
         """
         return self.init.shape
 
@@ -885,13 +1004,16 @@ class EclipseCase (object):
         return self.init.start_date
 
     def components(self):
-        """Components that exist in the restart file.
+        """
+        Components that exist in the restart file.
 
-        >>> case = EclipseCase (filename)
-        >>> comps = case.components ()
-        >>> print ("Number of components is %d" % (len (comps)))
-        >>> for num, name in enumerate (comps):
-        >>>     print ("%d : %s" % (num, name))
+        Examples
+        --------
+        >>> case = EclipseCase(filename)
+        >>> comps = case.components()
+        >>> print("Number of components is %d" % (len(comps)))
+        >>> for num, name in enumerate(comps):
+        >>>     print("%d : %s" % (num, name))
         """
         # get the last report date, and the index of that. the last
         # is selected because it is the most likely timestep to be
@@ -919,26 +1041,39 @@ class EclipseCase (object):
         return self.init.phases
 
     def report_dates(self):
-        """List of all the report dates that are available in this
-        case. Items from this list can be used as a parameter to `at`
-        to get the case for that particular report step.
+        """
+        List of all the report dates that are available in this case.
 
-        :returns: List of available report dates in sequence
-        :rtype:   list [datetime.datetime]
+        Items from this list can be used as a parameter to `at` to get the case for that particular report step.
 
-        >>> for rstp in case.report_dates ():
-                print (case.at (rstp).this_date)
+        Returns
+        -------
+        list of datetime.datetime
+            List of available report dates in sequence.
 
-        .. seealso:: at
+        Examples
+        --------
+        >>> for rstp in case.report_dates():
+        >>>     print(case.at(rstp).this_date)
+
+        See Also
+        --------
+        ecl.EclipseCase.at
         """
         return sorted(self.by_date.keys())
 
     def _delay_load(self, seq):
-        """Make sure that recurrent data for a sequence step is loaded
-        into memory.
+        """
+        Ensure that recurrent data for a sequence step is loaded into memory.
 
-        :param seq:   Sequence number of the restart
-        :type seq:    int
+        Parameters
+        ----------
+        seq : int
+            Sequence number of the restart.
+
+        Returns
+        -------
+        None
         """
         # check if we have loaded the data file yet. since we need
         # to index the file while reading from it, we maintain a
@@ -952,14 +1087,21 @@ class EclipseCase (object):
         return restart
 
     def at(self, when):  # pylint: disable=invalid-name
-        """Recurrent data for a certain timestep. The result of this
-        method is usually passed to function that need to calculate
+        """
+        Recurrent data for a certain timestep.
+
+        The result of this method is usually passed to functions that need to calculate
         something using several properties.
 
-        :param when:  Date of the property.
-        :type when:   :class:`datetime.datetime` or int
-        :returns:     Object containing properties for this timestep
-        :rtype:       EclipseRestart
+        Parameters
+        ----------
+        when : datetime.datetime or int
+            Date of the property.
+
+        Returns
+        -------
+        EclipseRestart
+            Object containing properties for this timestep.
         """
         # get the sequence number of the report step; this is either
         # specified directly as an int, or given as a date
@@ -973,14 +1115,21 @@ class EclipseCase (object):
         return restart
 
     def atsm(self, when):  # pylint: disable=invalid-name
-        """Recurrent data from summary file for a certain timestep. The result
-        of this method is usually passed to function that need to calculate
+        """
+        Recurrent data from summary file for a certain timestep.
+
+        The result of this method is usually passed to functions that need to calculate
         something using several properties.
 
-        :param when:  Date of the property.
-        :type when:   :class:`datetime.datetime` or int
-        :returns:     Object containing summary properties for this timestep
-        :rtype:       EclipseSummary
+        Parameters
+        ----------
+        when : datetime.datetime or int
+            Date of the property.
+
+        Returns
+        -------
+        EclipseSummary
+            Object containing summary properties for this timestep.
         """
         # get the sequence number of the report step; this is either
         # specified directly as an int, or given as a date
@@ -1002,19 +1151,26 @@ class EclipseCase (object):
         return summary
 
     def cell_data(self, prop, when=None):
-        """Read cell-wise data from case. This can be either static information
+        """
+        Read cell-wise data from case. This can be either static information
         or recurrent information for a certain date.
 
-        :param prop:  Name of the property, e.g. 'SWAT'
-        :type prop:   str
-        :param when:  Date of the property, or None if static
-        :type when:   :class:`datetime.datetime` or int
-        :returns:     Loaded array for the property.
-        :rtype:       :class:`numpy.ndarray`
+        Parameters
+        ----------
+        prop : str
+            Name of the property, e.g., 'SWAT'.
+        when : datetime.datetime or int, optional
+            Date of the property, or None if static.
 
-        :example:
-        >>> case = EclipseCase (cmd_args.filename)
-        >>> zmf2 = case.cell_data ('ZMF2', datetime.datetime (2054, 7, 1))
+        Returns
+        -------
+        numpy.ndarray
+            Loaded array for the property.
+
+        Examples
+        --------
+        >>> case = EclipseCase(cmd_args.filename)
+        >>> zmf2 = case.cell_data('ZMF2', datetime.datetime(2054, 7, 1))
         """
         # if it is static property, it is found in the initial file
         if when is None:
@@ -1024,19 +1180,26 @@ class EclipseCase (object):
             return self.at(when).cell_data(prop)
 
     def field_data(self, prop, when=None):
-        """Read field-wise data from case. This can be either static information
+        """
+        Read field-wise data from case. This can be either static information
         or recurrent information for a certain date.
 
-        :param prop:  Name of the property, e.g. 'ZPHASE'
-        :type prop:   str
-        :param when:  Date of the property, or None if static
-        :type when:   :class:`datetime.datetime` or int
-        :returns:     Loaded array for the property.
-        :rtype:       :class:`numpy.ndarray`
+        Parameters
+        ----------
+        prop : str
+            Name of the property, e.g., 'ZPHASE'.
+        when : datetime.datetime or int, optional
+            Date of the property, or None if static.
 
-        :example:
-        >>> case = EclipseCase (cmd_args.filename)
-        >>> zphase = case.cell_data ('ZPHASE', datetime.datetime (2054, 7, 1))
+        Returns
+        -------
+        numpy.ndarray
+            Loaded array for the property.
+
+        Examples
+        --------
+        >>> case = EclipseCase(cmd_args.filename)
+        >>> zphase = case.cell_data('ZPHASE', datetime.datetime(2054, 7, 1))
         """
         # if it is static property, it is found in the initial file
         if when is None:
@@ -1046,19 +1209,26 @@ class EclipseCase (object):
             return self.at(when).field_data(prop)
 
     def summary_data(self, prop, when):
-        """Read summary data from case. This is typically well data, but can
-        also be e.g., newton iterations.
+        """
+        Read summary data from case. This is typically well data, but can
+        also be, for example, newton iterations.
 
-        :param prop: Name of the property, e.g., 'WWPR PRO1'.
-        :type prop:  str
-        :param when: Date of the property
-        :type when:  :class:`datetime.datetime` or int
-        :returns:     Loaded array for the property.
-        :rtype:       :class:`numpy.ndarray`
-        :example:
-        >>> case = EclipseCase (cmd_args.filename)
-        >>> data = case.cell_data ('WWIR INJ-5',
-                                   datetime.datetime (2054, 7, 1))
+        Parameters
+        ----------
+        prop : str
+            Name of the property, e.g., 'WWPR PRO1'.
+        when : datetime.datetime or int
+            Date of the property.
+
+        Returns
+        -------
+        numpy.ndarray
+            Loaded array for the property.
+
+        Examples
+        --------
+        >>> case = EclipseCase(cmd_args.filename)
+        >>> data = case.cell_data('WWIR INJ-5', datetime.datetime(2054, 7, 1))
         """
         # Summary data is a bit more tricky than restart data. Mostly because
         # all specifications are given in the SMSPEC file. We must therefore
@@ -1075,14 +1245,25 @@ class EclipseCase (object):
         # offload this routine to the grid object
         return self._grid.grid()
 
+    def arrays(self, when):
+        return self.at(when).arrays()
+
 
 class EclipseRFT (object):
     """Read data from an Eclipse RFT file."""
 
     def __init__(self, casename):
         """
-        :param casename:  Path to the case, with or without extension.
-        :type casename:   str
+        Initialize the Eclipse case.
+
+        Parameters
+        ----------
+        casename : str
+            Path to the case, with or without extension.
+
+        Returns
+        -------
+        None
         """
         # get the directory of the file, using dot for current one if
         # no directory has been specified
@@ -1101,15 +1282,24 @@ class EclipseRFT (object):
 
     def rft_data(self, well, prop):
         """
-        Read the rft data for the requested well
-        :param well: Name of well, e.g. 'PRO-1'
-        :param prop: Type of property (depth, pressure, swat, or sgas)
-        :type well: str
-        :type prop: str
-        :return: Loaded array for the property.
-        :rtype: :class:`numpy.ndarray`
-        >>> case = EclipseRFT (cmd_args.filename)
-        >>> data = case.rft_data (well='INJ-5', prop='PRESSURE')
+        Read the RFT data for the requested well.
+
+        Parameters
+        ----------
+        well : str
+            Name of the well, e.g., 'PRO-1'.
+        prop : str
+            Type of property (depth, pressure, swat, or sgas).
+
+        Returns
+        -------
+        numpy.ndarray
+            Loaded array for the property.
+
+        Examples
+        --------
+        >>> case = EclipseRFT(cmd_args.filename)
+        >>> data = case.rft_data(well='INJ-5', prop='PRESSURE')
         """
         with EclipseFile(self.root, 'RFT') as eclf:
             vec_dat = None

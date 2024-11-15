@@ -1,5 +1,19 @@
 from setuptools import setup
 
+EXTRAS = {
+    "doc": [
+        "mkdocs-material",
+        "mkdocstrings",
+        "mkdocstrings-python",
+        "mkdocs-gen-files",
+        "mkdocs-literate-nav",
+        "mkdocs-section-index",
+        "mkdocs-glightbox",
+        "mkdocs-jupyter",
+        "pybtex",
+    ],
+}
+
 setup(
     name='PET',
     version='1.0',
@@ -18,7 +32,6 @@ setup(
         'tqdm',
         'PyWavelets',
         'psutil',
-        'pdoc @ git+https://github.com/patnr/pdoc@main',
         'geostat @ git+https://github.com/Python-Ensemble-Toolbox/Geostatistics@main',
         'pytest',
         'pandas', # libecalc 8.9.0 has requirement pandas<2,>=1
@@ -32,5 +45,5 @@ setup(
         'libecalc',
         'scikit-learn',
         'pylops'
-    ],
+    ] + EXTRAS['doc'],
 )

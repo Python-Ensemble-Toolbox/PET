@@ -1,3 +1,4 @@
+"""Line Search."""
 # External imports
 import numpy as np
 import time

@@ -1,5 +1,7 @@
 """Common definitions for all import filters
 
+Examples
+--------
 >>> from .ecl_common import Phase, Prop
 """
 
