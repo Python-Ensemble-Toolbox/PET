@@ -542,8 +542,9 @@ def calc_objectivefun(pert_obs, pred_data, Cd):
     data_misfit : array-like
         Nex1 array containing objective function values.
     """
-    ne = pred_data.shape[1]
-    r = (pred_data - pert_obs)
+    #ne = pred_data.shape[1]
+    ne = pert_obs.shape[1]
+    r = (pred_data[:, :ne] - pert_obs)  # This is necessary to use to gies code that xilu has implemented
     if len(Cd.shape) == 1:
         precission = Cd**(-1)
         data_misfit = np.diag(r.T.dot(r*precission[:, None]))

@@ -1,4 +1,3 @@
-"""Descriptive description."""
 from simulator.opm import flow
 from importlib import import_module
 import datetime as dt
@@ -116,20 +115,64 @@ class flow_sim2seis(flow):
             grid = self.ecl_case.grid()
 
             phases = self.ecl_case.init.phases
-            self.sats = []
-            vintage = []
-            # loop over seismic vintages
-            for v, assim_time in enumerate(self.pem_input['vintage']):
-                time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
+            if 'OIL' in phases and 'WAT' in phases and 'GAS' in phases:  # This should be extended
+                vintage = []
+                # loop over seismic vintages
+                for v, assim_time in enumerate(self.pem_input['vintage']):
+                    time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
                         dt.timedelta(days=assim_time)
+                    pem_input = {}
+                    # get active porosity
+                    tmp = self.ecl_case.cell_data('PORO')
+                    if 'compaction' in self.pem_input:
+                        multfactor = self.ecl_case.cell_data('PORV_RC', time)
 
-                self.calc_pem(time) #mali: update class inhere flor_rock. Include calc_pem as method in flow_rock
+                        pem_input['PORO'] = np.array(
+                            multfactor[~tmp.mask]*tmp[~tmp.mask], dtype=float)
+                    else:
+                        pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
+                    # get active NTG if needed
+                    if 'ntg' in self.pem_input:
+                        if self.pem_input['ntg'] == 'no':
+                            pem_input['NTG'] = None
+                        else:
+                            tmp = self.ecl_case.cell_data('NTG')
+                            pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
+                    else:
+                        tmp = self.ecl_case.cell_data('NTG')
+                        pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
 
-                grdecl.write(f'En_{str(self.ensemble_member)}/Vs{v+1}.grdecl', {
+                    for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
+                        tmp = self.ecl_case.cell_data(var, time)
+                        # only active, and conv. to float
+                        pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
+
+                    if 'press_conv' in self.pem_input:
+                        pem_input['PRESSURE'] = pem_input['PRESSURE'] * \
+                            self.pem_input['press_conv']
+
+                    tmp = self.ecl_case.cell_data('PRESSURE', 1)
+                    if hasattr(self.pem, 'p_init'):
+                        P_init = self.pem.p_init*np.ones(tmp.shape)[~tmp.mask]
+                    else:
+                        # initial pressure is first
+                        P_init = np.array(tmp[~tmp.mask], dtype=float)
+
+                    if 'press_conv' in self.pem_input:
+                        P_init = P_init*self.pem_input['press_conv']
+
+                    saturations = [1 - (pem_input['SWAT'] + pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)]
+                                   for ph in phases]
+                    # Get the pressure
+                    self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
+                                        ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
+                                        ensembleMember=self.ensemble_member)
+
+                    grdecl.write(f'En_{str(self.ensemble_member)}/Vs{v+1}.grdecl', {
                                  'Vs': self.pem.getShearVel()*.1, 'DIMENS': grid['DIMENS']}, multi_file=False)
-                grdecl.write(f'En_{str(self.ensemble_member)}/Vp{v+1}.grdecl', {
+                    grdecl.write(f'En_{str(self.ensemble_member)}/Vp{v+1}.grdecl', {
                                  'Vp': self.pem.getBulkVel()*.1, 'DIMENS': grid['DIMENS']}, multi_file=False)
-                grdecl.write(f'En_{str(self.ensemble_member)}/rho{v+1}.grdecl',
+                    grdecl.write(f'En_{str(self.ensemble_member)}/rho{v+1}.grdecl',
                                  {'rho': self.pem.getDens(), 'DIMENS': grid['DIMENS']}, multi_file=False)
 
             current_folder = os.getcwd()
@@ -622,7 +665,6 @@ class flow_barycenter(flow):
                     if self.true_prim[1][prim_ind] in self.pem_input['vintage']:
                         v = self.pem_input['vintage'].index(self.true_prim[1][prim_ind])
                         self.pred_data[prim_ind][key] = self.bar_result[v].flatten()
-                        
 
 class flow_avo(flow_sim2seis):
     def __init__(self, input_dict=None, filename=None, options=None, **kwargs):
@@ -731,81 +773,140 @@ class flow_avo(flow_sim2seis):
                 else ecl.EclipseCase(folder + self.file + '.DATA')
             grid = self.ecl_case.grid()
 
-            #phases = self.ecl_case.init.phases
-            self.sats = []
-            vintage = []
-            # loop over seismic vintages
-            for v, assim_time in enumerate(self.pem_input['vintage']):
-                time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
+            phases = self.ecl_case.init.phases
+            if 'OIL' in phases and 'WAT' in phases and 'GAS' in phases:  # This should be extended
+                vintage = []
+                # loop over seismic vintages
+                for v, assim_time in enumerate(self.pem_input['vintage']):
+                    time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
                            dt.timedelta(days=assim_time)
-                # extract dynamic variables from simulation run
-                self.calc_pem(time)
-                # vp, vs, density in reservoir
-                # The properties in pem is only given in the active cells
-                # indices of active cells:
-                if grid['ACTNUM'].shape[0] == self.NX:
-                    true_indices = np.where(grid['ACTNUM'])
-                elif grid['ACTNUM'].shape[0] == self.NZ:
-                    actnum = np.transpose(grid['ACTNUM'], (2, 1, 0))
-                    true_indices = np.where(actnum)
-                else:
-                    print('warning: dimension mismatch in line 750 flow_rock.py')
+                    pem_input = {}
+                    # get active porosity
+                    tmp = self.ecl_case.cell_data('PORO')
+                    if 'compaction' in self.pem_input:
+                        multfactor = self.ecl_case.cell_data('PORV_RC', time)
 
-                if len(self.pem.getBulkVel()) == len(true_indices[0]):
-                    self.vp = np.zeros(grid['DIMENS'])
-                    self.vp[true_indices] = (self.pem.getBulkVel() * .1)
-                    self.vs = np.zeros(grid['DIMENS'])
-                    self.vs[true_indices] = (self.pem.getShearVel() * .1)
-                    self.rho = np.zeros(grid['DIMENS'])
-                    self.rho[true_indices] = (self.pem.getDens())
-                else:
+                        pem_input['PORO'] = np.array(multfactor[~tmp.mask] * tmp[~tmp.mask], dtype=float)
+                        #pem_input['PORO'] = np.array(self._reformat3D_then_flatten(multfactor * tmp), dtype=float)
+                    else:
+                        pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
+                        #pem_input['PORO'] = np.array(self._reformat3D_then_flatten(tmp), dtype=float)
+
+                    # get active NTG if needed
+                    if 'ntg' in self.pem_input:
+                        if self.pem_input['ntg'] == 'no':
+                            pem_input['NTG'] = None
+                        else:
+                            tmp = self.ecl_case.cell_data('NTG')
+                            pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
+                            #pem_input['NTG'] = np.array(self._reformat3D_then_flatten(tmp), dtype=float)
+                    else:
+                        tmp = self.ecl_case.cell_data('NTG')
+                        pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
+                        #pem_input['NTG'] = np.array(self._reformat3D_then_flatten(tmp), dtype=float)
+
+                    for var in ['SWAT', 'SGAS', 'PRESSURE', 'RS']:
+                        tmp = self.ecl_case.cell_data(var, time)
+                        # only active, and conv. to float
+                        pem_input[var] = np.array(tmp[~tmp.mask], dtype=float)
+                        #pem_input[var] = np.array(self._reformat3D_then_flatten(tmp), dtype=float)
+
+                    if 'press_conv' in self.pem_input:
+                        pem_input['PRESSURE'] = pem_input['PRESSURE'] * \
+                                                self.pem_input['press_conv']
+                        #pem_input['PRESSURE'] = self._reformat3D_then_flatten(pem_input['PRESSURE'] *
+                        #                                                      self.pem_input['press_conv'])
+
+                    tmp = self.ecl_case.cell_data('PRESSURE', 0)
+                    if hasattr(self.pem, 'p_init'):
+                        P_init = self.pem.p_init * np.ones(tmp.shape)[~tmp.mask]
+                        #P_init = self._reformat3D_then_flatten(self.pem.p_init.reshape(tmp.shape) * np.ones(tmp.shape))
+                    else:
+                        # initial pressure is first
+                        P_init = np.array(tmp[~tmp.mask], dtype=float)
+                        #P_init = np.array(self._reformat3D_then_flatten(tmp), dtype=float)
+
+                    if 'press_conv' in self.pem_input:
+                        P_init = P_init * self.pem_input['press_conv']
+                        #P_init = self._reformat3D_then_flatten(P_init * self.pem_input['press_conv'])
+
+                    saturations = [
+                        1 - (pem_input['SWAT'] + pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)]
+                        for ph in phases]
+                    #saturations = [self._reformat3D_then_flatten(1 - (pem_input['SWAT'] + pem_input['SGAS']))
+                    #                if ph == 'OIL' else pem_input['S{}'.format(ph)] for ph in phases]
+
+                    # Get the pressure
+                    if hasattr(self, 'ensemble_member') and (self.ensemble_member is not None) and \
+                            (self.ensemble_member >= 0):
+                        self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
+                                            ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
+                                            ensembleMember=self.ensemble_member)
+                    else:
+                        self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
+                                        ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init)
+
+                    #grdecl.write(f'En_{str(self.ensemble_member)}/Vs{v + 1}.grdecl', {
+                    #    'Vs': self.pem.getShearVel() * .1, 'DIMENS': grid['DIMENS']}, multi_file=False)
+                    #grdecl.write(f'En_{str(self.ensemble_member)}/Vp{v + 1}.grdecl', {
+                    #    'Vp': self.pem.getBulkVel() * .1, 'DIMENS': grid['DIMENS']}, multi_file=False)
+                    #grdecl.write(f'En_{str(self.ensemble_member)}/rho{v + 1}.grdecl',
+                    #             {'rho': self.pem.getDens(), 'DIMENS': grid['DIMENS']}, multi_file=False)
+
+                    # vp, vs, density
                     self.vp = (self.pem.getBulkVel() * .1).reshape((self.NX, self.NY, self.NZ), order='F')
                     self.vs = (self.pem.getShearVel() * .1).reshape((self.NX, self.NY, self.NZ), order='F')
                     self.rho = (self.pem.getDens()).reshape((self.NX, self.NY, self.NZ), order='F')  # in the unit of g/cm^3
 
-                save_dic = {'vp': self.vp, 'vs': self.vs, 'rho': self.vp}
-                if save_folder is not None:
-                    file_name = save_folder + os.sep + f"vp_vs_rho_vint{v}.npz" if save_folder[-1] != os.sep \
-                        else save_folder + f"vp_vs_rho_vint{v}.npz"
-                else:
-                    if hasattr(self, 'ensemble_member') and (self.ensemble_member is not None) and \
-                            (self.ensemble_member >= 0):
-                        file_name = folder + os.sep + f"vp_vs_rho_vint{v}.npz" if folder[-1] != os.sep \
-                            else folder + f"vp_vs_rho_vint{v}.npz"
+                    save_dic = {'vp': self.vp, 'vs': self.vs, 'rho': self.vp}
+                    if save_folder is not None:
+                        file_name = save_folder + os.sep + f"vp_vs_rho_vint{v}.npz" if save_folder[-1] != os.sep \
+                            else save_folder + f"vp_vs_rho_vint{v}.npz"
                     else:
-                        file_name = os.getcwd() + os.sep + f"vp_vs_rho_vint{v}.npz"
-
-                #with open(file_name, "wb") as f:
-                #    dump(**save_dic, f)
-                np.savez(file_name, **save_dic)
-
-                # avo data
-                self._calc_avo_props()
-
-                avo = self.avo_data.flatten(order="F")
-
-                # XLUO: self.ensemble_member < 0 => reference reservoir model in synthetic case studies
-                # the corresonding (noisy) data are observations in data assimilation
-                if 'add_synthetic_noise' in self.input_dict and self.ensemble_member < 0:
-                    non_nan_idx = np.argwhere(~np.isnan(avo))
-                    data_std = np.std(avo[non_nan_idx])
-                    if self.input_dict['add_synthetic_noise'][0] == 'snr':
-                        noise_std = np.sqrt(self.input_dict['add_synthetic_noise'][1]) * data_std
-                        avo[non_nan_idx] += noise_std * np.random.randn(avo[non_nan_idx].size, 1)
-                else:
-                    noise_std = 0.0  # simulated data don't contain noise
-
-                save_dic = {'avo': avo, 'noise_std': noise_std, **self.avo_config}
-                if save_folder is not None:
-                    file_name = save_folder + os.sep + f"avo_vint{v}.npz" if save_folder[-1] != os.sep \
-                            else save_folder + f"avo_vint{v}.npz"
-                else:
-                    file_name = folder + os.sep + f"avo_vint{v}.npz" if folder[-1] != os.sep \
-                        else folder + f"avo_vint{v}.npz"
+                        if hasattr(self, 'ensemble_member') and (self.ensemble_member is not None) and \
+                                (self.ensemble_member >= 0):
+                            file_name = folder + os.sep + f"vp_vs_rho_vint{v}.npz" if folder[-1] != os.sep \
+                                else folder + f"vp_vs_rho_vint{v}.npz"
+                        else:
+                            file_name = os.getcwd() + os.sep + f"vp_vs_rho_vint{v}.npz"
 
                     #with open(file_name, "wb") as f:
                     #    dump(**save_dic, f)
-                np.savez(file_name, **save_dic)
+                    np.savez(file_name, **save_dic)
+
+                    # avo data
+                    self._calc_avo_props()
+
+                    avo = self.avo_data.flatten(order="F")
+
+                    # XLUO: self.ensemble_member < 0 => reference reservoir model in synthetic case studies
+                    # the corresonding (noisy) data are observations in data assimilation
+                    if 'add_synthetic_noise' in self.input_dict and self.ensemble_member < 0:
+                        non_nan_idx = np.argwhere(~np.isnan(avo))
+                        data_std = np.std(avo[non_nan_idx])
+                        if self.input_dict['add_synthetic_noise'][0] == 'snr':
+                            noise_std = np.sqrt(self.input_dict['add_synthetic_noise'][1]) * data_std
+                            avo[non_nan_idx] += noise_std * np.random.randn(avo[non_nan_idx].size, 1)
+                    else:
+                        noise_std = 0.0  # simulated data don't contain noise
+
+                    save_dic = {'avo': avo, 'noise_std': noise_std, **self.avo_config}
+                    if save_folder is not None:
+                        file_name = save_folder + os.sep + f"avo_vint{v}.npz" if save_folder[-1] != os.sep \
+                            else save_folder + f"avo_vint{v}.npz"
+                    else:
+                        # if hasattr(self, 'ensemble_member') and (self.ensemble_member is not None) and \
+                        #         (self.ensemble_member >= 0):
+                        #     file_name = folder + os.sep + f"avo_vint{v}.npz" if folder[-1] != os.sep \
+                        #         else folder + f"avo_vint{v}.npz"
+                        # else:
+                        #     file_name = os.getcwd() + os.sep + f"avo_vint{v}.npz"
+                        file_name = folder + os.sep + f"avo_vint{v}.npz" if folder[-1] != os.sep \
+                            else folder + f"avo_vint{v}.npz"
+
+                    #with open(file_name, "wb") as f:
+                    #    dump(**save_dic, f)
+                    np.savez(file_name, **save_dic)
 
         return success
 
@@ -843,86 +944,7 @@ class flow_avo(flow_sim2seis):
                     tmpl.render_context(ctx)
 
     def calc_pem(self, time):
-        # fluid phases written to restart file from simulator run
-        phases = self.ecl_case.init.phases
 
-        pem_input = {}
-        # get active porosity
-        tmp = self.ecl_case.cell_data('PORO')
-        if 'compaction' in self.pem_input:
-            multfactor = self.ecl_case.cell_data('PORV_RC', time)
-
-            pem_input['PORO'] = np.array(multfactor[~tmp.mask] * tmp[~tmp.mask], dtype=float)
-        else:
-            pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
-
-        # get active NTG if needed
-        if 'ntg' in self.pem_input:
-            if self.pem_input['ntg'] == 'no':
-                pem_input['NTG'] = None
-            else:
-                tmp = self.ecl_case.cell_data('NTG')
-                pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
-        else:
-            tmp = self.ecl_case.cell_data('NTG')
-            pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
-
-
-
-        if 'RS' in self.pem_input: #ecl_case.cell_data: # to be more robust!
-            tmp = self.ecl_case.cell_data('RS', time)
-            pem_input['RS'] = np.array(tmp[~tmp.mask], dtype=float)
-        else:
-            pem_input['RS'] = None
-            print('RS is not a variable in the ecl_case')
-
-        # extract pressure
-        tmp = self.ecl_case.cell_data('PRESSURE', time)
-        pem_input['PRESSURE'] = np.array(tmp[~tmp.mask], dtype=float)
-
-        if 'press_conv' in self.pem_input:
-            pem_input['PRESSURE'] = pem_input['PRESSURE'] * self.pem_input['press_conv']
-
-
-        if hasattr(self.pem, 'p_init'):
-            P_init = self.pem.p_init * np.ones(tmp.shape)[~tmp.mask]
-        else:
-            P_init = np.array(tmp[~tmp.mask], dtype=float)  # initial pressure is first
-
-        if 'press_conv' in self.pem_input:
-            P_init = P_init * self.pem_input['press_conv']
-
-        # extract saturations
-        if 'OIL' in phases and 'WAT' in phases and 'GAS' in phases:  # This should be extended
-            for var in phases:
-                if var in ['WAT', 'GAS']:
-                    tmp = self.ecl_case.cell_data('S{}'.format(var), time)
-                    pem_input['S{}'.format(var)] = np.array(tmp[~tmp.mask], dtype=float)
-
-            saturations = [1 - (pem_input['SWAT'] + pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)]
-                           for ph in phases]
-        elif 'OIL' in phases and 'GAS' in phases:  # Smeaheia model
-            for var in phases:
-                if var in ['GAS']:
-                    tmp = self.ecl_case.cell_data('S{}'.format(var), time)
-                    pem_input['S{}'.format(var)] = np.array(tmp[~tmp.mask], dtype=float)
-            saturations = [1 - (pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)] for ph in phases]
-        else:
-            print('Type and number of fluids are unspecified in calc_pem')
-
-        # fluid saturations in dictionary
-        tmp_s = {f'S{ph}': saturations[i] for i, ph in enumerate(phases)}
-        self.sats.extend([tmp_s])
-
-        # Get elastic parameters
-        if hasattr(self, 'ensemble_member') and (self.ensemble_member is not None) and \
-                (self.ensemble_member >= 0):
-            self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
-                                ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
-                                ensembleMember=self.ensemble_member)
-        else:
-            self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
-                                ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init)
 
     def _get_avo_info(self, avo_config=None):
         """

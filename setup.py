@@ -43,6 +43,7 @@ setup(
         'tomli-w',
         'pyyaml',
         'libecalc',
-        'scikit-learn'
+        'scikit-learn',
+        'pylops'
     ] + EXTRAS['doc'],
 )

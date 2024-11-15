@@ -580,8 +580,12 @@ class Assimilate:
                     for k in pred_data_tmp[i]:  # DATATYPE
                         if vintage < len(self.ensemble.sparse_info['mask']) and \
                                 len(pred_data_tmp[i][k]) == int(np.sum(self.ensemble.sparse_info['mask'][vintage])):
-                            self.ensemble.pred_data[i][k] = np.zeros(
-                                (len(self.ensemble.obs_data[i][k]), self.ensemble.ne))
+                            if self.ensemble.keys_da['daalg'][1] == 'gies':
+                                self.ensemble.pred_data[i][k] = np.zeros(
+                                    (len(self.ensemble.obs_data[i][k]), self.ensemble.ne+1))
+                            else:
+                                self.ensemble.pred_data[i][k] = np.zeros(
+                                    (len(self.ensemble.obs_data[i][k]), self.ensemble.ne))
                             for m in range(pred_data_tmp[i][k].shape[1]):
                                 data_array = self.ensemble.compress(pred_data_tmp[i][k][:, m], vintage,
                                                                     self.ensemble.sparse_info['use_ensemble'])

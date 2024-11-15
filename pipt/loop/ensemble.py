@@ -732,7 +732,7 @@ class Ensemble(PETEnsemble):
 
             data_array = None
 
-        elif aug_coeff is None:
+        elif aug_coeff is None: # compress predicted data
 
             data_array, wdec_rec = self.sparse_data[vintage].compress(data)
             rec = self.sparse_data[vintage].reconstruct(
@@ -741,7 +741,7 @@ class Ensemble(PETEnsemble):
                 self.data_rec.append([])
             self.data_rec[vintage].append(rec)
 
-        elif not aug_coeff:
+        elif not aug_coeff: # compress true data, aug_coeff = false
 
             options = copy(self.sparse_info)
             # find the correct mask for the vintage
