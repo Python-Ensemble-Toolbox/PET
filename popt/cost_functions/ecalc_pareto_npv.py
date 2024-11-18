@@ -37,6 +37,8 @@ def ecalc_pareto_npv(pred_data, kwargs):
 
     from libecalc.application.energy_calculator import EnergyCalculator
     from libecalc.common.time_utils import Frequency
+    from ecalc_cli.infrastructure.file_resource_service import FileResourceService
+    from libecalc.presentation.yaml.file_configuration_service import FileConfigurationService
     from libecalc.presentation.yaml.model import YamlModel
 
     # Get the necessary input
@@ -91,11 +93,21 @@ def ecalc_pareto_npv(pred_data, kwargs):
 
         # Config
         model_path = HERE / "ecalc_config.yaml"  # "drogn.yaml"
-        yaml_model = YamlModel(path=model_path, output_frequency=Frequency.NONE)
+        configuration_service = FileConfigurationService(configuration_path=model_path)
+        resource_service = FileResourceService(working_directory=model_path.parent)
+        yaml_model = YamlModel(
+            configuration_service=configuration_service,
+            resource_service=resource_service,
+            output_frequency=Frequency.NONE,
+        )
+        #yaml_model = YamlModel(path=model_path, output_frequency=Frequency.NONE)
         # comps = {c.name: id_hash for (id_hash, c) in yaml_model.graph.components.items()}
 
         # Compute energy, emissions
-        model = EnergyCalculator(graph=yaml_model.graph)
+        # model = EnergyCalculator(energy_model=yaml_model, expression_evaluator=yaml_model.variables)
+        # consumer_results = model.evaluate_energy_usage()
+        # emission_results = model.evaluate_emissions()
+        model = EnergyCalculator(graph=yaml_model.get_graph())
         consumer_results = model.evaluate_energy_usage(yaml_model.variables)
         emission_results = model.evaluate_emissions(yaml_model.variables, consumer_results)
 
@@ -151,7 +163,7 @@ def results_as_df(yaml_model, results, getter) -> pd.DataFrame:
     for id_hash in results:
         res = results[id_hash]
         res = getter(res)
-        component = yaml_model.graph.get_node(id_hash)
+        component = yaml_model.get_graph().get_node(id_hash)
         df[component.name] = res.values
         attrs[component.name] = {'id_hash': id_hash,
                                  'kind': type(component).__name__,
