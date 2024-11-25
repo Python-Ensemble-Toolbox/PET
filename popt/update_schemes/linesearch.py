@@ -13,10 +13,30 @@ from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
 
 
-
 class LineSearch(Optimize):
+    '''
+    A Line Search Optimizer.
 
-    def  __init__(self, fun, x, jac, hess=None, args=(), method='GD', bounds=None, callback=None,**options):
+    Parameters
+    ----------
+    fun: callable
+        Objective function, fun(x, *args).
+    
+    x: ndarray
+        Initial control vector.
+
+    jac: callable
+        Jacobian/Gradient function, jac(x, *args)
+    
+    method: str
+        Which optimization method to use. Default is 'GD' for 'Gradient Descent'.
+        Other options are 'BFGS' for the 'Broyden–Fletcher–Goldfarb–Shanno' method.   
+        TODO: Include 'Newton-method'.
+    
+    hess: callable
+        Hessian function.
+    '''
+    def  __init__(self, fun, x, jac, method='GD', hess=None, args=(), bounds=None, callback=None,**options):
 
         # init PETEnsemble
         super(LineSearch, self).__init__(**options)
@@ -45,7 +65,6 @@ class LineSearch(Optimize):
         self.hessian         = None
 
         # Initialize line-search parameters (scipy defaults for c1, and c2)
-        self.alpha_max  = options.get('alpha_max', 100)
         self.ls_options = {'c1': options.get('c1', 0.0001),
                            'c2': options.get('c2', 0.9),
                            'maxiter': options.get('alpha_maxiter', 5)}
@@ -67,7 +86,10 @@ class LineSearch(Optimize):
             # Init
             if self.method == 'BFGS':
                 self.H = options.get('H0', np.eye(x.size))
-                self.alpha_max = 1.0
+                self.alpha_max  = options.get('alpha_max', 1.0)
+            else:
+                self.alpha_max  = options.get('alpha_max', 100)
+
 
             # This sets the inital step-step such that the initial dx is sqrt(d)
             self.fold = self.fk + np.sqrt(x.size)*np.linalg.norm(self.gk)/2  
@@ -80,10 +102,9 @@ class LineSearch(Optimize):
             if self.logger is not None:
                 self.logger.info('       ====== Running optimization - EnOpt ======')
                 self.logger.info('\n'+pprint.pformat(self.options))
-
-                info_str = f'       {'iter.':<10} {'fun':<15} {'step-size':<15} {'|grad|':<15}'
-                self.logger.info(info_str)
+                self.logger.info(f'       {'iter.':<10} {'fun':<15} {'step-size':<15} {'|grad|':<15}')
                 self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {self.alpha:<15.4e}  {la.norm(self.gk):<15.4e}')
+                self.logger.info('')
 
         self.run_loop() 
 
@@ -275,33 +296,61 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
 
     # Perform Line-Search
     step_size, fnew, fold, i = _lines_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter)
-    #dcsrch = DCSRCH(phi, dphi, ftol=c1, gtol=c2, xtol=xtol, stpmin=amin, stpmax=amax)
-    #step_size, fnew, fold, msg = dcsrch(a1, phi0=phi0, derphi0=dphi0, maxiter=maxiter)
 
     if step_size is None:
         _log(f'Line search method did not converge')
         return None, fnew, None, None, i
     else:
+        step_size = min(step_size, amax)
         return step_size, fnew, fold, dphi.gnew, i 
 
 
 def _lines_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter):
     
     ai = a1
+    a_list   = []
+    phi_list = []
     
     for i in range(maxiter+1):
         phi_i = phi(ai)
+
+        a_list.append(ai)
+        phi_list.append(phi_i)
 
         if phi_i < phi0 + c1*ai*dphi0:
             dphi_i = dphi(ai)
             if abs(dphi_i) <= abs(c2*dphi0):
                 return ai, phi_i, phi0, i
-            
-        # set new alpha
-        ai = ai/2
+
+        # Set new alpha
+        if i == 0:
+            ai = quadratic_interpolation(a_list[i], phi_list[i], phi0, dphi0) 
+        else:
+            ai = qubic_interpolation(a_list[i], a_list[i-1], phi_list[i], phi_list[i-1], phi0, dphi0)
 
     # did not converge
     return None, None, phi0, i
+
+
+def quadratic_interpolation(a, phi_a, phi0, dphi0):
+    a_new = (dphi0*a**2)/(2*(phi_a - phi0 - dphi0*a))
+    return a_new
+
+def qubic_interpolation(ai, aold, phi_i, phi_old, phi0, dphi0):
+    frac = 1/((aold**2)*(ai**2)*(ai-aold))
+    mat = np.array([[aold**2, -ai**2],
+                    [-aold**3, ai**3]])
+    vec = np.array([[phi_i-phi0-dphi0*ai], [phi_old-phi_i-dphi0*aold]])
+    k = frac*np.squeeze(mat@vec)
+
+    sqrt_term = k[1]**2 - 3*k[0]*dphi0
+    if sqrt_term >= 0:
+        a_new =  (-k[1] + np.sqrt(sqrt_term))/(3*k[0])
+    else:
+        a_new = ai/2
+
+    return a_new
+
 
 
 
