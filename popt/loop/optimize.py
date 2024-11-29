@@ -93,7 +93,7 @@ class Optimize:
         self.rnd = None
 
         # Max number of iterations
-        self.max_iter = __set__variable('maxiter', 10)
+        self.max_iter = __set__variable('maxiter', 20)
 
         # Restart flag
         self.restart = __set__variable('restart', False)

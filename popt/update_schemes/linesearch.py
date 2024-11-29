@@ -5,15 +5,15 @@ import pprint
 import warnings
 
 from numpy import linalg as la
+from functools import cache
 from scipy.optimize import OptimizeResult
-#from scipy.optimize import line_search
+from scipy.optimize._dcsrch import DCSRCH
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
 
-
-class LineSearch(Optimize):
+def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callback=None, **options):
     '''
     A Line Search Optimizer.
 
@@ -33,13 +33,76 @@ class LineSearch(Optimize):
         Other options are 'BFGS' for the 'Broyden–Fletcher–Goldfarb–Shanno' method.   
         TODO: Include 'Newton-method'.
     
-    hess: callable
-        Hessian function.
+    hess: callable, optional
+        Hessian function, hess(x, *args). Default is None. 
+    
+    args: tuple, optional
+        Args passed to fun, jac and hess.
+
+    bounds: list, optional
+        (min, max) pairs for each element in x. None is used to specify no bound.
+    
+    callback: callable, optional
+        A callable called after each successful iteration. The class instance of LineSearch
+        is passed as the only argument to the callback function: callback(self) 
+    
+    **options: keyword arguments, optional
+
+            Optimization options:
+                - maxiter: maximum number of iterations. Default is 20.
+                - alpha_maxiter: maximum number of iterations for the line search. Default is 10.
+                - alpha_max: maximum step-size. Default is 1 when method='BFGS', and 100 when method='GD'
+                - alpha0: initial step-size (for the first iteration). Default is None.
+                - c1: tolerance parameter for the Armijo condition. Default is 1e-4.
+                - c2: tolerance parameter for the Curvature condition. Default is 0.9.
+                - ls_method: method for proposing new step-size in the line search.
+                  If ls_method=0: step-size is cut in half.
+                  If ls_method=1: the DCSRCH implementation in scipy is used. Default is 0.
+                - saveit: If True, the results from each iteration is saved. Default is True.
+                - save_folder: Name of folder to save the results to. Defaul is ./ (the current directory).
+                - f0: function value of the intial control. Default is None.
+                - g0: jacobian of the initial control. Default is None. 
+                - H0: initial inverse of hessian (only if method = 'BFGS'). Default is None. 
+                - resample: Number of jacobian re-computations allowed if a line search fails. Default is 0.
+                - savedata: further specification of which class variables to save to the result files.
+                - restart: restart optimization from a restart file (default false)
+                - restartsave: save a restart file after each successful iteration (defalut false)
+    
+    Returns
+    -------
+    res: OptimizeResult
+        Important attributes:
+            - x: optimized control
+            - fun: objective function value
+            - nfev: number of function evaluations
+            - njev: number of jacobian evaluations
+    
+    Example use
+    -----------
+    >>> import numpy as np
+    >>> from scipy.optimize import rosen, rosen_der
+    >>> from popt.update_schemes.linesearch import LineSearch
+    
+    >>> x0 = np.random.uniform(-3, 3, 2)
+    >>> kwargs = {'alpha_max': 1,
+                  'maxiter': 100,
+                  'alpha_maxiter': 10,
+                  'saveit': False,
+                  'alpha_iter_method': 1}
+
+    >>> res = LineSearch(fun=rosen, x=x0, jac=rosen_der, method='BFGS', **kwargs)
+    >>> print(res)
     '''
-    def  __init__(self, fun, x, jac, method='GD', hess=None, args=(), bounds=None, callback=None,**options):
+    obj = LineSearchClass(fun, x, jac, method, hess, args, bounds, callback, **options)
+    return obj.optimize_result
+
+
+class LineSearchClass(Optimize):
+
+    def  __init__(self, fun, x, jac, method='GD', hess=None, args=(), bounds=None, callback=None, **options):
 
         # init PETEnsemble
-        super(LineSearch, self).__init__(**options)
+        super(LineSearchClass, self).__init__(**options)
 
         # Set input as class variables
         self.options = options   # options
@@ -58,16 +121,17 @@ class LineSearch(Optimize):
             self.callback = None
         
         # Set other optimization parameters
-        self.normalize       = options.get('normalize', True)
+        self.normalize       = options.get('normalize', False)
         self.iter_resamp_max = options.get('resample', 0)
-        self.saveit          = options.get('saveit', False)
+        self.saveit          = options.get('saveit', True)
         self.alpha           = 0.0
         self.hessian         = None
 
         # Initialize line-search parameters (scipy defaults for c1, and c2)
         self.ls_options = {'c1': options.get('c1', 0.0001),
                            'c2': options.get('c2', 0.9),
-                           'maxiter': options.get('alpha_maxiter', 5)}
+                           'maxiter': options.get('alpha_maxiter', 5),
+                           'ls_method':  options.get('alpha_iter_method', 0)}
         
         # Calculate objective function of startpoint
         if not self.restart:
@@ -83,16 +147,20 @@ class LineSearch(Optimize):
             if g0 is None: self.gk = self._jac(self.xk)
             else: self.fk = self.f0
 
-            # Init
+            # Choose method
             if self.method == 'BFGS':
                 self.H = options.get('H0', np.eye(x.size))
                 self.alpha_max  = options.get('alpha_max', 1.0)
             else:
                 self.alpha_max  = options.get('alpha_max', 100)
 
-
-            # This sets the inital step-step such that the initial dx is sqrt(d)
-            self.fold = self.fk + np.sqrt(x.size)*np.linalg.norm(self.gk)/2  
+            # Inital step-size
+            alpha0 = options.get('alpha0', None)
+            if alpha0 is None:
+                # This sets the inital step-step such that the initial dx is sqrt(d)
+                self.fold = self.fk + np.sqrt(x.size)*np.linalg.norm(self.gk)/2
+            else:
+                self.ls_options['a0'] = alpha0
 
             # Save Results
             self.optimize_result = self.update_results()
@@ -120,7 +188,7 @@ class LineSearch(Optimize):
                'nit': self.iteration,
                'args': self.args,
                'step-size': self.alpha,
-               'save_folder': self.options['save_folder']}
+               'save_folder': self.options.get('save_folder', './')}
 
         if 'savedata' in self.options:
             # Make sure "SAVEDATA" gives a list
@@ -190,7 +258,7 @@ class LineSearch(Optimize):
                  'fold': self.fold,
                  'logger': self.logger}
         
-        step_size, fnew, self.fold, gnew, i = line_search_step(**ls_kw, **self.ls_options)
+        step_size, fnew, self.fold, gnew = line_search_step(**ls_kw, **self.ls_options)
         if not step_size is None:
 
             xold = self.xk
@@ -253,10 +321,11 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
 
     # Get kwargs
     fold = kwargs.get('fold', None)
-    xtol = kwargs.get('xtol', 1e-10)
+    xtol = kwargs.get('xtol', 1e-14)
     amax = kwargs.get('amax', 1.0)
-    amin = kwargs.get('amin', 1e-8)
+    amin = kwargs.get('amin', 0)
     logger = kwargs.get('logger', None)
+    ls_method = kwargs.get('ls_method', 0)
 
     def _log(message):
         if logger is None:
@@ -264,10 +333,12 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
         else:
             logger.info(message)
     
+    @cache
     def phi(a):
         _log('Evaluating Armijo Condition')
         return fun(xk + a*pk)
     
+    @cache
     def dphi(a):
         _log('Evaluating Curvature Condition')
         gnew = grad(xk + a*pk)
@@ -287,25 +358,29 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
 
     # Initial step-size
     if fold is None:
-        a0 = kwargs.get('a0', 1/np.linalg.norm(pk))
+        a0 = kwargs.get('a0', 0.25/np.linalg.norm(pk))
     else:
         # From "Numerical Optimization"
-        a0 = 2*abs(phi0 - fold)/max(abs(dphi0), 1e-20)
+        a0 = 2*abs(phi0 - fold)/abs(dphi0)
 
     a1 = min(amax, 1.01*a0)
 
     # Perform Line-Search
-    step_size, fnew, fold, i = _lines_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter)
+    if ls_method == 0:
+        step_size, fnew, fold = _line_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter)
+    elif ls_method == 1:
+        dcsrch = DCSRCH(phi, dphi, c1, c2, xtol, amin, amax)
+        step_size, fnew, fold, _ = dcsrch(a1, phi0=phi0, derphi0=dphi0, maxiter=maxiter)
 
     if step_size is None:
         _log(f'Line search method did not converge')
-        return None, fnew, None, None, i
+        return None, fnew, None, None
     else:
         step_size = min(step_size, amax)
-        return step_size, fnew, fold, dphi.gnew, i 
+        return step_size, fnew, fold, dphi.gnew  
+    
 
-
-def _lines_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter):
+def _line_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter):
     
     ai = a1
     a_list   = []
@@ -320,20 +395,17 @@ def _lines_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter):
         if phi_i < phi0 + c1*ai*dphi0:
             dphi_i = dphi(ai)
             if abs(dphi_i) <= abs(c2*dphi0):
-                return ai, phi_i, phi0, i
-
+                return ai, phi_i, phi0
+        
         # Set new alpha
-        if i == 0:
-            ai = quadratic_interpolation(a_list[i], phi_list[i], phi0, dphi0) 
-        else:
-            ai = qubic_interpolation(a_list[i], a_list[i-1], phi_list[i], phi_list[i-1], phi0, dphi0)
+        ai = ai/2
 
     # did not converge
-    return None, None, phi0, i
+    return None, None, phi0
 
-
+# Not used
 def quadratic_interpolation(a, phi_a, phi0, dphi0):
-    a_new = (dphi0*a**2)/(2*(phi_a - phi0 - dphi0*a))
+    a_new = - (dphi0*a**2)/(2*(phi_a - phi0 - dphi0*a))
     return a_new
 
 def qubic_interpolation(ai, aold, phi_i, phi_old, phi0, dphi0):
@@ -350,12 +422,3 @@ def qubic_interpolation(ai, aold, phi_i, phi_old, phi0, dphi0):
         a_new = ai/2
 
     return a_new
-
-
-
-
-
-
-
-
-    
