@@ -8,6 +8,7 @@ from numpy import linalg as la
 from functools import cache
 from scipy.optimize import OptimizeResult
 from scipy.optimize._dcsrch import DCSRCH
+from scipy.optimize._linesearch import scalar_search_wolfe2
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
@@ -51,13 +52,14 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
             Optimization options:
                 - maxiter: maximum number of iterations. Default is 20.
                 - alpha_maxiter: maximum number of iterations for the line search. Default is 10.
-                - alpha_max: maximum step-size. Default is 1 when method='BFGS', and 100 when method='GD'
-                - alpha0: initial step-size (for the first iteration). Default is None.
+                - alpha_max: maximum step-size. Default is 1000
+                - alpha0: initial step-size (for the first iteration). Default is 0.25/inf-norm(g0).
                 - c1: tolerance parameter for the Armijo condition. Default is 1e-4.
                 - c2: tolerance parameter for the Curvature condition. Default is 0.9.
-                - ls_method: method for proposing new step-size in the line search.
-                  If ls_method=0: step-size is cut in half.
-                  If ls_method=1: the DCSRCH implementation in scipy is used. Default is 0.
+                - alpha_iter_method: method for proposing new step-size in the line search.
+                  If alpha_iter_method=0: step-size is cut in half.
+                  If alpha_iter_method=1: polynomial interpolation is used to propose new step-size (Default).  
+                  If alpha_iter_method=2: the DCSRCH implementation in scipy is used.
                 - saveit: If True, the results from each iteration is saved. Default is True.
                 - save_folder: Name of folder to save the results to. Defaul is ./ (the current directory).
                 - f0: function value of the intial control. Default is None.
@@ -82,14 +84,10 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
     >>> import numpy as np
     >>> from scipy.optimize import rosen, rosen_der
     >>> from popt.update_schemes.linesearch import LineSearch
-    
     >>> x0 = np.random.uniform(-3, 3, 2)
-    >>> kwargs = {'alpha_max': 1,
-                  'maxiter': 100,
+    >>> kwargs = {'maxiter': 100,
                   'alpha_maxiter': 10,
-                  'saveit': False,
-                  'alpha_iter_method': 1}
-
+                  'saveit': False}
     >>> res = LineSearch(fun=rosen, x=x0, jac=rosen_der, method='BFGS', **kwargs)
     >>> print(res)
     '''
@@ -128,10 +126,10 @@ class LineSearchClass(Optimize):
         self.hessian         = None
 
         # Initialize line-search parameters (scipy defaults for c1, and c2)
-        self.ls_options = {'c1': options.get('c1', 0.0001),
+        self.ls_options = {'c1': options.get('c1', 1e-4),
                            'c2': options.get('c2', 0.9),
                            'maxiter': options.get('alpha_maxiter', 5),
-                           'ls_method':  options.get('alpha_iter_method', 0)}
+                           'ls_method':  options.get('alpha_iter_method', 1)}
         
         # Calculate objective function of startpoint
         if not self.restart:
@@ -140,6 +138,7 @@ class LineSearchClass(Optimize):
             # Check for initial values
             f0 = options.get('f0', None)
             g0 = options.get('g0', None)
+            self.fold = None
 
             if f0 is None: self.fk = self._fun(self.xk)
             else: self.fk = self.f0
@@ -147,21 +146,17 @@ class LineSearchClass(Optimize):
             if g0 is None: self.gk = self._jac(self.xk)
             else: self.fk = self.f0
 
+            self.alpha_max  = options.get('alpha_max', 1000)
+
             # Choose method
             if self.method == 'BFGS':
                 self.H = options.get('H0', np.eye(x.size))
-                self.alpha_max  = options.get('alpha_max', 1.0)
-            else:
-                self.alpha_max  = options.get('alpha_max', 100)
 
             # Inital step-size
             alpha0 = options.get('alpha0', None)
-            if alpha0 is None:
-                # This sets the inital step-step such that the initial dx is sqrt(d)
-                self.fold = self.fk + np.sqrt(x.size)*np.linalg.norm(self.gk)/2
-            else:
+            if alpha0 is not None:
                 self.ls_options['a0'] = alpha0
-
+        
             # Save Results
             self.optimize_result = self.update_results()
             if self.saveit:
@@ -321,9 +316,9 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
 
     # Get kwargs
     fold = kwargs.get('fold', None)
-    xtol = kwargs.get('xtol', 1e-14)
-    amax = kwargs.get('amax', 1.0)
-    amin = kwargs.get('amin', 0)
+    xtol = kwargs.get('xtol', 0.0)
+    amax = kwargs.get('amax', 1000)
+    amin = kwargs.get('amin', 0.0)
     logger = kwargs.get('logger', None)
     ls_method = kwargs.get('ls_method', 0)
 
@@ -361,14 +356,22 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
         a0 = kwargs.get('a0', 0.25/np.linalg.norm(pk))
     else:
         # From "Numerical Optimization"
-        a0 = 2*abs(phi0 - fold)/abs(dphi0)
+        if dphi0 != 0.0:
+            a0 = 2*(phi0 - fold)/dphi0
+        else:
+            a0 = 1
+
+    if a0 < 0:
+        a0 = 1
 
     a1 = min(amax, 1.01*a0)
 
     # Perform Line-Search
     if ls_method == 0:
-        step_size, fnew, fold = _line_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter)
+        step_size, fnew, fold = _line_search_cut(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter)
     elif ls_method == 1:
+        step_size, fnew, fold  = _line_search_interpol(phi, dphi, a1, phi0, dphi0, amax, c1, c2, maxiter)
+    elif ls_method == 2:
         dcsrch = DCSRCH(phi, dphi, c1, c2, xtol, amin, amax)
         step_size, fnew, fold, _ = dcsrch(a1, phi0=phi0, derphi0=dphi0, maxiter=maxiter)
 
@@ -380,7 +383,7 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
         return step_size, fnew, fold, dphi.gnew  
     
 
-def _line_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter):
+def _line_search_cut(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter):
     
     ai = a1
     a_list   = []
@@ -403,22 +406,57 @@ def _line_search(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter):
     # did not converge
     return None, None, phi0
 
-# Not used
-def quadratic_interpolation(a, phi_a, phi0, dphi0):
-    a_new = - (dphi0*a**2)/(2*(phi_a - phi0 - dphi0*a))
-    return a_new
+def _line_search_interpol(phi, dphi, alpha1, phi0, dphi0, amax, c1, c2, maxiter):
+    from scipy.optimize._linesearch import _zoom
+    alpha_i    = alpha1 
+    alpha_list = [0.0]
+    phi_list   = [phi0]
+    dphi_list  = [dphi0]
 
-def qubic_interpolation(ai, aold, phi_i, phi_old, phi0, dphi0):
-    frac = 1/((aold**2)*(ai**2)*(ai-aold))
-    mat = np.array([[aold**2, -ai**2],
-                    [-aold**3, ai**3]])
-    vec = np.array([[phi_i-phi0-dphi0*ai], [phi_old-phi_i-dphi0*aold]])
-    k = frac*np.squeeze(mat@vec)
+    extra = lambda *args: True 
 
-    sqrt_term = k[1]**2 - 3*k[0]*dphi0
-    if sqrt_term >= 0:
-        a_new =  (-k[1] + np.sqrt(sqrt_term))/(3*k[0])
-    else:
-        a_new = ai/2
+    for i in range(1, maxiter+1):
+        
+        alpha_list.append(alpha_i)
+        phi_list.append(phi(alpha_i))
+        dphi_list.append(dphi(alpha_i))
 
-    return a_new
+        if phi_list[i] > phi0 + c1*alpha_i*dphi0 or (phi_list[i] >= phi_list[i-1] and i>1):
+            alpha_val, phi_val, _ = _zoom(a_lo=alpha_list[i-1],
+                                          a_hi=alpha_list[i],
+                                          phi_lo=phi_list[i-1],
+                                          phi_hi=phi_list[i],
+                                          derphi_lo=dphi_list[i-1],
+                                          phi=phi,
+                                          derphi=dphi,
+                                          phi0=phi0,
+                                          derphi0=dphi0,
+                                          c1=c1,
+                                          c2=c2,
+                                          extra_condition=extra)
+            return alpha_val, phi_val, phi0
+        
+        elif abs(dphi_list[i]) < -c2*dphi0:
+            return alpha_list[i], phi_list[i], phi0
+
+        elif dphi_list[i] >= 0:
+            alpha_val, phi_val, _ = _zoom(a_lo=alpha_list[i],
+                                          a_hi=alpha_list[i-1],
+                                          phi_lo=phi_list[i],
+                                          phi_hi=phi_list[i-1],
+                                          derphi_lo=dphi_list[i],
+                                          phi=phi,
+                                          derphi=dphi,
+                                          derphi0=dphi0,
+                                          phi0=phi0,
+                                          c1=c1,
+                                          c2=c2,
+                                          extra_condition=extra)
+            return alpha_val, phi_val, phi0
+
+        if alpha_i >= amax:
+            return None, None, phi0
+        else:
+            alpha_i = (amax-alpha_i)/2
+    
+    return None, None, phi0
