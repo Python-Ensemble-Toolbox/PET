@@ -364,7 +364,8 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
     if a0 < 0:
         a0 = 1
 
-    a1 = min(amax, 1.01*a0)
+    a1 = min(1, 1.01*a0)
+    a1 = min(amax, a1)
 
     # Perform Line-Search
     if ls_method == 0:
