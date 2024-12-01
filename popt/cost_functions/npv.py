@@ -36,6 +36,7 @@ def npv(pred_data, keys_opt, report):
         npv_const[name] = value
 
     values = []
+    days = 0
     for i in np.arange(1, len(pred_data)):
 
         Qop = np.squeeze(pred_data[i]['fopt']) - np.squeeze(pred_data[i - 1]['fopt'])
@@ -43,9 +44,9 @@ def npv(pred_data, keys_opt, report):
         Qwp = np.squeeze(pred_data[i]['fwpt']) - np.squeeze(pred_data[i - 1]['fwpt'])
         Qwi = np.squeeze(pred_data[i]['fwit']) - np.squeeze(pred_data[i - 1]['fwit'])
         delta_days = (report[1][i] - report[1][i - 1]).days
-
+        days = days + delta_days
         val = (Qop * npv_const['wop'] + Qgp * npv_const['wgp'] - Qwp * npv_const['wwp'] - Qwi * npv_const['wwi']) / (
-            (1 + npv_const['disc']) ** (delta_days / 365))
+            (1 + npv_const['disc']) ** (days / 365))
 
         values.append(val)
 
