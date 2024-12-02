@@ -53,7 +53,7 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
                 - maxiter: maximum number of iterations. Default is 20.
                 - alpha_maxiter: maximum number of iterations for the line search. Default is 10.
                 - alpha_max: maximum step-size. Default is 1000
-                - alpha0: initial step-size (for the first iteration). Default is 0.25/inf-norm(g0).
+                - alpha0: initial step-size (for the first iteration). Default is 0.5/|g0|.
                 - c1: tolerance parameter for the Armijo condition. Default is 1e-4.
                 - c2: tolerance parameter for the Curvature condition. Default is 0.9.
                 - alpha_iter_method: method for proposing new step-size in the line search.
@@ -242,6 +242,7 @@ class LineSearchClass(Optimize):
         if self.method == 'BFGS':
             pk = - np.matmul(self.H, self.gk)
 
+
         self.logger.info('Performing line search...')
         ls_kw = {'fun': self._fun,
                  'grad': self._jac,
@@ -251,7 +252,8 @@ class LineSearchClass(Optimize):
                  'fk': self.fk,
                  'gk': self.gk,
                  'fold': self.fold,
-                 'logger': self.logger}
+                 'logger': self.logger,
+                 'method': self.method}
         
         step_size, fnew, self.fold, gnew = line_search_step(**ls_kw, **self.ls_options)
         if not step_size is None:
@@ -353,7 +355,7 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
 
     # Initial step-size
     if fold is None:
-        a0 = kwargs.get('a0', 0.25/np.linalg.norm(pk))
+        a0 = kwargs.get('a0', 0.5/np.linalg.norm(pk))
     else:
         # From "Numerical Optimization"
         if dphi0 != 0.0:
@@ -364,14 +366,18 @@ def line_search_step(fun, grad, xk, pk, fk=None, gk=None, c1=0.0001, c2=0.9, max
     if a0 < 0:
         a0 = 1
 
-    a1 = min(1, 1.01*a0)
+    if kwargs.get('method', '') == 'BFGS':
+        a1 = min(1, 1.01*a0)
+    else:
+        a1 = a0
+    
     a1 = min(amax, a1)
 
     # Perform Line-Search
     if ls_method == 0:
         step_size, fnew, fold = _line_search_cut(phi, dphi, a1, phi0, dphi0, c1, c2, maxiter)
     elif ls_method == 1:
-        step_size, fnew, fold  = _line_search_interpol(phi, dphi, a1, phi0, dphi0, amax, c1, c2, maxiter)
+        step_size, fnew, fold = _line_search_interpol(phi, dphi, a1, phi0, dphi0, amax, c1, c2, maxiter)
     elif ls_method == 2:
         dcsrch = DCSRCH(phi, dphi, c1, c2, xtol, amin, amax)
         step_size, fnew, fold, _ = dcsrch(a1, phi0=phi0, derphi0=dphi0, maxiter=maxiter)
@@ -458,6 +464,6 @@ def _line_search_interpol(phi, dphi, alpha1, phi0, dphi0, amax, c1, c2, maxiter)
         if alpha_i >= amax:
             return None, None, phi0
         else:
-            alpha_i = (amax-alpha_i)/2
+            alpha_i = alpha_i*2
     
     return None, None, phi0
