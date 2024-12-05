@@ -123,6 +123,7 @@ class LineSearchClass(Optimize):
         self.iter_resamp_max = options.get('resample', 0)
         self.saveit          = options.get('saveit', True)
         self.alpha_max       = options.get('alpha_max', 1000)
+        self.alpha_adapt     = options.get('alpha_adapt', 2)
         self.alpha           = 0.0
         self.hessian         = None
 
@@ -130,7 +131,7 @@ class LineSearchClass(Optimize):
         self.ls_options = {'c1': options.get('c1', 1e-4),
                            'c2': options.get('c2', 0.9),
                            'maxiter': options.get('alpha_maxiter', 5),
-                           'ls_method':  options.get('alpha_iter_method', 1),
+                           'ls_method':  options.get('alpha_iter_method', 2),
                            'amax': self.alpha_max}
         
         # Calculate objective function of startpoint
@@ -141,12 +142,14 @@ class LineSearchClass(Optimize):
             f0 = options.get('f0', None)
             g0 = options.get('g0', None)
             self.fold = None
+            self.gold = None
+            self.pold = None
 
             if f0 is None: self.fk = self._fun(self.xk)
-            else: self.fk = self.f0
+            else: self.fk = f0
 
             if g0 is None: self.gk = self._jac(self.xk)
-            else: self.fk = self.f0
+            else: self.gk = g0
 
             # Choose method
             if self.method == 'BFGS':
@@ -181,9 +184,11 @@ class LineSearchClass(Optimize):
                'nfev': self.nfev,
                'njev': self.njev,
                'nit': self.iteration,
-               'args': self.args,
                'step-size': self.alpha,
                'save_folder': self.options.get('save_folder', './')}
+        
+        for a, arg in enumerate(self.args):
+            res[f'args[{a}]'] = arg
 
         if 'savedata' in self.options:
             # Make sure "SAVEDATA" gives a list
@@ -220,7 +225,37 @@ class LineSearchClass(Optimize):
         else:
             g = self.jac(x, *self.args)
         return g
-                
+    
+    def _set_step_size(self, pk):
+        ''' Sets the step-size '''
+        # If first iteration
+        if self.iteration == 1:
+            if self.alpha0 is None:
+                a = 0.25/np.linalg.norm(pk)
+            else:
+                a = self.alpha0
+        else:
+            if np.dot(pk, self.gk) != 0 and self.alpha_adapt != 0:
+                if self.alpha_adapt == 1:
+                    a = 2*(self.fk - self.fold)/np.dot(pk, self.gk)
+                if self.alpha_adapt == 2:
+                    a = self.alpha*np.dot(self.pold, self.gold)/np.dot(pk, self.gk)
+            else:
+                a = self.alpha0
+
+        if a < 0: 
+            a = abs(a)
+
+        if self.method == 'BFGS' and self.alpha0 is None:
+            # From "Numerical Optimization"
+            a = min(1, 1.01*a)
+            a = min(self.alpha_max, a)
+        else:
+           a = min(self.alpha_max, a)
+
+        return a
+
+   
     def calc_update(self, iter_resamp=0):
 
         # Initialize variables for this step
@@ -243,26 +278,8 @@ class LineSearchClass(Optimize):
             pk = - np.matmul(self.H, self.gk)
         
         # Set step_size
-        if self.alpha0 is not None:
-            a0 = self.alpha0
-        elif self.iteration == 1:
-            a0 = 0.25/np.linalg.norm(pk)
-        elif np.dot(pk, self.gk) != 0:
-            a0 = 2*(self.fk - self.fold)/np.dot(pk, self.gk)
-            if a0 < 0:
-                a0 = self.alpha
-        else:
-            # Prevous step-size
-            a0 = self.alpha
-
-        if self.method == 'BFGS' and self.alpha0 is None:
-            # From "Numerical Optimization"
-            a0 = min(1, 1.01*a0)
-            step_size = min(self.alpha_max, a0)
-        else:
-            step_size = min(self.alpha_max, a0)
+        step_size = self._set_step_size(pk)
         
-
         # Perform line-search 
         self.logger.info('Performing line search...')
         ls_kw = {'fun': self._fun,
@@ -284,8 +301,10 @@ class LineSearchClass(Optimize):
             # Update state
             self.xk = xnew
             self.fk = fnew
-            self.gk = gnew
-            self.fold  = fold 
+            self.gold  = self.gk
+            self.gk    = gnew
+            self.fold  = fold
+            self.pold  = pk
             self.alpha = step_size
 
             # Call the callback function
@@ -475,6 +494,11 @@ class LineSearchStepBase:
         jval = self.jac(self.xk + a*self.pk)
         self.jac_val = jval
         return np.dot(self.pk, jval)
+    
+
+
+
+
     
 
 
