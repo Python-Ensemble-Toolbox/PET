@@ -500,6 +500,8 @@ class LineSearchStepBase:
                 # Curvature condition
                 if abs(dphi_new) <= abs(self.c2*self.dphi0):
                     return ak, phi_new
+            
+            ak = ak/2
         
         return None, None
     
