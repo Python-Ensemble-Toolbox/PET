@@ -8,7 +8,7 @@ from numpy import linalg as la
 from functools import cache
 from scipy.optimize import OptimizeResult
 from scipy.optimize._dcsrch import DCSRCH
-from scipy.optimize._linesearch import scalar_search_wolfe2
+from scipy.optimize._linesearch import _zoom
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
@@ -31,7 +31,8 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
     
     method: str
         Which optimization method to use. Default is 'GD' for 'Gradient Descent'.
-        Other options are 'BFGS' for the 'Broyden–Fletcher–Goldfarb–Shanno' method.   
+        Other options are 'BFGS' for the 'Broyden–Fletcher–Goldfarb–Shanno' method,
+        and 'Newton' for the Newton method.  
         TODO: Include 'Newton-method'.
     
     hess: callable, optional
@@ -74,6 +75,9 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
 
     c2: float
         Tolerance parameter for the Curvature condition. Default is 0.9.
+
+    xtol: float
+        Optimization stop whenever |dx|<xtol. Default is 1e-8. 
 
     line_search_method: int
         Sets method for proposing new step-size in the line search.  Default is 1.
@@ -178,6 +182,7 @@ class LineSearchClass(Optimize):
         self.line_search_kwargs  = {'c1': options.get('c1', 1e-4),
                                     'c2': options.get('c2', 0.9),
                                     'amax': self.step_size_max,
+                                    'xtol': options.get('xtol', 1e-8),
                                     'maxiter': options.get('line_search_maxiter', 10),
                                     'method' : options.get('line_search_method', 1)}
 
@@ -187,10 +192,15 @@ class LineSearchClass(Optimize):
         self.saveit    = options.get('saveit', True)
 
         # Check method
-        valid_methods = ['GD', 'BFGS']
+        valid_methods = ['GD', 'BFGS', 'Newton']
         if not self.method in valid_methods:
             raise ValueError(f"'{self.method}' is not a valid method. Valid methods are: {valid_methods}")
         
+        # Make sure hessian is callable if mehtod='Newton'
+        if (self.method == 'Newton') and (not callable(self.hessian)):
+            warnings.warn('Newton’s method requires a hessian, method changed to BFGS')
+            self.method = 'BFGS'
+
         # Calculate objective function of startpoint
         if not self.restart:
             self.start_time = time.perf_counter()
@@ -266,6 +276,7 @@ class LineSearchClass(Optimize):
                'njev': self.njev,
                'nit': self.iteration,
                'step-size': self.step_size,
+               'method': self.method,
                'save_folder': self.options.get('save_folder', './')}
         
         for a, arg in enumerate(self.args):
@@ -295,7 +306,8 @@ class LineSearchClass(Optimize):
         # If first iteration
         if self.iteration == 1:
             if self.step_size is None:
-                alpha = 0.25/la.norm(pk, np.inf)
+                self.step_size = 0.25/la.norm(pk, np.inf)
+                alpha = self.step_size
             else:
                 alpha = self.step_size
         else:
@@ -312,7 +324,7 @@ class LineSearchClass(Optimize):
         if alpha < 0: 
             alpha = abs(alpha)
 
-        if self.method == 'BFGS':
+        if self.method in ['BFGS', 'Newton']:
             # From "Numerical Optimization"
             alpha = min(1, 1.01*alpha)
         
@@ -344,6 +356,8 @@ class LineSearchClass(Optimize):
             pk = - self.jk
         if self.method == 'BFGS':
             pk = - np.matmul(self.Hk_inv, self.jk)
+        if self.method == 'Newton':
+            pk = - np.matmul(la.inv(self.Hk), self.jk)
         
         # Set step_size
         step_size = self._set_step_size(pk)
@@ -359,7 +373,7 @@ class LineSearchClass(Optimize):
               'gk': self.jk,
               'logger': self.logger}
         
-        step_size, f_new, f_old, j_new = line_search(**kw, **self.line_search_kwargs)
+        step_size, f_new, f_old, j_new, self.msg = line_search(**kw, **self.line_search_kwargs)
     
         if not step_size is None:
 
@@ -375,7 +389,6 @@ class LineSearchClass(Optimize):
             self.j_old = j_old
             self.f_old = f_old
             self.p_old = pk
-            self.step_size = step_size
 
             # Call the callback function
             if callable(self.callback):
@@ -447,11 +460,12 @@ class LineSearchStepBase:
         self.c1 = c1
         self.c2 = c2
         self.maxiter = maxiter
+        self.msg = ''
 
         # kwargs
         self.amax   = kwargs.get('amax', 1000)
         self.amin   = kwargs.get('amin', 0.0)
-        self.xtol   = kwargs.get('xtol', 1e-10)
+        self.xtol   = kwargs.get('xtol', 1e-8)
         self.method = kwargs.get('method', 1)
         self.logger = kwargs.get('logger', None)
 
@@ -468,7 +482,7 @@ class LineSearchStepBase:
 
 
     def __call__(self):
-
+        
         if self.method == 0:
             step_size, fnew = self._line_search_alpha_cut(step_size=self.ak)
         
@@ -477,14 +491,19 @@ class LineSearchStepBase:
 
         if self.method == 2:
             dcsrch = DCSRCH(self.phi, self.dphi, self.c1, self.c2, self.xtol, self.amin, self.amax)
-            step_size, fnew, _,  _ = dcsrch(self.ak, phi0=self.phi0, derphi0=self.dphi0, maxiter=self.maxiter)
+            step_size, fnew, _,  self.msg = dcsrch(self.ak, phi0=self.phi0, derphi0=self.dphi0, maxiter=self.maxiter)
 
         if step_size is None:
-            self.log('Line search method did not converge')
-            return None, None, None, None
+            if self.msg is None:
+                self.msg = 'Line search did not find a solution'
+            return None, None, None, None, self.msg
+        elif la.norm(step_size*self.pk) <= self.xtol:
+            self.msg = f'|dx| < {self.xtol}'
+            return None, None, None, None, self.msg
         else:
             step_size = min(step_size, self.amax)
-            return step_size, fnew, self.phi0, self.jac_val
+            self.msg = 'Line search was successful'
+            return step_size, fnew, self.phi0, self.jac_val, self.msg
 
 
     def _line_search_alpha_cut(self, step_size):
@@ -506,45 +525,34 @@ class LineSearchStepBase:
         return None, None
     
     def _line_search_alpha_interpol(self, step_size):
-        from scipy.optimize._linesearch import _zoom
-        ak  = step_size    
-        a   = [0.0]
-        ph  = [self.phi0]
-        dph = [self.dphi0]
+        ak  = step_size
+
+        # Some lists    
+        alpha = [0.0]
+        phi   = [self.phi0]
+        dphi  = [self.dphi0]
 
         for i in range(1, self.maxiter+1):
             
             # Append lists
-            a.append(ak)
-            ph.append(self.phi(ak))
-            dph.append(self.dphi(ak))
+            alpha.append(ak)
+            phi.append(self.phi(ak))
+            dphi.append(self.dphi(ak))
 
             # Check Armijo Condition
-            if ph[i] > self.phi0 + self.c1*a[i]*self.dphi0 or (ph[i] >= ph[i-1] and i>1):
-                step_size_new, phi_new, _ = _zoom(a_lo=a[i-1], a_hi=a[i],
-                                                  phi_lo=ph[i-1], phi_hi=ph[i],
-                                                  derphi_lo=dph[i-1],
-                                                  phi=self.phi, derphi=self.dphi,
-                                                  phi0=self.phi0, derphi0=self.dphi0,
-                                                  c1=self.c1,c2=self.c2,
-                                                  extra_condition = lambda *args: True)
+            if phi[i] > self.phi0 + self.c1*alpha[i]*self.dphi0 or (phi[i] >= phi[i-1] and i>1):                
+                step_size_new, phi_new = self._zoom(alpha[i-1], alpha[i], phi[i-1], phi[i], dphi[i-1])
                 return step_size_new, phi_new
             
-            if abs(dph[i]) < -self.c2*self.dphi0:
-                return a[i], ph[i]
+            if abs(dphi[i]) < - self.c2*self.dphi0:
+                return alpha[i], phi[i]
             
-            # Check # Curvature condition
-            if dph[i] >= 0:
-                step_size_new, phi_new, _ = _zoom(a_lo=a[i], a_hi=a[i-1],
-                                                  phi_lo=ph[i], phi_hi=ph[i-1],
-                                                  derphi_lo=dph[i],
-                                                  phi=self.phi, derphi=self.dphi,
-                                                  phi0=self.phi0, derphi0=self.dphi0,
-                                                  c1=self.c1, c2=self.c2,
-                                                  extra_condition = lambda *args: True)
+            # Check Curvature condition
+            if dphi[i] >= 0:
+                step_size_new, phi_new = self._zoom(alpha[i], alpha[i-1], phi[i], phi[i-1], dphi[i])
                 return step_size_new, phi_new
             
-            if a[i] >= self.amax:
+            if alpha[i] >= self.amax:
                 return None, None
             else:
                 ak = ak*2
@@ -557,12 +565,14 @@ class LineSearchStepBase:
             print(msg)
         else:
             self.logger.info(msg)
-            
+    
+    @cache
     def phi(self, a, eval=True):
         if eval:
             self.log('  Evaluating Armijo Condition')
         return self.fun(self.xk + a*self.pk)
 
+    @cache
     def dphi(self, a, eval=True):
         if eval:
             self.log('  Evaluating Curvature Condition')
@@ -570,6 +580,28 @@ class LineSearchStepBase:
         self.jac_val = jval
         return np.dot(self.pk, jval)
     
+    def _zoom(self, a_lo, a_hi, phi_lo, phi_hi, dphi_low):
+        alpha_new, phi_new, _  = _zoom(a_lo=a_lo, 
+                                       a_hi=a_hi, 
+                                       phi_lo=phi_lo, 
+                                       phi_hi=phi_hi,
+                                       derphi_lo=dphi_low,
+                                       phi=self.phi,
+                                       derphi=self.dphi,
+                                       phi0=self.phi0,
+                                       derphi0=self.dphi0,
+                                       c1=self.c1,
+                                       c2=self.c2,
+                                       extra_condition=lambda *args: True)
+        return alpha_new, phi_new
+
+
+                
+
+
+            
+
+
 
 
 

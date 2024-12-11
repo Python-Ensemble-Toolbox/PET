@@ -110,6 +110,8 @@ class Optimize:
         self.nfev = 0
         self.njev = 0
 
+        self.msg = 'Convergence was met :)'
+
     def run_loop(self):
         """
         This is the main optimization loop.
@@ -152,7 +154,8 @@ class Optimize:
         if self.iteration > self.max_iter:
             self.optimize_result['message'] = 'Iterations stopped due to max iterations reached!'
         else:
-            self.optimize_result['message'] = 'Convergence was met :)'
+            if not isinstance(self.msg, str): self.msg = ''
+            self.optimize_result['message'] = self.msg
 
         # Logging some info to screen
         logger.info('       Optimization converged in %d iterations ', self.iteration-1)
