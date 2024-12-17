@@ -80,7 +80,7 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
         Optimization stop whenever |dx|<xtol. Default is 1e-8. 
 
     line_search_method: int
-        Sets method for proposing new step-size in the line search.  Default is 1.
+        Sets method for proposing new step-size in the line search.  Default is 2.
         If line_search_method=0: step-size is cut in half.
         If line_search_method=1: Algorithm (3.5) from [1] with polynomial interpolation is used.
         If line_search_method=2: the DCSRCH implementation in scipy is used.
@@ -184,7 +184,7 @@ class LineSearchClass(Optimize):
                                     'amax': self.step_size_max,
                                     'xtol': options.get('xtol', 1e-8),
                                     'maxiter': options.get('line_search_maxiter', 10),
-                                    'method' : options.get('line_search_method', 1)}
+                                    'method' : options.get('line_search_method', 2)}
 
         # Set other options
         self.normalize = options.get('normalize', False)
@@ -222,8 +222,8 @@ class LineSearchClass(Optimize):
             self.p_old = None
         
             # Initial results
+            self.optimize_result = self.update_results()
             if self.saveit:
-                self.optimize_result = self.update_results()
                 ot.save_optimize_results(self.optimize_result)
 
             if self.logger is not None:
@@ -263,7 +263,7 @@ class LineSearchClass(Optimize):
             h = self.hessian(x)
         else:
             h = self.hessian(x, *self.args)
-        return ot.get_sym_pos_semidef(h)
+        return get_near_psd(h)
     
     def update_results(self):
 
@@ -337,7 +337,7 @@ class LineSearchClass(Optimize):
         success = False
 
         # If in resampling mode, compute jacobian 
-        # Else, jacobian from in __init__ or latest line_search is used
+        # Else, jacobian from in __init__ or from latest line_search is used
         if self.jk is None:
             self.jk = self._jac(self.xk)
 
@@ -364,18 +364,20 @@ class LineSearchClass(Optimize):
         
         # Perform line-search 
         self.logger.info('Performing line search...')
-        kw = {'fun': self._fun,
-              'jac': self._jac,
-              'xk': self.xk,
-              'pk': pk,
-              'ak': step_size,
-              'fk': self.fk,
-              'gk': self.jk,
-              'logger': self.logger}
-        
-        step_size, f_new, f_old, j_new, self.msg = line_search(**kw, **self.line_search_kwargs)
+        ls_res = line_search(
+            fun=self._fun,
+            jac=self._jac,
+            xk=self.xk,
+            pk=pk,
+            ak=step_size,
+            fk=self.fk,
+            gk=self.jk,
+            logger=self.logger,
+            **self.line_search_kwargs
+        )
+        step_size, f_new, f_old, j_new, self.msg = ls_res
     
-        if not step_size is None:
+        if not (step_size is None):
 
             x_old = self.xk
             j_old = self.jk
@@ -385,7 +387,8 @@ class LineSearchClass(Optimize):
             self.xk = x_new
             self.fk = f_new
             self.jk = j_new
-
+            
+            # Update old fun, jac and pk values
             self.j_old = j_old
             self.f_old = f_old
             self.p_old = pk
@@ -596,6 +599,12 @@ class LineSearchStepBase:
         return alpha_new, phi_new
 
 
+def get_near_psd(A):
+    C = (A + A.T)/2
+    eigval, eigvec = np.linalg.eig(C)
+    eigval[eigval < 0] = 1e-5
+
+    return eigvec.dot(np.diag(eigval)).dot(eigvec.T)
                 
 
 

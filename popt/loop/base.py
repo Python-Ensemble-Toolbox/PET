@@ -33,7 +33,7 @@ class EnsembleOptimizationBase(PETEnsemble):
 
         self.save_prediction = kwargs_ens.get('save_prediction', None)
         self.num_models  = kwargs_ens.get('num_models', 1)
-        self.transform   = kwargs_ens.get('transform', True)
+        self.transform   = kwargs_ens.get('transform', False)
         self.num_samples = self.ne
 
         # Get bounds and varaince

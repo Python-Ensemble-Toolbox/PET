@@ -1,6 +1,5 @@
 """Rosenbrock objective function."""
 
-
 def rosenbrock(state, *args):
     """
     Rosenbrock: http://en.wikipedia.org/wiki/Rosenbrock_function
