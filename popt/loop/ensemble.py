@@ -121,8 +121,9 @@ class Ensemble(PETEnsemble):
         # Inflation factor used in SmcOpt
         self.inflation_factor = None
         self.survival_factor = None
-        self.particles = np.empty((self.cov.shape[0],0))
-        self.particle_values = np.empty((0))
+        self.particles = np.empty((self.cov.shape[0],self.ne))
+        self.particle_values = np.empty(self.ne)
+        self.resample_index = None
 
         # Initialize variables for bias correction
         if 'bias_file' in self.sim.input_dict:  # use bias correction
@@ -388,24 +389,23 @@ class Ensemble(PETEnsemble):
             initial_state = deepcopy(self.state)  # store this to update current objective values
 
         # Generate ensemble of states
-        if self.particles.shape[1] == 0:
+        if self.resample_index is None:
             self.ne = self.num_samples
+            self.resample_index = []
         else:
             self.ne = int(np.round(self.num_samples*self.survival_factor))
         self._aux_input()
         self.state = self._gen_state_ensemble()
 
-        self._invert_scale_state()  # ensure that state is in [lb,ub]
-        self.calc_prediction()  # calculate flow data
-        self._scale_state()  # scale back to [0, 1]
-
-        #self.ens_func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
-        #self.ens_func_values = np.array(self.ens_func_values)
         state_ens = at.aug_state(self.state, list(self.state.keys()))
         self.function(state_ens, **kwargs)
 
-        self.particles = np.hstack((self.particles, state_ens))
-        self.particle_values = np.hstack((self.particle_values,self.ens_func_values))
+        self.particles[:,:(self.num_samples-self.ne)] = self.particles[:,self.resample_index]   
+        #np.hstack((self.particles, state_ens))
+        self.particles[:,(self.num_samples-self.ne):] = deepcopy(state_ens)
+        self.particle_values[:(self.num_samples-self.ne)] = self.particle_values[self.resample_index] 
+        # np.hstack((self.particle_values,self.ens_func_values))
+        self.particle_values[(self.num_samples - self.ne):] = deepcopy(self.ens_func_values)
 
         # If bias correction is used we need to calculate the bias factors, J(u_j,m_j)/J(u_j,m)
         if self.bias_file is not None:  # use bias corrections
@@ -415,7 +415,8 @@ class Ensemble(PETEnsemble):
         warnings.filterwarnings('ignore')  # suppress warnings
         weights = np.zeros(self.num_samples)
         for i in np.arange(self.num_samples):
-            weights[i] = np.exp(-(self.particle_values[i]-np.min(self.particle_values))*self.inflation_factor)
+            weights[i] = np.exp(np.clip(-(self.particle_values[i] - np.min(
+                self.particle_values)) * self.inflation_factor, None, 10))
 
         weights = weights + 0.000001
         weights = weights/np.sum(weights)  # TODO: Sjekke at disse er riktig
@@ -424,10 +425,10 @@ class Ensemble(PETEnsemble):
         index = np.argmin(self.particle_values)
         best_ens = self.particles[:, index]
         best_func = self.particle_values[index]
-        resample_index = np.random.choice(self.num_samples,int(np.round(self.num_samples-
+        self.resample_index = np.random.choice(self.num_samples,int(np.round(self.num_samples-
                                           self.num_samples*self.survival_factor)),replace=True,p=weights)
-        self.particles = self.particles[:, resample_index]
-        self.particle_values = self.particle_values[resample_index]
+        #self.particles = self.particles[:, resample_index]
+        #self.particle_values = self.particle_values[resample_index]
         return sens_matrix, best_ens, best_func
 
     def _gen_state_ensemble(self):
