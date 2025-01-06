@@ -33,7 +33,6 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
         Which optimization method to use. Default is 'GD' for 'Gradient Descent'.
         Other options are 'BFGS' for the 'Broyden–Fletcher–Goldfarb–Shanno' method,
         and 'Newton' for the Newton method.  
-        TODO: Include 'Newton-method'.
     
     hess: callable, optional
         Hessian function, hess(x, *args). Default is None. 
@@ -63,7 +62,7 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
         Maximum number of iterations for the line search. Default is 10.
 
     step_size_max: float
-        Maximum step-size. Default is 1000
+        Maximum step-size. Default is 1e5
 
     step_size_adapt: int
         Set method for choosing initial step-size for each iteration. If 0, step_size value is used.
@@ -146,8 +145,18 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
     >>> res = LineSearch(fun=rosen, x=x0, jac=rosen_der, method='BFGS', **kwargs)
     >>> print(res)
     '''
-    obj = LineSearchClass(fun, x, jac, method, hess, args, bounds, callback, **options)
-    return obj.optimize_result
+    ls_obj = LineSearchClass(
+        fun, 
+        x, 
+        jac, 
+        method, 
+        hess, 
+        args, 
+        bounds, 
+        callback, 
+        **options
+    )
+    return ls_obj.optimize_result
 
 
 class LineSearchClass(Optimize):
@@ -175,16 +184,18 @@ class LineSearchClass(Optimize):
         
         # Set options for step-size
         self.step_size       = options.get('step_size', None)
-        self.step_size_max   = options.get('step_size_max', 1000)
+        self.step_size_max   = options.get('step_size_max', 1e5)
         self.step_size_adapt = options.get('step_size_adapt', 0)
 
         # Set options for line-search method
-        self.line_search_kwargs  = {'c1': options.get('c1', 1e-4),
-                                    'c2': options.get('c2', 0.9),
-                                    'amax': self.step_size_max,
-                                    'xtol': options.get('xtol', 1e-8),
-                                    'maxiter': options.get('line_search_maxiter', 10),
-                                    'method' : options.get('line_search_method', 2)}
+        self.line_search_kwargs  = {
+            'c1': options.get('c1', 1e-4),
+            'c2': options.get('c2', 0.9),
+            'amax': self.step_size_max,
+            'xtol': options.get('xtol', 1e-8),
+            'maxiter': options.get('line_search_maxiter', 10),
+            'method' : options.get('line_search_method', 2)
+        }
 
         # Set other options
         self.normalize = options.get('normalize', False)
@@ -206,9 +217,13 @@ class LineSearchClass(Optimize):
             self.start_time = time.perf_counter()
 
             # Check for initial callable values
-            self.fk = options.get('fun0', self._fun(self.xk))
-            self.jk = options.get('jac0', self._jac(self.xk))
-            self.Hk = options.get('hess0', self._hess(self.xk))
+            self.fk = options.get('fun0', None)
+            self.jk = options.get('jac0', None)
+            self.Hk = options.get('hess0', None)
+
+            if self.fk is None: self.fk = self._fun(self.xk)
+            if self.jk is None: self.jk = self._jac(self.xk)
+            if self.Hk is None: self.Hk = self._hess(self.xk)
 
             # Check for initial inverse hessian for the BFGS method
             if self.method == 'BFGS':
@@ -228,8 +243,8 @@ class LineSearchClass(Optimize):
 
             if self.logger is not None:
                 self.logger.info(f'       ====== Running optimization - Line search ({method}) ======')
-                self.logger.info('\n'+pprint.pformat(self.options))
-                self.logger.info(f'       {'iter.':<10} {'fun':<15} {'step-size':<15} {'|grad|':<15}')
+                self.logger.info('Specified options\n'+pprint.pformat(OptimizeResult(self.options)))
+                self.logger.info(f'       {"iter.":<10} {"fun":<15} {"step-size":<15} {"|grad|":<15}')
                 self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {0.0:<15.4e}  {la.norm(self.jk):<15.4e}')
                 self.logger.info('')
 
@@ -263,7 +278,7 @@ class LineSearchClass(Optimize):
             h = self.hessian(x)
         else:
             h = self.hessian(x, *self.args)
-        return get_near_psd(h)
+        return make_matrix_psd(h)
     
     def update_results(self):
 
@@ -324,9 +339,9 @@ class LineSearchClass(Optimize):
         if alpha < 0: 
             alpha = abs(alpha)
 
-        if self.method in ['BFGS', 'Newton']:
+        #if self.method in ['BFGS', 'Newton']:
             # From "Numerical Optimization"
-            alpha = min(1, 1.01*alpha)
+        #    alpha = min(1, 1.01*alpha)
         
         return min(alpha, self.step_size_max)
 
@@ -419,7 +434,7 @@ class LineSearchClass(Optimize):
             # Write logging info
             if self.logger is not None:
                 self.logger.info('')
-                self.logger.info(f'       {'iter.':<10} {'fun':<15} {'step-size':<15} {'|grad|':<15}')
+                self.logger.info(f'       {"iter.":<10} {"fun":<15} {"step-size":<15} {"|grad|":<15}')
                 self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {step_size:<15.4e}  {la.norm(self.jk):<15.4e}')
                 self.logger.info('')
 
@@ -447,7 +462,19 @@ def line_search(fun, jac, xk, pk, ak, fk=None, gk=None, c1=0.0001, c2=0.9, maxit
     '''
     Performs a single line search step
     '''
-    line_search_step = LineSearchStepBase(fun, jac, xk, pk, ak, fk, gk, c1, c2, maxiter, **kwargs)
+    line_search_step = LineSearchStepBase(
+        fun, 
+        jac, 
+        xk, 
+        pk, 
+        ak, 
+        fk, 
+        gk, 
+        c1, 
+        c2, 
+        maxiter, 
+        **kwargs
+    )
     return line_search_step()
 
 class LineSearchStepBase:
@@ -466,10 +493,10 @@ class LineSearchStepBase:
         self.msg = ''
 
         # kwargs
-        self.amax   = kwargs.get('amax', 1000)
+        self.amax   = kwargs.get('amax', 1e5)
         self.amin   = kwargs.get('amin', 0.0)
         self.xtol   = kwargs.get('xtol', 1e-8)
-        self.method = kwargs.get('method', 1)
+        self.method = kwargs.get('method', 2)
         self.logger = kwargs.get('logger', None)
 
         # Check for initial values
@@ -493,8 +520,23 @@ class LineSearchStepBase:
             step_size, fnew = self._line_search_alpha_interpol(step_size=self.ak)
 
         if self.method == 2:
-            dcsrch = DCSRCH(self.phi, self.dphi, self.c1, self.c2, self.xtol, self.amin, self.amax)
-            step_size, fnew, _,  self.msg = dcsrch(self.ak, phi0=self.phi0, derphi0=self.dphi0, maxiter=self.maxiter)
+            dcsrch = DCSRCH(
+                self.phi, 
+                self.dphi, 
+                self.c1, 
+                self.c2, 
+                self.xtol, 
+                self.amin, 
+                self.amax
+            )
+            dcsrch_res = dcsrch(
+                self.ak, 
+                phi0=self.phi0, 
+                derphi0=self.dphi0, 
+                maxiter=self.maxiter
+            )
+            step_size, fnew, _,  self.msg = dcsrch_res
+            self.msg = str(self.msg)
 
         if step_size is None:
             if self.msg is None:
@@ -605,6 +647,28 @@ def get_near_psd(A):
     eigval[eigval < 0] = 1e-5
 
     return eigvec.dot(np.diag(eigval)).dot(eigvec.T)
+
+def make_matrix_psd(A, maxiter=100):
+    # Set beta to Frobenius norm of A
+    beta = np.linalg.norm(A, 'fro')
+    
+    # Initialize tau
+    if np.min(np.diag(A)) > 0:
+        tau = 0
+    else:
+        tau = beta/2
+    
+    for _ in range(maxiter):
+        try:
+            M = A + tau*np.eye(A.shape[0])
+            # Attempt Cholesky 
+            np.linalg.cholesky(A + tau*np.eye(A.shape[0]))
+            return M
+        except np.linalg.LinAlgError:
+            # Set new tau
+            tau = max(2*tau, beta/2)
+    
+    return None
                 
 
 
