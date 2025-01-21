@@ -130,7 +130,7 @@ def read_txt(init_file):
 
     Parameters
     ----------
-    init_file: str
+    init_file : str
         PIPT init. file containing info. to run the inversion algorithm
 
     Returns
@@ -197,12 +197,12 @@ def read_clean_file(init_file):
 
     Parameters
     ----------
-    init_file: str
+    init_file : str
         Name of file to remove all comments. WHOLE filename needed (with suffix!)
 
     Returns
     -------
-    lines: list
+    lines : list
         Lines from init. file converted to list entries
     """
     # Read file except lines starting with an octothorpe (#) and return the python variable
@@ -219,12 +219,12 @@ def remove_empty_lines(lines):
 
     Parameters
     ----------
-    lines: list
+    lines : list
         List of lines from a file
 
     Returns
     -------
-    lines_clean: list
+    lines_clean : list
         List of clean lines (without empty entries)
     """
     # Loop over lines to find '\n'
@@ -254,12 +254,12 @@ def parse_keywords(lines):
 
     Parameters
     ----------
-    lines: list
+    lines : list
         List of (clean) lines from the PIPT init. file.
 
     Returns
     -------
-    keys: dict
+    keys : dict
         Dictionary with all info. from the init. file.
     """
     # Init. the dictionary

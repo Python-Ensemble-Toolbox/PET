@@ -1,9 +1,0 @@
-.modulename {
-    color: orange;
-}
-
-nav.pdoc .doc0 {
-    padding-left: calc(var(--pad) * 1.5);
-    display: block;
-    font-size: smaller;
-}

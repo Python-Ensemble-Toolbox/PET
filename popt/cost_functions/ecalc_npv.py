@@ -52,6 +52,7 @@ def ecalc_npv(pred_data, **kwargs):
     Qwp = []
     Qwi = []
     Dd = []
+    T = []
     for i in np.arange(1, len(pred_data)):
 
         Qop.append(np.squeeze(pred_data[i]['fopt']) - np.squeeze(pred_data[i - 1]['fopt']))
@@ -59,6 +60,7 @@ def ecalc_npv(pred_data, **kwargs):
         Qwp.append(np.squeeze(pred_data[i]['fwpt']) - np.squeeze(pred_data[i - 1]['fwpt']))
         Qwi.append(np.squeeze(pred_data[i]['fwit']) - np.squeeze(pred_data[i - 1]['fwit']))
         Dd.append((report[1][i] - report[1][i - 1]).days)
+        T.append((report[1][i] - report[1][0]).days)
 
     # Write production data to .csv file for eCalc input, for each ensemble member
     Qop = np.array(Qop).T
@@ -66,6 +68,7 @@ def ecalc_npv(pred_data, **kwargs):
     Qgp = np.array(Qgp).T
     Qwi = np.array(Qwi).T
     Dd = np.array(Dd)
+    T = np.array(T)
     if len(Qop.shape) == 1:
         Qop = np.expand_dims(Qop,0)
         Qwp = np.expand_dims(Qwp, 0)
@@ -104,7 +107,7 @@ def ecalc_npv(pred_data, **kwargs):
 
         value = (Qop[n, :] * npv_const['wop'] + Qgp[n, :] * npv_const['wgp'] - Qwp[n, :] * npv_const['wwp'] -
                  Qwi[n, :] * npv_const['wwi'] - Qem * npv_const['wem']) / (
-            (1 + npv_const['disc']) ** (Dd / 365))
+            (1 + npv_const['disc']) ** (T / 365))
         values.append(np.sum(value))
 
     # Save emissions for later analysis

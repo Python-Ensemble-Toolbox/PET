@@ -20,7 +20,8 @@ from pipt.update_schemes.update_methods_ns.subspace_update import subspace_updat
 
 class esmdaMixIn(Ensemble):
     """
-    This is the implementation of the ES-MDA algorithm given in [1]. This algorithm have been implemented mostly to
+    This is the implementation of the ES-MDA algorithm given in [`emerick2013a`][].
+    This algorithm have been implemented mostly to
     illustrate how a algorithm using the Mda loop can be implemented.
     """
 
@@ -30,17 +31,13 @@ class esmdaMixIn(Ensemble):
 
         Parameters
         ----------
-        keys_da['mda']: list
+        keys_da['mda'] : list
             - tot_assim_steps: total number of iterations in MDA, e.g., 3
             - inflation_param: covariance inflation factors, e.g., [2, 4, 4]
 
         keys_en : dict
 
         sim : callable
-
-        References
-        ----------
-        [1] A. Emerick & A. Reynods, Computers & Geosciences, 55, p. 3-15, 2013
         """
         # Pass the init_file upwards in the hierarchy
         super().__init__(keys_da, keys_en, sim)
@@ -86,29 +83,22 @@ class esmdaMixIn(Ensemble):
         covariance matrix is inflated with an inflation parameter alpha. The update is done as an iterative smoother
         where all data is assimilated at once.
 
-        Parameters:
-        -------------------------------------------------------------
-            assim_step: int
-                Current assimilation step
-
-        Notes:
+        Notes
         -----
         ES-MDA is an iterative ensemble smoother with a predefined number of iterations, where the updates is done with
         the EnKF update equations but where the data covariance matrix have been inflated:
 
-        .. math::
-            d_{obs} = d_{true} + \sqrt{\alpha}C_d^{1/2}Z \\
-            m = m_{prior} + C_{md}(C_g + \alpha C_d)^{-1}(g(m) - d_{obs})
-
+        $$ \begin{align}
+        d_{obs} &= d_{true} + \sqrt{\alpha}C_d^{1/2}Z \\
+        m &= m_{prior} + C_{md}(C_g + \alpha C_d)^{-1}(g(m) - d_{obs})
+        \end{align} $$
 
         where $d_{true}$ is the true observed data, $\alpha$ is the inflation factor, $C_d$ is the data covariance
         matrix, $Z$ is a standard normal random variable, $C_{md}$ and $C_{g}$ are sample covariance matrices,
         $m$ is the model parameter, and $g(\)$ is the predicted data. Note that $\alpha$ can have a different
         value in each assimilation step and must fulfill:
 
-        .. math::
-            \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1
-
+        $$ \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1 $$
 
         where $N_a$ being the total number of assimilation steps.
         """
@@ -222,8 +212,7 @@ class esmdaMixIn(Ensemble):
         Extract the data covariance inflation parameter from the MDA keyword in DATAASSIM part. Also, we check that
         the criterion:
 
-        .. math::
-            \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1
+        $$ \sum_{i=1}^{N_a} \frac{1}{\alpha} = 1 $$
 
         is fulfilled for the inflation factor, alpha. If the keyword for inflation parameter -- INFLATION_PARAM -- is
         not provided, we set the default $\alpha_i = N_a$, where $N_a$ is the tot. no. of MDA assimilation steps (the
@@ -276,9 +265,9 @@ class esmdaMixIn(Ensemble):
 
         Parameters
         ----------
-        keys_da: dict
+        keys_da : dict
             all keywords from DATAASSIM part
-        mda': info
+        mda : info
             for MDA methods
 
         Returns
@@ -338,22 +327,13 @@ class esmda_geo(esmda_approx):
     """
     This is the implementation of the ES-MDA-GEO algorithm from [1]. The main analysis step in this algorithm is the
     same as the standard ES-MDA algorithm (implemented in the `es_mda` class). The difference between this and the
-    standard algorithm is the calculation of the inflation factor.
+    standard algorithm is the calculation of the inflation factor. Also see [`rafiee2017`][].
     """
 
     def __init__(self, keys_da):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
-
-        Parameters
-        ----------
-        init_file: str
-            PIPT init. file containing info. to run the inversion algorithm
-
-        References
-        ----------
-        [1] J. Rafiee & A. Reynolds, Inverse Problems 33 (11), 2017
         """
         # Pass the init_file upwards in the hierarchy
         super().__init__(keys_da)
@@ -367,18 +347,18 @@ class esmda_geo(esmda_approx):
 
         Parameters
         ----------
-        pert_preddata: ndarray
+        pert_preddata : ndarray
             Predicted data (fwd. run) ensemble matrix perturbed with its mean
-        cov_data: ndarray
+        cov_data : ndarray
             Data covariance matrix
-        energy: float, optional
+        energy : float, optional
             Percentage of energy kept in (T)SVD decompostion of 'sensitivity' matrix (default is 99%)
 
         Returns
         -------
-        alpha: float
+        alpha : float
             Inflation factor
-        beta: float
+        beta : float
             Geometric factor
         """
         # Need the square-root of the data covariance matrix

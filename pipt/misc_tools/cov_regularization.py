@@ -6,6 +6,7 @@ Changelog
 - 28/6-16: Initialise major reconstruction of the covariance regularization script.
 
 Main outline is:
+
 - make this a collection of support functions, not a class
 - initialization will be performed at the initialization of the ensemble class, not at the analysis step. This will
   return a dictionary of dictionaries, with a triple as key (data_type, assim_time, parameter). From this key the info
@@ -731,7 +732,8 @@ def _calc_distance(data_pos, index_unique, current_data_list, assim_index, obs_d
     param_pos : list of tuple
         List of tuples representing the position of the parameters.
 
-    Returns:
+    Returns
+    -------
         - dist: list of euclidean distance between the data/parameter pair.
     """
     # distance to data if distance based localization

@@ -1,3 +1,4 @@
+"""Descriptive description."""
 from simulator.opm import flow
 from importlib import import_module
 import datetime as dt
@@ -25,7 +26,6 @@ from scipy.interpolate import griddata
 from pipt.misc_tools.analysis_tools import store_ensemble_sim_information
 from geostat.decomp import Cholesky
 from simulator.eclipse import ecl_100
-
 
 class flow_rock(flow):
     """
@@ -68,7 +68,7 @@ class flow_rock(flow):
                     self.pem_input['depth'] = elem[1]
                 if elem[0] == 'actnum':  # the npz of actnum values
                     self.pem_input['actnum'] = elem[1]
-                if elem[0] == 'baseline':  # the time for the baseline 4D measurment
+                if elem[0] == 'baseline':  # the time for the baseline 4D measurement
                     self.pem_input['baseline'] = elem[1]
                 if elem[0] == 'vintage':
                     self.pem_input['vintage'] = elem[1]
@@ -647,7 +647,9 @@ class flow_barycenter(flow):
                         v = self.pem_input['vintage'].index(self.true_prim[1][prim_ind])
                         self.pred_data[prim_ind][key] = self.bar_result[v].flatten()
 
+
 class flow_avo(flow_rock):
+  
     def __init__(self, input_dict=None, filename=None, options=None, **kwargs):
         super().__init__(input_dict, filename, options)
 
@@ -786,7 +788,7 @@ class flow_avo(flow_rock):
 
                 # avo data
                 self._calc_avo_props()
-
+                
                 avo_baseline = self.avo_data.flatten(order="F")
                 avo = avo - avo_baseline
 
@@ -938,11 +940,13 @@ class flow_avo(flow_rock):
         # cum_time = np.concatenate((top_res[:, :, np.newaxis], cum_time_res), axis=2)
         cum_time = np.concatenate((top_res[:, :, np.newaxis], cum_time_res, underburden[:, :, np.newaxis]), axis=2)
 
+
         # add overburden and underburden of Vp, Vs and Density
         vp = np.concatenate((vp_shale * np.ones((self.NX, self.NY, 1)),
                              self.vp, vp_shale * np.ones((self.NX, self.NY, 1))), axis=2)
         vs = np.concatenate((vs_shale * np.ones((self.NX, self.NY, 1)),
                              self.vs, vs_shale * np.ones((self.NX, self.NY, 1))), axis=2)
+
         #rho = np.concatenate((rho_shale * np.ones((self.NX, self.NY, 1)) * 0.001,  # kg/m^3 -> k/cm^3
         #                      self.rho, rho_shale * np.ones((self.NX, self.NY, 1)) * 0.001), axis=2)
         rho = np.concatenate((rho_shale * np.ones((self.NX, self.NY, 1)),
@@ -970,10 +974,10 @@ class flow_avo(flow_rock):
                     vs_sample[m, l, k] = vs[m, l, idx]
                     rho_sample[m, l, k] = rho[m, l, idx]
 
-
         # Ricker wavelet
         wavelet, t_axis, wav_center = ricker(np.arange(0, self.avo_config['wave_len'], dt),
                                              f0=self.avo_config['frequency'])
+
 
         # Travel time corresponds to reflectivity series
         t = time_sample[:, :, 0:-1]
@@ -983,6 +987,7 @@ class flow_avo(flow_rock):
         trace_interp = np.zeros((self.NX, self.NY, len(t_interp)))
 
         # number of pp reflection coefficients in the vertical direction
+
         nz_rpp = vp_sample.shape[2] - 1
 
         for i in range(len(self.avo_config['angle'])):
@@ -1493,3 +1498,4 @@ class flow_grav_and_avo(flow_avo, flow_grav):
                             else self.folder + key + '_vint' + str(idx) + '.npz'
                         with np.load(filename) as f:
                             self.pred_data[prim_ind][key] = f[key]
+
