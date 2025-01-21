@@ -1,11 +1,14 @@
 """Descriptive description."""
 
-__author__ = 'TM'
+__author__ = {'TM', 'TB', 'ML'}
 
 # standardrp.py
 import numpy as np
 import sys
 import multiprocessing as mp
+
+from numpy.random import poisson
+
 # internal load
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
 
@@ -55,6 +58,13 @@ class elasticproperties:
             # obvalues=<overburden values>)
             self.overburden = npzfile['obvalues']
             npzfile.close()
+        #else:
+        #    # Norne litho pressure equation in Bar
+        #    P_litho = -49.6 + 0.2027 * Z + 6.127e-6 * Z ** 2  # Using e-6 for scientific notation
+        #    # Convert reservoir pore pressure from Bar to MPa
+        #    P_litho *= 0.1
+        #    self.overburden = P_litho
+
         if 'baseline' in self.input_dict:
             self.baseline = self.input_dict['baseline']  # 4D baseline
         if 'parallel' in self.input_dict:
@@ -66,7 +76,7 @@ class elasticproperties:
 
     def setup_fwd_run(self, state):
         """
-        Setup the input parameters to be used in the PEM simulator. Parameters can be a an ensemble or a single array.
+        Setup the input parameters to be used in the PEM simulator. Parameters can be an ensemble or a single array.
         State is set as an attribute of the simulator, and the correct value is determined in self.pem.calc_props()
 
         Parameters
@@ -90,36 +100,9 @@ class elasticproperties:
         pass
 
     def calc_props(self, phases, saturations, pressure,
-                   porosity, wait_for_proc=None, ntg=None, Rs=None, press_init=None, ensembleMember=None):
+                   porosity, dens = None, wait_for_proc=None, ntg=None, Rs=None, press_init=None, ensembleMember=None):
         ###
-        # This doesn't initialize for models with no uncertainty
-        ###
-        # # if some PEM properties have uncertainty, set the correct value
-        # if ensembleMember is not None:
-        #     for pem_state in self.__dict__.keys(): # loop over all possible pem vaules
-        #         if pem_state is not 'inv_state': # do not alter the ensemble
-        #             if type(eval('self.{}'.format(pem_state))) is dict:
-        #                 for el in eval('self.{}'.format(pem_state)).keys():
-        #                     if type(eval('self.{}'.format(pem_state))[el]) is dict:
-        #                         for param in eval('self.{}'.format(pem_state))[el].keys():
-        #                             if param in self.inv_state:
-        #                                 eval('self.{}'.format(pem_state))[el][param]=\
-        #                                     self.inv_state[param][:, ensembleMember]
-        #                             elif param + '_' + el in self.inv_state:
-        #                                 eval('self.{}'.format(pem_state))[el][param] = \
-        #                                     self.inv_state[param+'_' + el][:, ensembleMember]
-        #                     else:
-        #                         if el in self.inv_state:
-        #                             eval('self.{}'.format(pem_state))[el] = self.inv_state[el][:,ensembleMember]
-        #             else:
-        #                 if pem_state in self.inv_state:
-        #                     setattr(self,pem_state, self.inv_state[pem_state][:,ensembleMember])
-
-        # Check if the inputs are given as a list (more
-        # than one phase) or a single input (single
-        # phase). If single phase input, make the input a
-        # list with a single entry (s.t. it can be used
-        # directly with the methods below)
+        # TODO add fluid densities here -needs to be added as optional input
         #
         if not isinstance(phases, list):
             phases = [phases]
@@ -132,15 +115,21 @@ class elasticproperties:
                 type(porosity).__module__ != 'numpy':
             porosity = [porosity]
         #
-        # Load "overburden" into local variable to
+        # Load "overburden" pressures into local variable to
         # comply with remaining code parts
-        overburden = self.overburden
-
+        poverburden = self.overburden
         if press_init is None:
             p_init = self.p_init
         else:
             p_init = press_init
-        #
+
+        # Average number of contacts that each grain has with surrounding grains
+        coordnumber = self._coordination_number()
+
+        # porosity value separating the porous media's mechanical and acoustic behaviour
+        phicritical = self._critical_porosity()
+
+
         # Check that no. of phases is equal to no. of
         # entries in saturations list
         #
@@ -192,27 +181,38 @@ class elasticproperties:
                 self._fluidprops(self.phases,
                                  saturations[i, :], pressure[i], Rs[i])
             #
+            #denss, bulks, shears = \
+            #    self._solidprops(porosity[i], ntg[i], i)
+
+            #
             denss, bulks, shears = \
-                self._solidprops(porosity[i], ntg[i], i)
+                self._solidprops_Johansen()
             #
             # Calculate dry rock moduli
             #
 
+            #bulkd, sheard = \
+            #    self._dryrockmoduli(porosity[i],
+            #                        overburden[i],
+            #                        pressure[i], bulks,
+            #                        shears, i, ntg[i], p_init[i], denss, Rs[i], self.phases)
+            #
+            peff = self._effective_pressure(poverburden[i], pressure[i])
+
+
             bulkd, sheard = \
-                self._dryrockmoduli(porosity[i],
-                                    overburden[i],
-                                    pressure[i], bulks,
-                                    shears, i, ntg[i], p_init[i], denss, Rs[i], self.phases)
+                self._dryrockmoduli_Smeaheia(coordnumber, phicritical, porosity[i], peff, bulks, shears)
+
             # -------------------------------
             # Calculate saturated properties
             # -------------------------------
             #
-            # Density
+            # Density (kg/m3)
             #
             self.dens[i] = (porosity[i]*densf +
                             (1-porosity[i])*denss)
             #
-            # Moduli
+            # Moduli (MPa)
             #
             self.bulkmod[i] = \
                 bulkd + (1 - bulkd/bulks)**2 / \
@@ -220,19 +220,22 @@ class elasticproperties:
                  (1-porosity[i])/bulks -
                  bulkd/(bulks**2))
             self.shearmod[i] = sheard
-
-            # Velocities (due to bulk/shear modulus being
-            # in MPa, we multiply by 1000 to get m/s
-            # instead of km/s)
+            #
+            # Velocities (km/s)
             #
             self.bulkvel[i] = \
-                1000*np.sqrt((abs(self.bulkmod[i]) +
+                np.sqrt((abs(self.bulkmod[i]) +
                              4*self.shearmod[i]/3)/(self.dens[i]))
             self.shearvel[i] = \
-                1000*np.sqrt(self.shearmod[i] /
+                np.sqrt(self.shearmod[i] /
                             (self.dens[i]))
             #
-            # Impedances (m/s)*(Kg/m3)
+            # convert from (km/s) to (m/s)
+            #
+            self.bulkvel[i] *= 1000
+            self.shearvel[i] *= 1000
+            #
+            # Impedance (m/s)*(kg/m3)
             #
             self.bulkimp[i] = self.dens[i] * \
                 self.bulkvel[i]
@@ -397,7 +400,7 @@ class elasticproperties:
     # Solid properties start
     # =========================
     #
-    def _solidprops(self, poro, ntg=None, ind=None):
+    def _solidprops_Johansen(self):
         #
         # Calculate bulk and shear solid rock (mineral)
         # moduli by averaging Hashin-Shtrikman bounds
@@ -408,191 +411,84 @@ class elasticproperties:
         #
         # Output
         #       denss  - solid rock density (kg/m³)
-        #       bulks  - solid rock bulk modulus (unit
-        #                inherited from hashinshtr)
-        #       shears - solid rock shear modulus (unit
-        #                inherited from hashinshtr)
+        #       bulks  - solid rock bulk modulus (unit MPa)
+        #       shears - solid rock shear modulus (unit MPa)
         #
         # -----------------------------------------------
         #
-        # From PetroWiki (kg/m³)
         #
-        densc = 2540
-        densq = 2650
-        #
-        # From "Step 1" of "recipe" in Report 1 in Abul
-        # Fahimuddin's thesis.
-        #
-        vclay = 0.7 - 1.58*poro
-        #
-        # Calculate solid rock (mineral) density. (Note
+        # Solid rock (mineral) density. (Note
         # that this is often termed \rho_dry, and not
         # \rho_s)
+
+        denss = 2650 # Density of mineral/solid rock kg/m3
+
         #
-        denss = densq + vclay*(densc - densq)
-        #
-        # Calculate lower and upper bulk and shear
-        # Hashin-Shtrikman bounds
-        #
-        bulkl, bulku, shearl, shearu = \
-            self._hashinshtr(vclay)
-        #
-        # Calculate bulk and shear solid rock (mineral)
-        # moduli as arithmetic means of the respective
-        # bounds
-        #
-        bulkb = np.array([bulkl, bulku])
-        shearb = np.array([shearl, shearu])
-        bulks = np.mean(bulkb)
-        shears = np.mean(shearb)
+        bulks = 37 # (GPa)
+        shears = 44 # (GPa)
+        bulks *= 1000  # Convert from GPa to MPa
+        shears *= 1000
         #
         return denss, bulks, shears
     #
-    # ---------------------------------------------------
-    #
-
-    def _hashinshtr(self, vclay):
-        #
-        # Calculate lower and upper, bulk and shear,
-        # Hashin-Shtrikman bounds, utilizing that they
-        # all have the common mathematical form,
-        #
-        # f = a + b/((1/c) + d*(1/e)).
-        #
-        #
-        # Input
-        #       vclay - "volume of clay"
-        #
-        # Output
-        #       bulkl  - lower bulk Hashin-Shtrikman
-        #                bound (MPa)
-        #       bulku  - upper bulk Hashin-Shtrikman
-        #                bound (MPa)
-        #       shearl - lower shear Hashin-Shtrikman
-        #                bound (MPa)
-        #       shearu - upper shear Hashin-Shtrikman
-        #                bound (MPa)
-        #
-        # -----------------------------------------------
-        #
-        # From table 1 in Report 1 in Abul Fahimuddin's
-        # thesis (he used GPa, I use MPa), ("c" for clay
-        # and "q" for quartz.):
-        #
-        bulkc = 14900
-        bulkq = 37000
-        shearc = 1950
-        shearq = 44000
-        #
-        # Calculate quantities common for both bulk and
-        # shear formulas
-        #
-        lb = 1 - vclay
-        ub = vclay
-        le = bulkc + 4*shearc/3
-        ue = bulkq + 4*shearq/3
-        #
-        # Calculate quantities common only for bulk
-        # formulas
-        #
-        bld = vclay
-        bud = 1 - vclay
-        blc = bulkq - bulkc
-        buc = bulkc - bulkq
-        #
-        # Calculate quantities common only for shear
-        # formulas
-        #
-        sld = 2*vclay*(bulkc + 2*shearc)/(5*shearc)
-        sud = 2*(1 - vclay)*(bulkq + 2*shearq)/(5*shearq)
-        slc = shearq - shearc
-        suc = shearc - shearq
-        #
-        # Calculate bounds utilizing generic formula;
-        # f = a + b/((1/c) + d*(1/e)).
-        #
-        # Lower bulk
-        #
-        bulkl = self._genhashinshtr(bulkc, lb, blc, bld,
-                                    le)
-        #
-        # Upper bulk
-        #
-        bulku = self._genhashinshtr(bulkq, ub, buc, bud,
-                                    ue)
-        #
-        # Lower shear
-        #
-        shearl = self._genhashinshtr(shearc, lb, slc,
-                                     sld, le)
-        #
-        # Upper shear
-        #
-        shearu = self._genhashinshtr(shearq, ub, suc,
-                                     sud, ue)
-        #
-        return bulkl, bulku, shearl, shearu
-
-    #
-    # ---------------------------------------------------
-    #
-    def _genhashinshtr(self, a, b, c, d, e):
-        #
-        # Calculate arbitrary Hashin-Shtrikman bound,
-        # which has the generic form
-        #
-        # f = a + b/((1/c) + d*(1/e))
-        #
-        # both for lower and upper bulk and shear bounds
-        #
-        #
-        # Input
-        #       a - see above formula
-        #       b - see above formula
-        #       c - see above formula
-        #       d - see above formula
-        #       e - see above formula
-        #
-        # Output
-        #       f - Bulk or shear Hashin-Shtrikman bound
-        #           value
-        #
-        # -----------------------------------------------
-        #
-        cinv = 1/c
-        einv = 1/e
-        f = a + b/(cinv + d*einv)
-        #
-        return f
     #
     # =======================
     # Solid properties end
     # =======================
     #
+    def _coordination_number(self):
+        # Applies for granular media
+        # Average number of contacts that each grain has with surrounding grains
+        # Coordnumber = 6; simple cubic packing
+        # Coordnumber = 12; hexagonal close packing
+        # Needed for Hertz-Mindlin model
+        # Smeaheia number (Tuhin)
+        coordnumber = 9
 
+        return coordnumber
     #
+    def _critical_porosity(self):
+        # For most porous media there exists a critical  porosity
+        # phi_critical, that seperates their mechanical and acoustic behaviour into two domains.
+        # For porosities below phi_critical the mineral grains are oad bearing, for values above the grains are
+        # suspended in the fluids which are load-bearing
+        # Needed for Hertz-Mindlin model
+        # Smeaheia number (Tuhin)
+        phicritical = 0.36
+
+        return phicritical
+    #
+    def _effective_pressure(self, poverb, pfluid):
+
+        # Input
+        #       poverb - overburden pressure (MPa)
+        #       pfluid - fluid pressure (MPa)
+
+        peff = poverb - pfluid
+
+        if peff < 0:
+            print("\nError in _hertzmindlin method")
+            print("Negative effective pressure (" + str(peff) +
+              "). Setting effective pressure to 0.01")
+            peff = 0.01
+
+
+
+        return peff
+
     # ============================
     # Dry rock properties start
     # ============================
     #
-    def _dryrockmoduli(self, poro, poverb, pfluid, bulks, shears, ind=None, ntg=None, p_init=None, denss=None, Rs=None, phases=None):
+    def _dryrockmoduli_Smeaheia(self, coordnumber, phicritical, poro, peff, bulks, shears):
         #
         #
         # Calculate bulk and shear dry rock moduli,
-        # utilizing that they have the common
-        # mathematical form,
-        #
-        #     --                                -- ^(-1)
-        #     |(poro/poroc)      1 - (poro/poroc)|
-        # f = |------------   +  ----------------|   - z.
-        #     |   a + z              b + z       |
-        #     --.                               --
-        #
+
         #
         # Input
         #       poro   - porosity
-        #       poverb - overburden pressure (MPa)
-        #       pfluid - fluid pressure (MPa)
+        #       peff   - effective pressure overburden - fluid pressure (MPa)
         #       bulks  - bulk solid (mineral) rock bulk
         #                modulus (MPa)
         #       shears - solid rock (mineral) shear
@@ -610,55 +506,38 @@ class elasticproperties:
         #
         # Calculate Hertz-Mindlin moduli
         #
-        bulkhm, shearhm = self._hertzmindlin(poverb,
-                                             pfluid)
+        bulkhm, shearhm = self._hertzmindlin_Mavko(peff, bulks, shears, coordnumber, phicritical)
         #
-        # From table 1 in Report 1 in Abul Fahimuddin's
-        # thesis (I assume \phi_max in that
-        # table corresponds to \phi_c in his formulas):
-        #
-        poroc = 0.4
-        #
-        # Calculate input common to both bulk and
-        # shear formulas
-        #
-        poratio = poro/poroc
-        #
-        # Calculate input to bulk formula
-        #
-        ba = bulkhm
-        bb = bulks
-        bz = 4*shearhm/3
-        #
-        # Calculate input to shear formula
-        #
-        sa = shearhm
-        sb = shears
-        sz = (shearhm/6)*((9*bulkhm + 8*shearhm) /
-                          (bulkhm + 2*shearhm))
-        #
-        # Calculate moduli
-        #
-        bulkd = self._gendryrock(poratio, ba, bb, bz)
-        sheard = self._gendryrock(poratio, sa, sb, sz)
-        #
+        bulkd = 1 / ((poro / phicritical) / (bulkhm + 4 / 3 * shearhm) +
+                     (1 - poro / phicritical) / (bulks + 4 / 3 * shearhm)) - 4 / 3 * shearhm
+
+        psi = (9 * bulkhm + 8 * shearhm) / (bulkhm + 2 * shearhm)
+
+        sheard = 1 / ((poro / phicritical) / (shearhm + 1 / 6 * psi * shearhm) +
+                     (1 - poro / phicritical) / (shears + 1 / 6 * psi * shearhm)) - 1 / 6 * psi * shearhm
+
+        #return K_dry, G_dry
         return bulkd, sheard
-    #
+
+
+            #
     # ---------------------------------------------------
     #
 
-    def _hertzmindlin(self, poverb, pfluid):
+    def _hertzmindlin_Mavko(self, peff, bulks, shears, coordnumber, phicritical):
         #
         # Calculate bulk and shear Hertz-Mindlin moduli
-        # utilizing that they have the common
-        # mathematical form,
-        #
-        # f = <a>max*(peff/pref)^kappa.
+        # adapted from Tuhins kode and "The rock physics handbook", pp247
         #
         #
         # Input
-        #       poverb - overburden pressure
-        #       pfluid - fluid pressure
+        #       p_eff       - effective pressure
+        #       bulks       - bulk solid (mineral) rock bulk
+        #                     modulus (MPa)
+        #       shears      - solid rock (mineral) shear
+        #                     modulus (MPa)
+        #       coordnumber - average number of contacts that each grain has with surrounding grains
+        #       phicritical - critical porosity
         #
         # Output
         #       bulkhm  - Hertz-Mindlin bulk modulus
@@ -668,63 +547,22 @@ class elasticproperties:
         #
         # -----------------------------------------------
         #
-        # From table 1 in Report 1 in Abul Fahimuddin's
-        # thesis (he used GPa for the moduli, I use MPa
-        # also for them):
-        #
-        bulkmax = 3310
-        shearmax = 2840
-        pref = 8.8
-        kappa = 0.233
-        #
-        # Calculate moduli
-        #
-        peff = poverb - pfluid
-        if peff < 0:
-            print("\nError in _hertzmindlin method")
-            print("Negative effective pressure (" + str(peff) +
-                  "). Setting effective pressure to 0.01")
-            peff = 0.01
-   #         sys.exit(1)
-        common = (peff/pref)**kappa
-        bulkhm = bulkmax*common
-        shearhm = shearmax*common
+
+
+        poisson = (3 * bulks - 2 * shears) / (6 * bulks + 2 * shears)
+
+        bulkhm = ((coordnumber ** 2 * (1 - phicritical) ** 2 * shears ** 2 * peff) /
+                (18 * np.pi ** 2 * (1 - poisson) ** 2)) ** (1 / 3)
+        shearhm = (5 - 4 * poisson) / (10 - 5 * poisson) * \
+               ((3 * coordnumber ** 2 * (1 - phicritical) ** 2 * shears ** 2 * peff) /
+                (2 * np.pi ** 2 * (1 - poisson) ** 2)) ** (1 / 3)
+
+
+
         #
         return bulkhm, shearhm
-    #
-    # ---------------------------------------------------
-    #
 
-    def _gendryrock(self, q, a, b, z):
-        #
-        # Calculate arbitrary dry rock moduli, which has
-        # the generic form
-        #
-        #     --                                -- ^(-1)
-        #     |     q                1 - q       |
-        # f = |------------   +  ----------------|   - z,
-        #     |   a + z              b + z       |
-        #     --.                               --
-        #
-        # both for bulk and shear moduli
-        #
-        #
-        # Input
-        #       q - see above formula
-        #       a - see above formula
-        #       b - see above formula
-        #       z - see above formula
-        #
-        # Output
-        #       f - Bulk or shear dry rock modulus value
-        #
-        # -----------------------------------------------
-        #
-        afrac = q/(a + z)
-        bfrac = (1 - q)/(b + z)
-        f = 1/(afrac + bfrac) - z
-        #
-        return f
+
     # ===========================
     # Dry rock properties end
     # ===========================
