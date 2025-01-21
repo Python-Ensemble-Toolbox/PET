@@ -45,5 +45,6 @@ setup(
         'libecalc',
         'scikit-learn',
         'pylops'
+
     ] + EXTRAS['doc'],
 )
