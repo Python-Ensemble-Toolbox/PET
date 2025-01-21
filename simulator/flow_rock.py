@@ -18,7 +18,7 @@ from mako.runtime import Context
 from pylops.utils.wavelets import ricker
 from pylops.signalprocessing import Convolve1D
 import sys
-sys.path.append("/home/AD.NORCERESEARCH.NO/mlie/")
+#sys.path.append("/home/AD.NORCERESEARCH.NO/mlie/")
 from PyGRDECL.GRDECL_Parser import GRDECL_Parser  # https://github.com/BinWang0213/PyGRDECL/tree/master
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
@@ -213,11 +213,8 @@ class flow_rock(flow):
             for v, assim_time in enumerate(self.pem_input['vintage']):
                 time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
                         dt.timedelta(days=assim_time)
-                time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
-                           dt.timedelta(days=assim_time)
 
                 self.calc_pem(time)
-
 
                 # mask the bulk imp. to get proper dimensions
                 tmp_value = np.zeros(self.ecl_case.init.shape)
