@@ -829,11 +829,11 @@ class flow_avo(flow_rock):
             print('warning: dimension mismatch in line 750 flow_rock.py')
 
         if len(self.pem.getBulkVel()) == len(true_indices[0]):
-            self.vp = np.zeros(grid['DIMENS'])
+            self.vp = np.full(grid['DIMENS'], self.avo_config['vp_shale'])
             self.vp[true_indices] = (self.pem.getBulkVel())
-            self.vs = np.zeros(grid['DIMENS'])
+            self.vs = np.full(grid['DIMENS'], self.avo_config['vs_shale'])
             self.vs[true_indices] = (self.pem.getShearVel())
-            self.rho = np.zeros(grid['DIMENS'])
+            self.rho = np.full(grid['DIMENS'], self.avo_config['den_shale'])
             self.rho[true_indices] = (self.pem.getDens())
         else:
             self.vp = (self.pem.getBulkVel()).reshape((self.NX, self.NY, self.NZ), order='F')
