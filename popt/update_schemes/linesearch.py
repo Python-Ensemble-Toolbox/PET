@@ -642,10 +642,8 @@ class LineSearchStepBase:
 
 
 def get_near_psd(A):
-    C = (A + A.T)/2
-    eigval, eigvec = np.linalg.eig(C)
-    eigval[eigval < 0] = 1e-5
-
+    eigval, eigvec = np.linalg.eig((A + A.T)/2)
+    eigval[eigval < 0] = 1.0
     return eigvec.dot(np.diag(eigval)).dot(eigvec.T)
 
 def make_matrix_psd(A, maxiter=100):
