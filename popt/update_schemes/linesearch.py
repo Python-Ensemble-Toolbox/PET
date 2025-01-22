@@ -499,6 +499,11 @@ class LineSearchStepBase:
         self.method = kwargs.get('method', 2)
         self.logger = kwargs.get('logger', None)
 
+        # If c2 is None, the curvature condition is not used
+        if self.c2 is None:
+            self.c2 = np.inf
+            self.method = 0
+
         # Check for initial values
         if self.fk is None:
             self.phi0 = self.phi(0, eval=False)

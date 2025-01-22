@@ -86,19 +86,19 @@ class TrustRegionClass(Optimize):
             
         self.trust_radius     = options.get('trust_radius', init_trust_radius) 
         self.trust_radius_max = options.get('trust_radius_max', 10*self.trust_radius)
-        self.trust_radius_min = options.get('trust_radius_min', self.trust_radius/1000)
+        self.trust_radius_min = options.get('trust_radius_min', self.trust_radius/100)
 
         # Set other options
         #self.ftol = options.get('ftol', 1e-6)
         #self.xtol = options.get('xtol', 1e-4)
-        self.eta  = options.get('eta', 1e-6)
-        self.eps1 = options.get('eps1', 0.1)
-        self.eps2 = options.get('eps2', 0.5)
-        self.eps3 = options.get('eps3', 0.5)
+        self.eta1 = options.get('eta1', 1e-6)
+        self.eta2 = options.get('eta2', 0.1)
+        self.gam1 = options.get('gam1', 0.8)
+        self.gam2 = options.get('gam2', 1.5)
         self.rho  = 0.0
 
         self.normalize = options.get('normalize', False)
-        self.resample  = options.get('resample', 0)
+        self.resample  = options.get('resample', 3)
         self.saveit    = options.get('saveit', True)
 
         if not self.restart:
@@ -118,12 +118,11 @@ class TrustRegionClass(Optimize):
             if self.saveit:
                 ot.save_optimize_results(self.optimize_result)
 
-            if self.logger is not None:
-                self.logger.info(f'       ====== Running optimization - Trust Region ======')
-                self.logger.info('\n'+pprint.pformat(OptimizeResult(self.options)))
-                self.logger.info(f'       {"iter.":<10} {"fun":<15} {"tr-radius":<15} {"rho":<15}')
-                self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
-                self.logger.info('')
+            self._log(f'       ====== Running optimization - Trust Region ======')
+            self._log('\n'+pprint.pformat(OptimizeResult(self.options)))
+            self._log(f'       {"iter.":<10} {"fun":<15} {"tr-radius":<15} {"rho":<15}')
+            self._log(f'       {self.iteration:<10} {self.fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
+            self._log('')
         
         # Run the optimization
         self.run_loop()
@@ -190,13 +189,18 @@ class TrustRegionClass(Optimize):
 
         return OptimizeResult(res)
 
-    def calc_update(self):
+    def _log(self, msg):
+        if self.logger is not None:
+            self.logger.info(msg)
+
+    def calc_update(self, iter_resamp=0):
 
         # Initialize variables for this step
         success = True
         fun_old = self.fk
 
         # Solve subproblem
+        self._log('Solving trust region subproblem')
         sk = self.solve_sub_problem_CG_Steihaug(self.jk, self.Hk, self.trust_radius)
 
         # Calculate the actual function value
@@ -207,60 +211,70 @@ class TrustRegionClass(Optimize):
         predicted_reduction = - np.dot(self.jk, sk) - 0.5*np.dot(sk, np.dot(self.Hk, sk))
         self.rho = actual_reduction/predicted_reduction
 
-        if self.rho > self.eta:
+        if self.rho > self.eta1:
             
             # Update the control
             self.xk = ot.clip_state(self.xk + sk, self.bounds)
             self.fk = fun_new
 
-            # Update trust region radius
-            if np.linalg.norm(sk) <= 0.8*self.trust_radius:
-                self.trust_radius = 0.8*self.trust_radius
-            else:  
-                if self.rho > self.eps3:
-                    self.trust_radius = min(self.trust_radius_max, 1.5*self.trust_radius)          
-                elif self.eps1 <= self.rho <= self.eps2:
-                    self.trust_radius = self.trust_radius
-                else:
-                    self.trust_radius = 0.95*self.trust_radius
+            # Save Results
+            self.optimize_result = self.update_results()
+            if self.saveit:
+                ot.save_optimize_results(self.optimize_result)
+
+            # Write logging info
+            self._log('')
+            self._log(f'       {"iter.":<10} {"fun":<15} {"tr-radius":<15} {"rho":<15}')
+            self._log(f'       {self.iteration:<10} {self.fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
+            self._log('')
+
+            # Call the callback function
+            if callable(self.callback):
+                self.callback(self)
+
+            # update the trust region radius
+            if self.rho >= self.eta2:
+                self.trust_radius = min(self.gam2*self.trust_radius, self.trust_radius_max)
+            elif self.eta1 <= self.rho < self.eta2:
+                self.trust_radius = self.trust_radius
+            else:
+                self.trust_radius = self.gam1*self.trust_radius
+
+            # check for convergence
+            if self.trust_radius < self.trust_radius_min:
+                success = False
+            else:
+                # Calculate the jacobian and hessian
+                self.jk = self._jac(self.xk)
+                self.Hk = self._hess(self.xk)
+            
+            # Update iteration
+            self.iteration += 1
 
         else:
-            self.trust_radius = 0.5*self.trust_radius
-    
+            if iter_resamp < self.resample:
 
-        # Update results if we hav improvement in the function value
-        if fun_new < fun_old:
-            self.optimize_result = self.update_results()
-        # Save results
-        if self.saveit:
-            ot.save_optimize_results(self.optimize_result)
+                iter_resamp += 1
 
-        # Write logging info
-        if self.logger is not None:
-            self.logger.info('')
-            self.logger.info(f'       {"iter.":<10} {"fun":<15} {"tr-radius":<15} {"rho":<15}')
-            self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
-            self.logger.info('')
-        
-        # Call the callback function
-        if callable(self.callback):
-            self.callback(self) 
+                self._log('Resampling gradient and hessian')
+                # Calculate the jacobian and hessian
+                self.jk = self._jac(self.xk)
+                self.Hk = self._hess(self.xk)
 
-        # Calculate the jacobian and hessian
-        self.jk = self._jac(self.xk)
-        self.Hk = self._hess(self.xk)
+                self._log('Reducing trust region radius by 50%')
+                # Reduce trust region radius to 50% of current value
+                self.trust_radius = 0.5*self.trust_radius
 
-        # Update iteration
-        self.iteration += 1
+                # Recursivly call function
+                success = self.calc_update(iter_resamp=iter_resamp)
 
-        # check for convergence
-        if self.trust_radius < self.trust_radius_min:
-            success = False
+            else:
+                success = False
 
         return success
 
     
-    def solve_sub_problem_CG_Steihaug(self, g, B, delta, tol=1e-5, maxiter=1000):
+    def solve_sub_problem_CG_Steihaug(self, g, B, delta, tol=1e-4, maxiter=1000):
         """
         Solve the trust region subproblem using Steihaug's Conjugate Gradient method.
         (A big thanks to copilot for the help with this implementation)
@@ -279,40 +293,45 @@ class TrustRegionClass(Optimize):
         p = np.zeros(n)
         r = g.copy()
         d = -r
-        rTr = np.dot(r, r)
+
+        # make quadratic model
+        mc = lambda p: np.dot(g,p) + np.dot(p,np.dot(B,p))/2
 
         for k in range(maxiter):
-            Bd  = np.dot(B, d)
-            dBd = np.dot(d, Bd)
+            dBd = np.dot(d, np.dot(B, d))
 
             if dBd <= 0:
-                tau = - (np.dot(g,d) + np.dot(p,np.dot(B,d))) / (np.dot(d,np.dot(B,d)))
-                if np.linalg.norm(p + tau*d) > delta:
-                    tau = (-np.dot(p,d) + np.sqrt(np.dot(p,d)**2 - np.dot(d,d) * (np.dot(p,p) - delta**2))) / np.dot(d,d)
+                # Solve the quadratic equation: (p + tau*d)**2 = delta**2
+                tau_values   = np.roots([np.dot(d,d), 2*np.dot(p,d), np.dot(p,p) - delta**2])
+                model_values = [mc(p + t*d) for t in tau_values]
+                tau = tau_values[np.argmin(model_values)]
                     
                 p = p + tau*d
                 p = ot.clip_state(self.xk + p, self.bounds) - self.xk
                 break
 
-            alpha = rTr/dBd
-            p_next = p + alpha * d
+            alpha = np.dot(r,r)/dBd
+            p_new = p + alpha * d
 
-            if np.linalg.norm(p_next) >= delta:
-                tau = (-np.dot(p, d) + np.sqrt(np.dot(p, d)**2 - np.dot(d, d) * (np.dot(p, p) - delta**2))) / np.dot(d, d)
+            if np.linalg.norm(p_new) >= delta:
+
+                # Solve the quadratic equation: (p + tau*d)**2 = delta**2, for tau > 0
+                tau_values = np.roots([np.dot(d,d), 2*np.dot(p,d), np.dot(p,p) - delta**2])
+                tau = np.max(tau_values[np.where(tau_values > 0)[0]])
                 p = p + tau * d
                 p = ot.clip_state(self.xk + p, self.bounds) - self.xk
                 break
 
-            p = p = ot.clip_state(self.xk + p_next, self.bounds) - self.xk
-            r_next = r + alpha * Bd
+            r_new = r + alpha*np.dot(B, d)
 
-            if np.linalg.norm(r_next) < tol:
+            if np.linalg.norm(r_new) < tol*np.linalg.norm(r_new):
+                p = ot.clip_state(self.xk + p_new, self.bounds) - self.xk
                 break
 
-            beta = np.dot(r_next, r_next) / rTr
-            d = -r_next + beta * d
-            r = r_next
-            rTr = np.dot(r, r)
+            beta = np.dot(r_new, r_new)/np.dot(r,r)
+            d = -r_new + beta * d
+            r = r_new
+            p = p_new
 
         return p
              
