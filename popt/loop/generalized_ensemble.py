@@ -49,7 +49,9 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
             elif marginal == 'BetaMC':
                 lb, ub = np.array(self.bounds).T
                 self.margs = BetaMC(lb, ub)
-                default_theta = self.margs.var_to_concentration(np.diag(self.cov), self.get_state())
+                state = self.get_state()
+                var = np.diag(self.cov)
+                default_theta = np.array([var_to_concentration(state[i], var[i], lb[i], ub[i]) for i in range(self.dim)])
                 self.theta = kwargs_ens.get('theta', default_theta)
                 self.grad_scale = 1.0
                 self.hess_scale = 1.0
@@ -287,3 +289,39 @@ def epsilon_trafo(x, enX, eps, lower=None, upper=None):
         enY = x + 2*eps*(enX-0.5)
     
     return enY
+
+
+from sympy import symbols, solve, im, re
+def var_to_concentration(mode, var, lb=0, ub=1):
+
+    mode = (mode-lb)/(ub-lb)
+    var  = var/(ub-lb)**2
+
+    if var >= 1/12:
+        warnings.warn('Maximum variance for Beta distribution is 1/12. The variance is set to 0.08.')
+        var = 0.08
+
+    m, c, v = symbols('m c v')
+
+    # define alpha and beta
+    a = m*c+1
+    b = (1-m)*c+1
+
+    # define the variance expression
+    var_expr = a*b/((a+b)**2 * (a+b+1))
+    equation = var_expr - v
+    equation = equation.subs({m:mode, v:var})
+
+    # solve for c
+    solution = solve(equation, c)
+   
+    # check if imaginary part is zero
+    for i, sol in enumerate(solution):
+        is_real = im(sol).evalf() < 1e-10
+        if is_real:
+            solution[i] = re(sol).evalf()
+        else:
+            solution[i] = np.nan
+
+    # return the positive solution
+    return np.max(solution)
