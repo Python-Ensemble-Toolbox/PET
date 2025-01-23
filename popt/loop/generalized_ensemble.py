@@ -51,7 +51,11 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
                 self.margs = BetaMC(lb, ub)
                 state = self.get_state()
                 var = np.diag(self.cov)
+                #default_theta = self.margs.var_to_concentration(state, var)
                 default_theta = np.array([var_to_concentration(state[i], var[i], lb[i], ub[i]) for i in range(self.dim)])
+                #print(type(default_theta[0]))
+                #print(type(default_theta_old[0]))
+                #stop
                 self.theta = kwargs_ens.get('theta', default_theta)
                 self.grad_scale = 1.0
                 self.hess_scale = 1.0
@@ -322,6 +326,9 @@ def var_to_concentration(mode, var, lb=0, ub=1):
             solution[i] = re(sol).evalf()
         else:
             solution[i] = np.nan
+
+    # convert to numpy array
+    solution = np.array(solution).astype(np.float64)
 
     # return the positive solution
     return np.max(solution)
