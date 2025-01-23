@@ -94,7 +94,7 @@ class TrustRegionClass(Optimize):
         self.eta1 = options.get('eta1', 1e-6)
         self.eta2 = options.get('eta2', 0.1)
         self.gam1 = options.get('gam1', 0.8)
-        self.gam2 = options.get('gam2', 1.5)
+        self.gam2 = options.get('gam2', 1.25)
         self.rho  = 0.0
 
         self.normalize = options.get('normalize', False)
@@ -204,7 +204,8 @@ class TrustRegionClass(Optimize):
         sk = self.solve_sub_problem_CG_Steihaug(self.jk, self.Hk, self.trust_radius)
 
         # Calculate the actual function value
-        fun_new = self._fun(self.xk + sk)
+        xk_new = ot.clip_state(self.xk + sk, self.bounds)
+        fun_new = self._fun(xk_new)
 
         # Calculate rho
         actual_reduction    = self.fk - fun_new
@@ -214,7 +215,7 @@ class TrustRegionClass(Optimize):
         if self.rho > self.eta1:
             
             # Update the control
-            self.xk = ot.clip_state(self.xk + sk, self.bounds)
+            self.xk = xk_new
             self.fk = fun_new
 
             # Save Results
@@ -274,7 +275,7 @@ class TrustRegionClass(Optimize):
         return success
 
     
-    def solve_sub_problem_CG_Steihaug(self, g, B, delta, tol=1e-4, maxiter=1000):
+    def solve_sub_problem_CG_Steihaug(self, g, B, delta):
         """
         Solve the trust region subproblem using Steihaug's Conjugate Gradient method.
         (A big thanks to copilot for the help with this implementation)
@@ -289,51 +290,62 @@ class TrustRegionClass(Optimize):
         Returns:
         p (numpy.ndarray): Solution vector.
         """
-        n = len(g)
-        p = np.zeros(n)
-        r = g.copy()
-        d = -r
+        z = np.zeros_like(g)
+        r = g
+        d = -g
+
+        # Set same default tolerance as scipy
+        tol = min(0.5, la.norm(g)**2)*la.norm(g)
+
+        if la.norm(g) <= tol:
+            return z
 
         # make quadratic model
-        mc = lambda p: np.dot(g,p) + np.dot(p,np.dot(B,p))/2
+        mc = lambda s: self.fk + np.dot(g,s) + np.dot(s,np.dot(B,s))/2
 
-        for k in range(maxiter):
-            dBd = np.dot(d, np.dot(B, d))
+        while True:
+            dBd = np.dot(d, np.dot(B,d))
 
             if dBd <= 0:
                 # Solve the quadratic equation: (p + tau*d)**2 = delta**2
-                tau_values   = np.roots([np.dot(d,d), 2*np.dot(p,d), np.dot(p,p) - delta**2])
-                model_values = [mc(p + t*d) for t in tau_values]
-                tau = tau_values[np.argmin(model_values)]
-                    
-                p = p + tau*d
-                p = ot.clip_state(self.xk + p, self.bounds) - self.xk
-                break
+                tau_lo, tau_hi = self.get_tau_at_delta(z, d, delta)
+                p_lo = z + tau_lo*d
+                p_hi = z + tau_hi*d
+
+                if mc(p_lo) < mc(p_hi): 
+                    return p_lo
+                else:
+                    return p_hi
 
             alpha = np.dot(r,r)/dBd
-            p_new = p + alpha * d
+            z_new = z + alpha*d
 
-            if np.linalg.norm(p_new) >= delta:
-
+            if la.norm(z_new) >= delta:
                 # Solve the quadratic equation: (p + tau*d)**2 = delta**2, for tau > 0
-                tau_values = np.roots([np.dot(d,d), 2*np.dot(p,d), np.dot(p,p) - delta**2])
-                tau = np.max(tau_values[np.where(tau_values > 0)[0]])
-                p = p + tau * d
-                p = ot.clip_state(self.xk + p, self.bounds) - self.xk
-                break
+                _ , tau = self.get_tau_at_delta(z, d, delta)
+                return z + tau * d
+                
+            r_new = r + alpha*np.dot(B,d)
 
-            r_new = r + alpha*np.dot(B, d)
+            if la.norm(r_new) < tol:
+                return z_new
 
-            if np.linalg.norm(r_new) < tol*np.linalg.norm(r_new):
-                p = ot.clip_state(self.xk + p_new, self.bounds) - self.xk
-                break
-
-            beta = np.dot(r_new, r_new)/np.dot(r,r)
-            d = -r_new + beta * d
+            beta = np.dot(r_new,r_new)/np.dot(r,r)
+            d = -r_new + beta*d
             r = r_new
-            p = p_new
+            z = z_new
 
-        return p
+    
+    def get_tau_at_delta(self, p, d, delta):
+        """
+        Solve the quadratic equation: (p + tau*d)**2 = delta**2, for tau > 0
+        """
+        a = np.dot(d,d)
+        b = 2*np.dot(p,d)
+        c = np.dot(p,p) - delta**2
+        tau_lo = -b/(2*a) - np.sqrt(b**2 - 4*a*c)/(2*a) 
+        tau_hi = -b/(2*a) + np.sqrt(b**2 - 4*a*c)/(2*a) 
+        return tau_lo, tau_hi
              
 
                 
