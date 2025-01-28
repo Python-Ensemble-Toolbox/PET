@@ -49,7 +49,7 @@ def npv(pred_data, **kwargs):
         Qgp = np.squeeze(pred_data[i]['fgpt']) - np.squeeze(pred_data[i - 1]['fgpt'])
         Qwp = np.squeeze(pred_data[i]['fwpt']) - np.squeeze(pred_data[i - 1]['fwpt'])
         Qwi = np.squeeze(pred_data[i]['fwit']) - np.squeeze(pred_data[i - 1]['fwit'])
-        delta_days = (report[1][i] - report[1][i - 1]).days
+        delta_days = (report[1][i] - report[1][0]).days
 
         val = (Qop * npv_const['wop'] + Qgp * npv_const['wgp'] - Qwp * npv_const['wwp'] - Qwi * npv_const['wwi']) / (
             (1 + npv_const['disc']) ** (delta_days / 365))

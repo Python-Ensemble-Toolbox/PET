@@ -1,6 +1,8 @@
 # pylint: disable=too-many-lines
 """Read Schlumberger Eclipse grid input files.
 
+Examples
+--------
 >>> import pyresito.io.grdecl as grdecl
 >>> grid = grdecl.read ("FOO")
 """
@@ -429,10 +431,14 @@ class _OwningLexer (_Lexer):
 
 # pylint: disable=too-many-arguments, too-many-locals, invalid-name
 def _axes_rot(x1, y1, x2, y2, x3, y3):
-    """Rotation matrix and offset vector for axes mapping.
+    """
+    Rotation matrix and offset vector for axes mapping.
 
-    :returns:  (A, b) such that each point x in coordinate array should be
-               rotated with A(x-b)+b
+    Returns
+    -------
+    tuple
+        A tuple (A, b) where A is the rotation matrix and b is the offset vector.
+        Each point x in the coordinate array should be rotated with A(x - b) + b.
     """
     # y axis vector
     v1_x = x1 - x2
@@ -862,16 +868,22 @@ _GEN_END = b'-- Generated ]\r\n'
 
 
 def _parse_meta(mem):
-    """Parse the file headers for properties that are put there by the
-    generator and that can give hints as to how to most efficiently
-    process the file.
+    """
+    Parse the file headers for properties set by the generator.
 
-    :param mem: Opened memory-map for the main input file.
-    :type mem:  mmap.mmap
-    :returns:   Properties that are set in the header of the data file,
-                and the number of bytes that can be skipped to avoid
-                processing this header again (it will be in comments)
-    :rtype:     (dict, int)
+    These properties can provide hints for efficient file processing.
+
+    Parameters
+    ----------
+    mem : mmap.mmap
+        Opened memory-map for the main input file.
+
+    Returns
+    -------
+    dict
+        Properties set in the header of the data file.
+    int
+        Number of bytes that can be skipped to avoid processing this header again (it will be in comments).
     """
     # dictionary that will receive parsed headers, if any
     props = col.OrderedDict()
@@ -1010,23 +1022,27 @@ def _fast_index_file(base_dir, fname, index):
 
 def _fast_index_mem(base_dir, fname, mem, skip, index):
     """
-    :param base_dir: Directory from which included files will be read
-    :type base_dir:  str
-    :param fname:    Filename associated with the memory-mapping
-    :type fname:     str
-    :param mem:      Memory-mapping of the file that should be indexed.
-    :type mem:       mmap.mmap
-    :param skip:     Number of bytes that should be skipped at the beginning of
-                     the file.
-    :type skip:      int
-    :param index:    Lookup table of the (recognized) keywords in the file and
-                     their position. The position is a pair of the address of
-                     the first data byte (which may be a whitespace), and of
-                     the ending slash, which can be seen as the end-point of
-                     the data, exclusive (i.e. you don't read that slash). If
-                     the last item in the tuple is not None, then it is in
-                     another file than the main file.
-    :type index:     Dictionary [str, (int, int, str)]
+    Parse and index the memory-mapped file.
+
+    Parameters
+    ----------
+    base_dir : str
+        Directory from which included files will be read.
+    fname : str
+        Filename associated with the memory-mapping.
+    mem : mmap.mmap
+        Memory-mapping of the file that should be indexed.
+    skip : int
+        Number of bytes that should be skipped at the beginning of the file.
+    index : dict
+        Lookup table of the recognized keywords in the file and their position.
+        The position is a pair of the address of the first data byte (which may be a whitespace),
+        and of the ending slash, which can be seen as the end-point of the data, exclusive.
+        If the last item in the tuple is not None, then it is in another file than the main file.
+
+    Returns
+    -------
+    None
     """
     # build an index of keywords found in the file
     cur_pos = skip
@@ -1108,17 +1124,22 @@ else:
 
 
 def _tokenize(mem, bgn, end):
-    """Read tokens from the data part of a section.
+    """
+    Read tokens from the data part of a section.
 
-    :param mem:  Memory-mapping of the file the section should be read from.
-    :type mem:   mmap.mmap
-    :param bgn:  Offset of the first byte that is part of the section.
-    :type bgn:   int
-    :param end:  Offset of the first next byte that is *not* part of the
-                 section (end range, exclusive).
-    :type end:   int
-    :returns:    List of ranges for each token.
-    :rtype:      Generator [(int, int)]
+    Parameters
+    ----------
+    mem : mmap.mmap
+        Memory-mapping of the file the section should be read from.
+    bgn : int
+        Offset of the first byte that is part of the section.
+    end : int
+        Offset of the first next byte that is *not* part of the section (end range, exclusive).
+
+    Returns
+    -------
+    generator
+        Generator yielding tuples of (int, int) representing ranges for each token.
     """
     # current position we are looking at
     cur = bgn
@@ -1145,18 +1166,24 @@ def _tokenize(mem, bgn, end):
 
 
 def _decode(mem, fst, lst, typ):
-    """Decode a token into a value.
+    """
+    Decode a token into a value.
 
-    :param mem:  Memory-mapping of the file we are reading from.
-    :type mem:   mmap.mmap
-    :param fst:  Offset into the file of the start of the token.
-    :type fst:   int
-    :param lst:  Offset into the file of one past the last byte of the token.
-    :type lst:   int
-    :param typ:  Conversion routine for the value
-    :type typ:   str -> Any
-    :returns:    The value that is decoded, and the repeat count of that value.
-    :rtype:      (int, Any)
+    Parameters
+    ----------
+    mem : mmap.mmap
+        Memory-mapping of the file we are reading from.
+    fst : int
+        Offset into the file of the start of the token.
+    lst : int
+        Offset into the file of one past the last byte of the token.
+    typ : str -> Any
+        Conversion routine for the value.
+
+    Returns
+    -------
+    tuple of (int, Any)
+        The value that is decoded, and the repeat count of that value.
     """
     # is a repeat count specified?
     asterisk = mem.find(b'*', fst, lst)
@@ -1175,21 +1202,26 @@ def _decode(mem, fst, lst, typ):
 
 
 def _read_array(mem, bgn, end, dims, typ):
-    """Read a section as a typed matrix.
+    """
+    Read a section as a typed matrix.
 
-    :param mem:  Memory-mapping of the file the section should be read from.
-    :type mem:   mmap.mmap
-    :param bgn:  Offset of the first byte that is part of the section.
-    :type bgn:   int
-    :param end:  Offset of the first next byte that is *not* part of the
-                 section (end range, exclusive).
-    :type end:   int
-    :param dims: Tuple consisting of final dimensions for the array
-    :type dims:  List [int]
-    :param typ:  Conversion routine for the value
-    :type typ:   str -> Any
-    :returns:    Array of values read from the file
-    :type:       :class:`numpy.ndarray`, shape = dims, dtype = typ
+    Parameters
+    ----------
+    mem : mmap.mmap
+        Memory-mapping of the file the section should be read from.
+    bgn : int
+        Offset of the first byte that is part of the section.
+    end : int
+        Offset of the first next byte that is *not* part of the section (end range, exclusive).
+    dims : list of int
+        Tuple consisting of final dimensions for the array.
+    typ : str -> Any
+        Conversion routine for the value.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of values read from the file with shape `dims` and dtype `typ`.
     """
     # allocate the memory of the array first
     total = int(numpy.product(dims))
@@ -1219,19 +1251,26 @@ def _read_array(mem, bgn, end, dims, typ):
 
 # pylint: disable=too-many-arguments
 def _read_section(sec_name, dims, typ, mem, sec_tbl):
-    """Read a section from file, if it is present.
+    """
+    Read a section from file, if it is present.
 
-    :param sec_name: Name of the section to be read
-    :type sec_name:  str
-    :param dims:     Tuple consisting of final dimensions for the array
-    :type dims:      List [int]
-    :param typ:      Conversion routine for the value
-    :type typ:       str -> Any
-    :param mem:      Memory-mapping of the file the section should be read
-                     from.
-    :type mem:       mmap.mmap
-    :param sec_tbl:  Lookup table for each section, in the file
-    :type sec_tbl:   Dict [str, (int, int)]
+    Parameters
+    ----------
+    sec_name : str
+        Name of the section to be read.
+    dims : list of int
+        Tuple consisting of final dimensions for the array.
+    typ : str -> Any
+        Conversion routine for the value.
+    mem : mmap.mmap
+        Memory-mapping of the file the section should be read from.
+    sec_tbl : dict of str to tuple of (int, int)
+        Lookup table for each section in the file.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of values read from the file with shape `dims` and dtype `typ`.
     """
     log.info("Reading keyword %s", sec_name)
 
@@ -1251,18 +1290,26 @@ def _read_section(sec_name, dims, typ, mem, sec_tbl):
 
 
 def _sec_mat(mem, sec_tbl, sec_name, dtype, usecols):
-    """Read a data section matrix for a keyword.
+    """
+    Read a data section matrix for a keyword.
 
-    :param mem:      Memory-mapping of the file the section should be read
-                     from.
-    :type mem:       mmap.mmap
-    :param sec_tbl:  Lookup table for each section, in the file
-    :type sec_tbl:   Dict [str, (int, int)]
-    :param sec_name: Name of the section to be read
-    :type sec_name:  str
-    :param dtype:    Expected NumPy data type of the values in the section
-    :param usecols:  Columns that should be read. Use None to read a freely
-                     formatted section.
+    Parameters
+    ----------
+    mem : mmap.mmap
+        Memory-mapping of the file the section should be read from.
+    sec_tbl : dict of str to tuple of (int, int)
+        Lookup table for each section in the file.
+    sec_name : str
+        Name of the section to be read.
+    dtype : numpy.dtype
+        Expected NumPy data type of the values in the section.
+    usecols : list of int or None
+        Columns that should be read. Use None to read a freely formatted section.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of values read from the file with shape inferred from the section and dtype `dtype`.
     """
     # get the address of the section within the file
     bgn, end, fname = sec_tbl[sec_name]
@@ -1299,13 +1346,20 @@ def _sec_mat_mem(mem, bgn, end, dtype, usecols):
 
 
 def _read_specgrid(mem, sec_tbl):
-    """Read the grid dimensions.
+    """
+    Read the grid dimensions.
 
-    :param mem:      Memory-mapping of the file the section should be read
-                     from.
-    :type mem:       mmap.mmap
-    :param sec_tbl:  Lookup table for each section, in the file
-    :type sec_tbl:   Dict [str, (int, int)]
+    Parameters
+    ----------
+    mem : mmap.mmap
+        Memory-mapping of the file the section should be read from.
+    sec_tbl : dict of str to tuple of (int, int)
+        Lookup table for each section in the file.
+
+    Returns
+    -------
+    tuple of int
+        The dimensions of the grid.
     """
     # read the first three numbers from the section
     log.info("Reading keyword SPECGRID")
@@ -1337,10 +1391,14 @@ def _strip_newline(data):
 
 
 def _axes_map(mem, section_index):
-    """Rotation matrix and offset vector for axes mapping.
+    """
+    Rotation matrix and offset vector for axes mapping.
 
-    :returns:  (A, b) such that each point x in coordinate array should be
-               rotated with A(x-b)+b
+    Returns
+    -------
+    tuple of (ndarray, ndarray)
+        A tuple (A, b) where A is the rotation matrix and b is the offset vector.
+        Each point x in the coordinate array should be rotated with A(x - b) + b.
     """
     # if a mapping is specified in the file, then use this, otherwise
     # return a unit mapping, so that we can proceed along the same code path
@@ -1357,15 +1415,19 @@ def _axes_map(mem, section_index):
 
 
 def _read_coord(dims, mem, sec_tbl, A, b):
-    """Read pillar coordinates.
+    """
+    Read pillar coordinates.
 
-    :param mem:      Memory-mapping of the file the section should be read
-                     from.
-    :type mem:       mmap.mmap
-    :param sec_tbl:  Lookup table for each section, in the file
-    :type sec_tbl:   Dict [str, (int, int)]
-    :param A:        Rotation matrix
-    :param b:        Rotation offset
+    Parameters
+    ----------
+    mem : mmap.mmap
+        Memory-mapping of the file the section should be read from.
+    sec_tbl : dict of str to tuple of (int, int)
+        Lookup table for each section in the file.
+    A : ndarray
+        Rotation matrix.
+    b : ndarray
+        Rotation offset.
     """
     # extract dimensions of the table into more sensible local names
     num_j = dims[1]
@@ -1471,12 +1533,13 @@ def read(filename):
 
 def _read_multi(wrapper_name, mem):
     """
-    :param wrapper_name:  Name of the file containing the inclusion wrapper.
-                          This file is only interesting because the name of
-                          the dimensions file is constructed based on it.
-    :type wrapper_name:   str
-    :param mem:           Handle to memory-mapping of the wrapper file.
-    :type mem:            mmap.mmap
+    Parameters
+    ----------
+    wrapper_name : str
+        Name of the file containing the inclusion wrapper. This file is only 
+        interesting because the name of the dimensions file is constructed based on it.
+    mem : mmap.mmap
+        Handle to memory-mapping of the wrapper file.
     """
     log.info("Reading wrapper for include statements")
     # parse the entire buffer for inclusion clauses
@@ -1542,12 +1605,20 @@ def _read_multi(wrapper_name, mem):
 
 def _read_multi_prop(filename, dims, grid):
     """
-    :param filename:  Name of the file containing the property.
-    :type filename:   str
-    :param dims:      Dimensions of the grid
-    :type dims:       List [int]
-    :param grid:      Structure that will receive the property.
-    :type grid:       dict
+    Read a property from a file and store it in the grid structure.
+
+    Parameters
+    ----------
+    filename : str
+        Name of the file containing the property.
+    dims : list of int
+        Dimensions of the grid.
+    grid : dict
+        Structure that will receive the property.
+
+    Returns
+    -------
+    None
     """
     with open(filename, 'rb') as fileobj:
         # read the name of the property from the first line of the file
@@ -1580,13 +1651,25 @@ _SPECIAL_FORMAT = {
 
 
 def _write_kw(fileobj, propname, values, lookup, dimens):
-    """Write a section for a single keyword to an already open file.
+    """
+    Write a section for a single keyword to an already open file.
 
-    :param fileobj:   Where to serialize the data
-    :param propname:  Name of the property from the grid to write
-    :param values:    Array with the values themselves
-    :param lookup:    Mapping of properties to identfier string used in file
-    :param dimens:    Dimensions of the grid, (ni, nj, nk)
+    Parameters
+    ----------
+    fileobj : file-like object
+        Where to serialize the data.
+    propname : str
+        Name of the property from the grid to write.
+    values : numpy.ndarray
+        Array with the values themselves.
+    lookup : dict
+        Mapping of properties to identifier string used in file.
+    dimens : tuple of int
+        Dimensions of the grid, (ni, nj, nk).
+
+    Returns
+    -------
+    None
     """
     # structure of the values: if we can make a fixed number of columns,
     # then we attempt to do so, otherwise we just write everything as a
@@ -1655,11 +1738,24 @@ _LEADING = ['COORD', 'ZCORN', 'ACTNUM']
 
 def _write_multi(path, base, grid, lookup, dialect):
     """
-    :param path:     Path to all files that are generated
-    :param base:     Prefix for all the files that are generated
-    :param grid:     Dictionary of properties
-    :param lookup:   Lookup function for keyword strings
-    :param dialect:  Simulator that the file is intended for
+    Generate files for the grid properties.
+
+    Parameters
+    ----------
+    path : str
+        Path to all files that are generated.
+    base : str
+        Prefix for all the files that are generated.
+    grid : dict
+        Dictionary of properties.
+    lookup : function
+        Lookup function for keyword strings.
+    dialect : str
+        Simulator that the file is intended for.
+
+    Returns
+    -------
+    None
     """
     log.info('Writing multiple files')
     stem = os.path.join(path, base)
@@ -1706,11 +1802,24 @@ def _write_multi(path, base, grid, lookup, dialect):
 
 def _write_single(path, base, grid, lookup, dialect):
     """
-    :param path:     Path to all files that are generated
-    :param base:     Prefix for all the files that are generated
-    :param grid:     Dictionary of properties
-    :param lookup:   Lookup function for keyword strings
-    :param dialect:  Simulator that the file is intended for
+    Generate files for the grid properties.
+
+    Parameters
+    ----------
+    path : str
+        Path to all files that are generated.
+    base : str
+        Prefix for all the files that are generated.
+    grid : dict
+        Dictionary of properties.
+    lookup : function
+        Lookup function for keyword strings.
+    dialect : str
+        Simulator that the file is intended for.
+
+    Returns
+    -------
+    None
     """
     log.info('Writing Single files')
     stem = os.path.join(path, base)
@@ -1769,21 +1878,25 @@ _DIALECT = {
 
 
 def write(filename, grid, dialect='ecl', multi_file=True):
-    """Write a grid to corner-point text format, formatted in such a way
+    """
+    Write a grid to corner-point text format, formatted in such a way
     that it can easily be read again.
 
-    :param filename:    Name of the filename containing a wrapper for all
-                        the properties. This will also serve as the stem for
-                        all individual property files.
-    :type filename:     str
-    :param grid:        Grid object containing values for all properties.
-    :type grid:         dict
-    :param dialect:     Name of the simulator that we are writing files for.
-                        Currently, this must be 'ecl'.
-    :type dialect:      str
-    :param multi_file:  Write properties in separate files, instead of putting
-                        everything in one large file.
-    :type multi_file:   bool
+    Parameters
+    ----------
+    filename : str
+        Name of the filename containing a wrapper for all the properties.
+        This will also serve as the stem for all individual property files.
+    grid : dict
+        Grid object containing values for all properties.
+    dialect : str
+        Name of the simulator that we are writing files for. Currently, this must be 'ecl'.
+    multi_file : bool
+        Write properties in separate files, instead of putting everything in one large file.
+
+    Returns
+    -------
+    None
     """
     # inner helper function that curries the dialect, and returns the keyword
     # from the translation dictionary if present, otherwise return unmodified.
@@ -1808,13 +1921,18 @@ def write(filename, grid, dialect='ecl', multi_file=True):
 
 
 def _stretches(data):
-    """\
-    Identify stretches of data with equal values:
+    """
+    Identify stretches of data with equal values.
 
-    :param data:  Array which is scanned for stretches of equal values
-    :type  data:  :class:`numpy.array`
-    :return:
-    :rtype:       Generator[(int, Any)]
+    Parameters
+    ----------
+    data : numpy.ndarray
+        Array which is scanned for stretches of equal values.
+
+    Returns
+    -------
+    generator
+        Generator yielding tuples of (int, Any), where the int is the start index of the stretch and Any is the value of the stretch.
     """
     # picture cursors in between every number; this becomes the array of
     # numbers before and after every such cursor; looking backward and forwards
@@ -1844,18 +1962,23 @@ def _stretches(data):
 
 
 def _write_compr_full(f_obj, data, fmt):
-    """\
+    """
     Write a data field as a keyword that can be included into an already
     opened grid file, assuming a full data array.
 
-    :param f_obj:  File-like object to write to
-    :type  f_obj:  :class:`io.IOBase`
-    :param data:   Data array to be written
-    :type  data:   :class:`numpy.array`
-    :param fmt:    Format of a single item, on the form used to specify
-                   formats in the build-in routines, but without percent
-                   or braces.
-    :type fmt:     str
+    Parameters
+    ----------
+    f_obj : io.IOBase
+        File-like object to write to.
+    data : numpy.ndarray
+        Data array to be written.
+    fmt : str
+        Format of a single item, on the form used to specify formats in the
+        built-in routines, but without percent or braces.
+
+    Returns
+    -------
+    None
     """
     # format strings for writing a single value and multiple values,
     # respectively; we prepare these outside of the loop. as a special
@@ -1882,18 +2005,23 @@ def _write_compr_full(f_obj, data, fmt):
 
 # pylint: disable=too-many-branches
 def _write_compr_masked(f_obj, data, mask, fmt):
-    """\
+    """
     Write a data field as a keyword that can be included into an already
     opened grid file, assuming a masked (sparse) data array.
 
-    :param f_obj:  File-like object to write to
-    :type  f_obj:  :class:`io.IOBase`
-    :param data:   Data array to be written
-    :type  data:   :class:`numpy.array`
-    :param fmt:    Format of a single item, on the form used to specify
-                   formats in the build-in routines, but without percent
-                   or braces.
-    :type fmt:     str
+    Parameters
+    ----------
+    f_obj : io.IOBase
+        File-like object to write to.
+    data : numpy.ndarray
+        Data array to be written.
+    fmt : str
+        Format of a single item, in the form used to specify formats in the
+        built-in routines, but without percent or braces.
+
+    Returns
+    -------
+    None
     """
     # format strings for writing a single value and multiple values. these
     # are the same as for the _write_compr_full routine, but we cannot make
@@ -1954,21 +2082,24 @@ def _write_compr_masked(f_obj, data, mask, fmt):
 
 
 def _write_compr_any(f_obj, keyw, cube, fmt):
-    """\
+    """
     Write a data field as a keyword that can be included into an already
     opened grid file.
 
-    :param f_obj:  File-like object to write to
-    :type  f_obj:  :class:`io.IOBase`
-    :param keyw:   Name of the keyword to put in the header; this should
-                   not be greater than eight characters
-    :type  keyw:   str
-    :param cube:   Data cube to be written
-    :type  cube:   :class:`numpy.array`
-    :param fmt:    Format of a single item, on the form used to specify
-                   formats in the build-in routines, but without percent
-                   or braces.
-    :type fmt:     str
+    Parameters
+    ----------
+    f_obj : io.IOBase
+        File-like object to write to.
+    keyw : str
+        Name of the keyword to put in the header; this should not be greater than eight characters.
+    cube : numpy.ndarray
+        Data cube to be written.
+    fmt : str
+        Format of a single item, in the form used to specify formats in the built-in routines, but without percent or braces.
+
+    Returns
+    -------
+    None
     """
     # write the keyword first, on its own line
     f_obj.write(enc('{0:8s}\n'.format(keyw.upper())))
@@ -1986,20 +2117,23 @@ def _write_compr_any(f_obj, keyw, cube, fmt):
 
 
 def write_compressed(fname, keyw, cube, *, fmt="12.6e"):
-    """\
+    """
     Write a data field as a keyword that can be included into a grid file.
 
-    :param fname:  Path to the output file to write to
-    :type  fname:  str
-    :param keyw:   Name of the keyword to put in the header; this should
-                   not be greater than eight characters
-    :type  keyw:   str
-    :param cube:   Data cube to be written
-    :type  cube:   :class:`numpy.array`
-    :param fmt:    Format of a single item, on the form used to specify
-                   formats in the build-in routines, but without percent
-                   or braces.
-    :type fmt:     str
+    Parameters
+    ----------
+    fname : str
+        Path to the output file to write to.
+    keyw : str
+        Name of the keyword to put in the header; this should not be greater than eight characters.
+    cube : numpy.ndarray
+        Data cube to be written.
+    fmt : str
+        Format of a single item, in the form used to specify formats in the built-in routines, but without percent or braces.
+
+    Returns
+    -------
+    None
     """
     # if we specified a string, this is the path to the file, so open it
     # and start writing; otherwise, it is a file-like object that is already
@@ -2012,40 +2146,50 @@ def write_compressed(fname, keyw, cube, *, fmt="12.6e"):
 
 
 def shape(grdecl):
-    """\
+    """
     Get shape of field data cube.
 
-    :param grdecl:  Corner-point grid structure
-    :type  grdecl:  dict
-    :return:        (num_k, num_j, num_i)
-    :rtype:         (int, int, int)
+    Parameters
+    ----------
+    grdecl : dict
+        Corner-point grid structure.
+
+    Returns
+    -------
+    tuple of int
+        Shape of the field data cube as (num_k, num_j, num_i).
     """
     return tuple(reversed(grdecl['DIMENS']))
 
 
 def read_prop(fname, dims, typ=numpy.float64, prop=None, *, mask=None):
-    """\
+    """
     Read a property from a text file into a dictionary. This is akin to
     Petrel's Import onto selection popup menu choice.
 
-    :param fname:   File name to load property from. Currently, this must be
-                    a file in the filesystem and cannot be a file-like object.
-    :type  fname:   str
-    :param dims:    Dimensions of the data cube, in a format compatible with
-                    the return of the shape function, i.e. (nk, nj, ni)
-    :type  dims:    (int, int, int)
-    :param typ:     Data type of the data to be loaded
-    :type  typ:     :class:`numpy.dtype`
-    :param prop:    Dictionary where the keyword will be added. If this is
-                    None, then a new dictionary will be created.
-    :type  prop:    dict
-    :param mask:    Existing mask for inactive elements; this will be
-                    combined with the mask inherit in the data, if specified.
-                    If you have loaded the grid, this should be the ACTNUM
-                    field
-    :type  mask:    Optional[:class:`numpy.ndarray`]
-    :return:        Dictionary where the property being read is added as a key
-    :rtype:         dict
+    Parameters
+    ----------
+    fname : str
+        File name to load property from. Currently, this must be
+        a file in the filesystem and cannot be a file-like object.
+    dims : tuple of int
+        Dimensions of the data cube, in a format compatible with
+        the return of the shape function, i.e. (nk, nj, ni).
+    typ : numpy.dtype
+        Data type of the data to be loaded.
+    prop : dict, optional
+        Dictionary where the keyword will be added. If this is
+        None, then a new dictionary will be created.
+    mask : numpy.ndarray, optional
+        Existing mask for inactive elements; this will be
+        combined with the mask inherent in the data, if specified.
+        If you have loaded the grid, this should be the ACTNUM
+        field.
+
+    Returns
+    -------
+    dict
+        Dictionary where the property being read is added as a key.
     """
     # if output isn't given, then add to brand new dictionary
     if prop is None:

@@ -14,7 +14,8 @@ class full_update():
     smoother for efficient history matching and uncertainty quantification. Computational Geosciences, 17(4), 689–703.
     https://doi.org/10.1007/s10596-013-9351-5". Note that for a EnKF or ES update, or for update within GN scheme, lambda = 0.
 
-    Note: no localization is implemented for this method yet.
+    !!! note
+        no localization is implemented for this method yet.
     """
 
     def update(self):

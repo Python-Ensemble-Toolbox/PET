@@ -477,7 +477,7 @@ class Ensemble:
                      List of total assimilation steps.
         """
         # Get list of assim. steps. from ASSIMINDEX
-        list_assim = list(range(len(self.keys_da['assimindex'])))
+        list_assim = list(range(len(self.keys_en['assimindex'])))
 
         # If it is a restart run, we only list the assimilation steps we have not done
         if self.restart is True:
@@ -499,14 +499,14 @@ class Ensemble:
 
         Parameters
         ----------
-        input_state:
+        input_state :
             Use an input state instead of internal state (stored in self) to run predictions
-        save_prediction:
+        save_prediction :
             Save the predictions as a <save_prediction>.npz file (numpy compressed file)
 
         Returns
         -------
-        prediction:
+        prediction :
             List of dictionaries with keys equal to data types (in DATATYPE),
             containing the responses at each time step given in PREDICTION.
 
@@ -555,7 +555,7 @@ class Ensemble:
 
             # modified by xluo, for including the simulation of the mean reservoir model
             # as used in the RLM-MAC algorithm
-            if self.keys_da['daalg'][1] == 'gies':
+            if self.keys_en['daalg'][1] == 'gies':
                 list_state.append({})
                 list_member_index.append(self.ne)
 

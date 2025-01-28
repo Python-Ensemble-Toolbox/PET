@@ -51,21 +51,24 @@ class Organize_input():
         Also, the pred_data variable (predicted data or forward simulation) will be initialized here with the same
         structure as the obs_data variable.
 
-        .. warning:: An "N/A" entry in "TRUEDATA" is treated as a None-entry; that is, there is NOT an observed data at this
-        assimilation step.
+        !!! warning
+            An "N/A" entry in "TRUEDATA" is treated as a None-entry; that is, there is NOT an observed data at this
+            assimilation step.'
 
-        .. warning:: The array associated with the first string inputted in "TRUEDATAINDEX" is assumed to be the "main"
-        index, that is, the length of this array will determine the length of the obs_data list! There arrays
-        associated with the subsequent strings in "TRUEDATAINDEX" are then assumed to be a subset of the first
-        string.
-        An example: the first string is SOURCE (e.g., sources in CSEM), where the array will be a list of numbering
-        for the sources; and the second string is FREQ, where the array associated will be a list of frequencies.
+        !!! warning
+            The array associated with the first string inputted in "TRUEDATAINDEX" is assumed to be the "main"
+            index, that is, the length of this array will determine the length of the obs_data list! There arrays
+            associated with the subsequent strings in "TRUEDATAINDEX" are then assumed to be a subset of the first
+            string.
+            An example: the first string is SOURCE (e.g., sources in CSEM), where the array will be a list of numbering
+            for the sources; and the second string is FREQ, where the array associated will be a list of frequencies.
 
-        .. info:: It is assumed that the number of data associated with a subset is the same for each index in the subset.
-        For example: If two frequencies are inputted in FREQ, then the number of data for one SOURCE index and one
-        frequency is 1/2 of the total no. of data for that SOURCE index. If three frequencies are inputted, the number
-        of data for one SOURCE index and one frequencies is 1/3 of the total no of data for that SOURCE index,
-        and so on.
+        !!! info
+            It is assumed that the number of data associated with a subset is the same for each index in the subset.
+            For example: If two frequencies are inputted in FREQ, then the number of data for one SOURCE index and one
+            frequency is 1/2 of the total no. of data for that SOURCE index. If three frequencies are inputted, the number
+            of data for one SOURCE index and one frequencies is 1/3 of the total no of data for that SOURCE index,
+            and so on.
         """
 
         # Extract primary indices from "TRUEDATAINDEX"

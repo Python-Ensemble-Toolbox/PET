@@ -54,6 +54,7 @@ def ecalc_pareto_npv(pred_data, kwargs):
     Qwp = []
     Qwi = []
     Dd = []
+    T = []
     for i in np.arange(1, len(pred_data)):
 
         Qop.append(np.squeeze(pred_data[i]['fopt']) - np.squeeze(pred_data[i - 1]['fopt']))
@@ -61,6 +62,7 @@ def ecalc_pareto_npv(pred_data, kwargs):
         Qwp.append(np.squeeze(pred_data[i]['fwpt']) - np.squeeze(pred_data[i - 1]['fwpt']))
         Qwi.append(np.squeeze(pred_data[i]['fwit']) - np.squeeze(pred_data[i - 1]['fwit']))
         Dd.append((report[1][i] - report[1][i - 1]).days)
+        T.append((report[1][i] - report[1][0]).days)
 
     # Write production data to .csv file for eCalc input, for each ensemble member
     Qop = np.array(Qop).T
@@ -68,6 +70,7 @@ def ecalc_pareto_npv(pred_data, kwargs):
     Qgp = np.array(Qgp).T
     Qwi = np.array(Qwi).T
     Dd = np.array(Dd)
+    T = np.array(T)
     if len(Qop.shape) == 1:
         Qop = np.expand_dims(Qop,0)
         Qwp = np.expand_dims(Qwp, 0)
@@ -75,14 +78,14 @@ def ecalc_pareto_npv(pred_data, kwargs):
         Qwi = np.expand_dims(Qwi, 0)
 
     N = Qop.shape[0]
-    T = Qop.shape[1]
+    NT = Qop.shape[1]
     values = []
     pareto_values = []
     for n in range(N):
         with open('ecalc_input.csv', 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',')
             writer.writerow(['dd/mm/yyyy', 'GAS_PROD', 'OIL_PROD', 'WATER_INJ'])
-            for t in range(T):
+            for t in range(NT):
                 D = report[1][t]
                 writer.writerow([D.strftime("%d/%m/%Y"), Qgp[n, t]/Dd[t], Qop[n, t]/Dd[t], Qwi[n, t]/Dd[t]])
 
@@ -105,14 +108,14 @@ def ecalc_pareto_npv(pred_data, kwargs):
 
         value1 = (Qop[n, :] * npv_const['wop'] + Qgp[n, :] * npv_const['wgp'] - Qwp[n, :] * npv_const['wwp'] -
                   Qwi[n, :] * npv_const['wwi'] - Qem * npv_const['wem']) / (
-                         (1 + npv_const['disc']) ** (Dd / 365))
+                         (1 + npv_const['disc']) ** (T / 365))
         value1 = np.sum(value1)
         if 'obj_scaling' in npv_const:
             value1 /= npv_const['obj_scaling']
 
         value2 = np.array([])
         if 'wemc' in npv_const:  # multi-opjective with co2 cost correction
-            value2 = - Qem * npv_const['wemc'] / ((1 + npv_const['disc']) ** (Dd / 365))
+            value2 = - Qem * npv_const['wemc'] / ((1 + npv_const['disc']) ** (T / 365))
             value2 = np.sum(value2)
             if 'obj_scaling' in npv_const:
                 value2 /= npv_const['obj_scaling']
