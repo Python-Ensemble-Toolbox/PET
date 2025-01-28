@@ -27,6 +27,7 @@ from pipt.misc_tools.analysis_tools import store_ensemble_sim_information
 from geostat.decomp import Cholesky
 from simulator.eclipse import ecl_100
 
+
 class flow_rock(flow):
     """
     Couple the OPM-flow simulator with a rock-physics simulator such that both reservoir quantities and petro-elastic
@@ -167,16 +168,21 @@ class flow_rock(flow):
 
 
         #for key in self.all_data_types:
-        #    if 'grav' in key:
-        #        for var in phases:
-        #            # fluid densities
-        #            dens = [var + '_DEN']
-        #            tmp = self.ecl_case.cell_data(dens, time)
-        #            pem_input[dens] = np.array(tmp[~tmp.mask], dtype=float)
-
-        #        # pore volumes at each assimilation step
-        #        tmp = self.ecl_case.cell_data('RPORV', time)
-        #        pem_input['RPORV'] = np.array(tmp[~tmp.mask], dtype=float)
+        #if 'grav' in key:
+        for var in phases:
+            # fluid densities
+            dens = [var + '_DEN']
+            try:
+                tmp = self.ecl_case.cell_data(dens, time)
+                pem_input[dens] = np.array(tmp[~tmp.mask], dtype=float)
+            except:
+                pem_input[dens] = None
+        # pore volumes at each assimilation step
+        try:
+            tmp = self.ecl_case.cell_data('RPORV', time)
+            pem_input['RPORV'] = np.array(tmp[~tmp.mask], dtype=float)
+        except:
+            pem_input['RPORV'] = None
 
         # Get elastic parameters
         if hasattr(self, 'ensemble_member') and (self.ensemble_member is not None) and \
@@ -649,7 +655,6 @@ class flow_barycenter(flow):
 
 
 class flow_avo(flow_rock):
-  
     def __init__(self, input_dict=None, filename=None, options=None, **kwargs):
         super().__init__(input_dict, filename, options)
 
@@ -774,7 +779,8 @@ class flow_avo(flow_rock):
             self.calc_velocities(folder, save_folder, grid, v)
 
             # avo data
-            self._calc_avo_props()
+            #self._calc_avo_props()
+            self._calc_avo_props_active_cells(grid)
 
             avo = self.avo_data.flatten(order="F")
 
@@ -787,8 +793,9 @@ class flow_avo(flow_rock):
                 self.calc_velocities(folder, save_folder, grid, -1)
 
                 # avo data
-                self._calc_avo_props()
-                
+                #self._calc_avo_props()
+                self._calc_avo_props_active_cells(grid)
+
                 avo_baseline = self.avo_data.flatten(order="F")
                 avo = avo - avo_baseline
 
@@ -974,6 +981,7 @@ class flow_avo(flow_rock):
                     vs_sample[m, l, k] = vs[m, l, idx]
                     rho_sample[m, l, k] = rho[m, l, idx]
 
+
         # Ricker wavelet
         wavelet, t_axis, wav_center = ricker(np.arange(0, self.avo_config['wave_len'], dt),
                                              f0=self.avo_config['frequency'])
@@ -1014,6 +1022,114 @@ class flow_avo(flow_rock):
                 avo_data = np.concatenate((avo_data, trace_interp[:, :, :, np.newaxis]), axis=3)  # 4D
 
         self.avo_data = avo_data
+
+
+    def _calc_avo_props_active_cells(self, grid, dt=0.005):
+        # dt is the fine resolution sampling rate
+        # convert properties in reservoir model to time domain
+        vp_shale = self.avo_config['vp_shale']  # scalar value (code may not work for matrix value)
+        vs_shale = self.avo_config['vs_shale']  # scalar value
+        rho_shale = self.avo_config['den_shale']  # scalar value
+
+        # Two-way travel time of the top of the reservoir
+        # TOPS[:, :, 0] corresponds to the depth profile of the reservoir top on the first layer
+        top_res = 2 * self.TOPS[:, :, 0] / vp_shale
+
+        # Cumulative traveling time through the reservoir in vertical direction
+        cum_time_res = np.cumsum(2 * self.DZ / self.vp, axis=2) + top_res[:, :, np.newaxis]
+
+        # assumes underburden to be constant. No reflections from underburden. Hence set traveltime to underburden very large
+        underburden = top_res + np.max(cum_time_res)
+
+        # total travel time
+        # cum_time = np.concatenate((top_res[:, :, np.newaxis], cum_time_res), axis=2)
+        cum_time = np.concatenate((top_res[:, :, np.newaxis], cum_time_res, underburden[:, :, np.newaxis]), axis=2)
+
+        # add overburden and underburden of Vp, Vs and Density
+        vp = np.concatenate((vp_shale * np.ones((self.NX, self.NY, 1)),
+                             self.vp, vp_shale * np.ones((self.NX, self.NY, 1))), axis=2)
+        vs = np.concatenate((vs_shale * np.ones((self.NX, self.NY, 1)),
+                             self.vs, vs_shale * np.ones((self.NX, self.NY, 1))), axis=2)
+        #rho = np.concatenate((rho_shale * np.ones((self.NX, self.NY, 1)) * 0.001,  # kg/m^3 -> k/cm^3
+        #                      self.rho, rho_shale * np.ones((self.NX, self.NY, 1)) * 0.001), axis=2)
+        rho = np.concatenate((rho_shale * np.ones((self.NX, self.NY, 1)),
+                              self.rho, rho_shale * np.ones((self.NX, self.NY, 1))), axis=2)
+
+        # get indices of active cells
+        actnum = np.transpose(grid['ACTNUM'], (2, 1, 0))
+        indices = np.where(actnum)
+        a, b, c = indices
+        # Combine a and b into a 2D array (each column represents a vector)
+        ab = np.column_stack((a, b))
+
+        # Extract unique rows and get the indices of those unique rows
+        unique_rows, indices = np.unique(ab, axis=0, return_index=True)
+
+
+        # search for the lowest grid cell thickness and sample the time according to
+        # that grid thickness to preserve the thin layer effect
+        time_sample = np.arange(self.avo_config['t_min'], self.avo_config['t_max'], dt)
+        if time_sample.shape[0] == 1:
+            time_sample = time_sample.reshape(-1)
+        time_sample = np.tile(time_sample, (len(indices), 1))
+
+        vp_sample = np.zeros((len(indices), time_sample.shape[1]))
+        vs_sample = np.zeros((len(indices), time_sample.shape[1]))
+        rho_sample = np.zeros((len(indices), time_sample.shape[1]))
+
+
+        for ind in range(len(indices)):
+            for k in range(time_sample.shape[1]):
+                # find the right interval of time_sample[m, l, k] belonging to, and use
+                # this information to allocate vp, vs, rho
+                idx = np.searchsorted(cum_time[a[indices[ind]], b[indices[ind]], :], time_sample[ind, k], side='left')
+                idx = idx if idx < len(cum_time[a[indices[ind]], b[indices[ind]], :]) else len(cum_time[a[indices[ind]], b[indices[ind]], :]) - 1
+                vp_sample[ind, k] = vp[a[indices[ind]], b[indices[ind]], idx]
+                vs_sample[ind, k] = vs[a[indices[ind]], b[indices[ind]], idx]
+                rho_sample[ind, k] = rho[a[indices[ind]], b[indices[ind]], idx]
+
+
+        # Ricker wavelet
+        wavelet, t_axis, wav_center = ricker(np.arange(0, self.avo_config['wave_len'], dt),
+                                             f0=self.avo_config['frequency'])
+
+        # Travel time corresponds to reflectivity series
+        t = time_sample[:, 0:-1]
+
+        # interpolation time
+        t_interp = np.arange(self.avo_config['t_min'], self.avo_config['t_max'], self.avo_config['t_sampling'])
+        trace_interp = np.zeros((len(indices), len(t_interp)))
+
+        # number of pp reflection coefficients in the vertical direction
+        nz_rpp = vp_sample.shape[1] - 1
+        conv_op = Convolve1D(nz_rpp, h=wavelet, offset=wav_center, dtype="float32")
+
+        for i in range(len(self.avo_config['angle'])):
+            angle = self.avo_config['angle'][i]
+            Rpp = self.pp_func(vp_sample[:, :-1], vs_sample[:, :-1], rho_sample[:, :-1],
+                           vp_sample[:, 1:], vs_sample[:, 1:], rho_sample[:, 1:], angle)
+
+
+
+            for ind in range(len(indices)):
+                # convolution with the Ricker wavelet
+
+                w_trace = conv_op * Rpp[ind, :]
+
+                # Sample the trace into regular time interval
+                f = interp1d(np.squeeze(t[ind, :]), np.squeeze(w_trace),
+                            kind='nearest', fill_value='extrapolate')
+                trace_interp[ind, :] = f(t_interp)
+
+            if i == 0:
+                avo_data = trace_interp  # 3D
+            elif i == 1:
+                avo_data = np.stack((avo_data, trace_interp), axis=-1)  # 4D
+            else:
+                avo_data = np.concatenate((avo_data, trace_interp[:, :, :, np.newaxis]), axis=3)  # 4D
+
+        self.avo_data = avo_data
+
 
     @classmethod
     def _reformat3D_then_flatten(cls, array, flatten=True, order="F"):
@@ -1323,8 +1439,9 @@ class flow_grav(flow_rock):
     def find_cell_centers(self, grid):
 
         # Find indices where the boolean array is True
-        indices = np.where(grid['ACTNUM'])
-
+        #indices = np.where(grid['ACTNUM'])
+        actnum = np.transpose(grid['ACTNUM'], (2, 1, 0))
+        indices = np.where(actnum)
         # `indices` will be a tuple of arrays: (x_indices, y_indices, z_indices)
         #nactive = len(actind)  # Number of active cells
 
@@ -1335,7 +1452,7 @@ class flow_grav(flow_rock):
         #N1, N2, N3 = grid['DIMENS']
 
 
-        c, a, b = indices
+        b, a, c = indices
         # Calculate xt, yt, zt
         xb = 0.25 * (coord[a, b, 0, 0] + coord[a, b + 1, 0, 0] + coord[a + 1, b, 0, 0] + coord[a + 1, b + 1, 0, 0])
         yb = 0.25 * (coord[a, b, 0, 1] + coord[a, b + 1, 0, 1] + coord[a + 1, b, 0, 1] + coord[a + 1, b + 1, 0, 1])
@@ -1466,6 +1583,7 @@ class flow_grav_and_avo(flow_avo, flow_grav):
             folder = self.folder
 
         # run flow  simulator
+        #success = True #super(flow_rock, self).call_sim(folder, True)
         success = super(flow_rock, self).call_sim(folder, True)
 
         # use output from flow simulator to forward model gravity response
