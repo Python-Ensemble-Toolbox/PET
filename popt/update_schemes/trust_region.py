@@ -89,9 +89,8 @@ class TrustRegionClass(Optimize):
         self.trust_radius_min = options.get('trust_radius_min', self.trust_radius/100)
 
         # Set other options
-        #self.ftol = options.get('ftol', 1e-6)
-        #self.xtol = options.get('xtol', 1e-4)
-        self.eta1 = options.get('eta1', 1e-6)
+        self.rho_tol = options.get('rho_tol', 1e-6)
+        self.eta1 = options.get('eta1', 0.001)
         self.eta2 = options.get('eta2', 0.1)
         self.gam1 = options.get('gam1', 0.8)
         self.gam2 = options.get('gam2', 1.25)
@@ -200,7 +199,7 @@ class TrustRegionClass(Optimize):
         fun_old = self.fk
 
         # Solve subproblem
-        self._log('Solving trust region subproblem')
+        self._log('Solving trust region subproblem using the "CG-Steihaug" method')
         sk = self.solve_sub_problem_CG_Steihaug(self.jk, self.Hk, self.trust_radius)
 
         # Calculate the actual function value
@@ -212,7 +211,7 @@ class TrustRegionClass(Optimize):
         predicted_reduction = - np.dot(self.jk, sk) - 0.5*np.dot(sk, np.dot(self.Hk, sk))
         self.rho = actual_reduction/predicted_reduction
 
-        if self.rho > self.eta1:
+        if self.rho > self.rho_tol:
             
             # Update the control
             self.xk = xk_new
@@ -234,12 +233,18 @@ class TrustRegionClass(Optimize):
                 self.callback(self)
 
             # update the trust region radius
+            delta_old = self.trust_radius
             if self.rho >= self.eta2:
-                self.trust_radius = min(self.gam2*self.trust_radius, self.trust_radius_max)
+                delta_new = min(self.gam2*delta_old, self.trust_radius_max)
             elif self.eta1 <= self.rho < self.eta2:
-                self.trust_radius = self.trust_radius
+                delta_new = delta_old
             else:
-                self.trust_radius = self.gam1*self.trust_radius
+                delta_new = self.gam1*delta_old
+            
+            # Log new trust-radius
+            self.trust_radius = delta_new 
+            if not (delta_old == delta_new):
+                self._log(f'Trust-radius updated: {delta_old:<15.4e} --> {delta_new:<15.4e}')
 
             # check for convergence
             if self.trust_radius < self.trust_radius_min:
@@ -257,13 +262,13 @@ class TrustRegionClass(Optimize):
 
                 iter_resamp += 1
 
-                self._log('Resampling gradient and hessian')
                 # Calculate the jacobian and hessian
+                self._log('Resampling gradient and hessian')
                 self.jk = self._jac(self.xk)
                 self.Hk = self._hess(self.xk)
 
-                self._log('Reducing trust region radius by 50%')
                 # Reduce trust region radius to 50% of current value
+                self._log('Reducing trust-radius by 50%')
                 self.trust_radius = 0.5*self.trust_radius
 
                 # Recursivly call function

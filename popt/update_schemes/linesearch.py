@@ -376,7 +376,13 @@ class LineSearchClass(Optimize):
         
         # Set step_size
         step_size = self._set_step_size(pk)
-        
+
+        # Set maximum step-size
+        if self.bounds is not None:
+            mean_bound_range = np.mean([b[1]-b[0] for b in self.bounds])
+            step_size_max = mean_bound_range/np.linalg.norm(pk)
+            self.line_search_kwargs['amax'] = step_size_max
+
         # Perform line-search 
         self.logger.info('Performing line search...')
         ls_res = line_search(

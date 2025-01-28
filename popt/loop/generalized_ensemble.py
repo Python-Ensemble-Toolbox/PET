@@ -37,7 +37,10 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
         # choose marginal
         marginal = kwargs_ens.get('marginal', 'Beta')
 
-        if marginal in ['Beta', 'BetaMC', 'Logistic']:
+        if marginal in ['Beta', 'BetaMC', 'Logistic', 'TruncGaussian']:
+
+            self.grad_scale = 1.0
+            self.hess_scale = 1.0
 
             if marginal == 'Beta':
                 self.margs = Beta()
@@ -51,20 +54,17 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
                 self.margs = BetaMC(lb, ub)
                 state = self.get_state()
                 var = np.diag(self.cov)
-                #default_theta = self.margs.var_to_concentration(state, var)
                 default_theta = np.array([var_to_concentration(state[i], var[i], lb[i], ub[i]) for i in range(self.dim)])
-                #print(type(default_theta[0]))
-                #print(type(default_theta_old[0]))
-                #stop
                 self.theta = kwargs_ens.get('theta', default_theta)
-                self.grad_scale = 1.0
-                self.hess_scale = 1.0
                 
             elif marginal == 'Logistic':
                 self.margs = Logistic()
                 self.theta = kwargs_ens.get('theta', self.margs.var_to_scale(np.diag(self.cov)))
-                self.grad_scale = 1.0
-                self.hess_scale = 1.0
+
+            elif marginal == 'TruncGaussian':
+                lb, ub = np.array(self.bounds).T
+                self.margs = TruncGaussian(lb,ub)
+                self.theta = kwargs_ens.get('theta', np.sqrt(np.diag(self.cov)))
     
     def get_theta(self):
         return self.theta
@@ -79,7 +79,7 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
         #enZ = stats.qmc.MultivariateNormalQMC(np.zeros(self.dim), self.corr).random(n=size)
         enZ = np.random.multivariate_normal(np.zeros(self.dim), self.corr, size=size)
         enX = self.margs.ppf(stats.norm.cdf(enZ), self.theta, mean=self.get_state())
-
+        enX = ot.clip_state(enX, self.bounds)
         return enX, enZ
     
     def gradient(self, x, *args, **kwargs):
@@ -119,17 +119,22 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
             X = self.enX[n]
             Z = self.enZ[n]
             
-            rho = self.margs.pdf(X, self.theta, mean=x)/stats.norm.pdf(Z)   # p(X)/φ(Z)
+            # Marginal terms
             G = self.margs.grad_log_pdf(X, self.theta, mean=x)              # ∇log(p)
-            K = self.margs.hess_log_pdf(X, self.theta, mean=x)              # ∇²log(p) 
-            D = - rho*np.matmul(H,Z)                                        # ∇log(c)
+            K = self.margs.hess_log_pdf(X, self.theta, mean=x)              # ∇²log(p)
+
+            # Copula terms
+            rho  = self.margs.pdf(X, self.theta, mean=x)/stats.norm.pdf(Z)   # p(X)/φ(Z) 
+            D    = - rho*np.matmul(H,Z)                                      # ∇log(c)
             M_ii = (G+rho*Z)*D - np.diag(H)*rho**2
             M_ij = - np.outer(rho,rho)*H
-            M = np.diag(M_ii) + M_ij*O                                      # ∇²log(c) 
+            M    = np.diag(M_ii) + M_ij*O                                    # ∇²log(c) 
             
             # calc grad and hess
-            self.avg_grad += enJ[n] * (G + D)
-            self.avg_hess += enJ[n] * (np.outer(G+D,G+D) + np.diag(K)+M)
+            grad_log_p = G + D
+            hess_log_p = np.diag(K)+M
+            self.avg_grad += enJ[n]*grad_log_p
+            self.avg_hess += enJ[n]*(np.outer(grad_log_p, grad_log_p) + hess_log_p)
 
         self.avg_grad = -self.avg_grad*self.grad_scale/ne
         self.avg_hess = self.avg_hess*self.hess_scale/ne
@@ -171,66 +176,43 @@ class BetaMC:
         self.lb = lb
         self.ub = ub
 
+    def _mc_to_ab(self, m, c):
+        a = 1 + c*m
+        b = 1 + c*(1-m)
+        return a, b
+
     def pdf(self, x, theta, **kwargs):
         mode = kwargs.get('mean')
         mode = (mode-self.lb)/(self.ub-self.lb)
-        concentration = theta
-
-        a = mode*concentration+1
-        b = (1-mode)*concentration+1
-
+        #mode = np.clip(mode, 0.001, 0.999)
+        a, b = self._mc_to_ab(mode, theta)
         return stats.beta(a,b, loc=self.lb, scale=self.ub-self.lb).pdf(x)
 
-    def ppf(self, x, theta, **kwargs):
+    def ppf(self, u, theta, **kwargs):
         mode = kwargs.get('mean')
         mode = (mode-self.lb)/(self.ub-self.lb)
-        concentration = theta
-
-        a = mode*concentration+1
-        b = (1-mode)*concentration+1
-        return stats.beta(a,b, loc=self.lb, scale=self.ub-self.lb).ppf(x)
+        #mode = np.clip(mode, 0.001, 0.999)
+        a, b = self._mc_to_ab(mode, theta)
+        return stats.beta(a,b, loc=self.lb, scale=self.ub-self.lb).ppf(u)
     
     def grad_log_pdf(self, x, theta, **kwargs):
-
         mode = kwargs.get('mean')
         mode = (mode-self.lb)/(self.ub-self.lb)
-        concentration = theta
-
-        a = mode*concentration+1
-        b = (1-mode)*concentration+1
-
+        #mode = np.clip(mode, 0.001, 0.999)
         u = (x-self.lb)/(self.ub-self.lb)
-        d_log_p = (a-1)/u - (b-1)/(1-u)
-        return d_log_p/(self.ub-self.lb)
+        m = mode
+        c = theta
+        return c*m/u - c*(1-u)/(1-u)
     
     def hess_log_pdf(self, x, theta, **kwargs):
-
         mode = kwargs.get('mean')
         mode = (mode-self.lb)/(self.ub-self.lb)
-        concentration = theta
-
-        a = mode*concentration+1
-        b = (1-mode)*concentration+1
-
+        #mode = np.clip(mode, 0.001, 0.999)
         u = (x-self.lb)/(self.ub-self.lb)
-        h_log_p = -(a-1)/u**2 - (b-1)/(1-u)**2
-        return h_log_p/((self.ub-self.lb)**2)
+        m = mode
+        c = theta
+        return -c*m/u**2 - c*(1-u)/(1-u)**2
     
-    def var_to_concentration(self, var, mode):
-        from scipy.optimize import fsolve
-        kappa = []
-        for i, v in enumerate(var):
-            m = (mode[i]-self.lb[i])/(self.ub[i]-self.lb[i])
-            v = v/(self.ub[i]-self.lb[i])**2
-            def func(k):
-                a = m*k+1
-                b = (1-m)*k+1
-                return v - a*b/((a+b)**2 * (a+b+1))
-            
-            kappa.append(fsolve(func, 50)[0])
-
-        return np.array(kappa)
-
 
 class Beta:
 
@@ -258,29 +240,49 @@ class Logistic:
     name = 'Logistic'
 
     def pdf(self, x, theta, **kwargs):
-        scale = theta
         loc = kwargs.get('mean', 0)
-        return stats.logistic(loc=loc, scale=scale).pdf(x)
+        return stats.logistic(loc=loc, scale=theta).pdf(x)
     
     def ppf(self, u, theta, **kwargs):
-        scale = theta
         loc = kwargs.get('mean', 0)
-        return stats.logistic(loc=loc, scale=scale).ppf(u)
+        return stats.logistic(loc=loc, scale=theta).ppf(u)
 
-    def grad_log_pdf(self, x, theta,**kwargs):
-        scale = theta
+    def grad_log_pdf(self, x, theta, **kwargs):
         loc = kwargs.get('mean', 0)
-        u = (x-loc)/(2*scale)
-        return - np.tanh(u)/scale
+        u = (x - loc) / (2 * theta)
+        return -np.tanh(u)/theta
     
-    def hess_log_pdf(self, x, theta,**kwargs):
-        scale = theta
+    def hess_log_pdf(self, x, theta, **kwargs):
         loc = kwargs.get('mean', 0)
-        u = (x-loc)/(2*scale)
-        return -(1/np.cosh(u))**2/(2*scale**2)
+        u = (x - loc) / (2 * theta)
+        return -1/(2*theta**2 * np.cosh(u)**2)
     
     def var_to_scale(self, var):
-        return np.sqrt( 3*var/(np.pi**2) )
+        return np.sqrt(3*var)/np.pi
+    
+class TruncGaussian:
+
+    def __init__(self, lb=0, ub=1):
+        self.name = 'TruncGaussian'
+        self.lb = lb
+        self.ub = ub
+
+    def pdf(self, x, theta, **kwargs):
+        mu = kwargs.get('mean')
+        a, b = (self.lb - mu)/theta, (self.ub - mu)/theta
+        return stats.truncnorm(a, b, loc=mu, scale=theta).pdf(x)
+
+    def ppf(self, u, theta, **kwargs):
+        mu = kwargs.get('mean')
+        a, b = (self.lb - mu)/theta, (self.ub - mu)/theta
+        return stats.truncnorm(a, b, loc=mu, scale=theta).ppf(u)
+    
+    def grad_log_pdf(self, x, theta, **kwargs):
+        mu = kwargs.get('mean')
+        return -(x - mu)/theta**2
+
+    def hess_log_pdf(self, x, theta, **kwargs):
+        return -1/theta**2
         
         
 
