@@ -79,7 +79,7 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
         Optimization stop whenever |dx|<xtol. Default is 1e-8. 
 
     line_search_method: int
-        Sets method for proposing new step-size in the line search.  Default is 2.
+        Sets method for proposing new step-size in the line search.  Default is 1.
         If line_search_method=0: step-size is cut in half.
         If line_search_method=1: Algorithm (3.5) from [1] with polynomial interpolation is used.
         If line_search_method=2: the DCSRCH implementation in scipy is used.
@@ -194,7 +194,7 @@ class LineSearchClass(Optimize):
             'amax': self.step_size_max,
             'xtol': options.get('xtol', 1e-8),
             'maxiter': options.get('line_search_maxiter', 10),
-            'method' : options.get('line_search_method', 2)
+            'method' : options.get('line_search_method', 1)
         }
 
         # Set other options
@@ -502,7 +502,7 @@ class LineSearchStepBase:
         self.amax   = kwargs.get('amax', 1e5)
         self.amin   = kwargs.get('amin', 0.0)
         self.xtol   = kwargs.get('xtol', 1e-8)
-        self.method = kwargs.get('method', 2)
+        self.method = kwargs.get('method', 1)
         self.logger = kwargs.get('logger', None)
 
         # If c2 is None, the curvature condition is not used

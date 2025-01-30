@@ -91,9 +91,9 @@ class TrustRegionClass(Optimize):
         # Set other options
         self.rho_tol = options.get('rho_tol', 1e-6)
         self.eta1 = options.get('eta1', 0.001)
-        self.eta2 = options.get('eta2', 0.1)
-        self.gam1 = options.get('gam1', 0.8)
-        self.gam2 = options.get('gam2', 1.25)
+        self.eta2 = options.get('eta2', 0.25)
+        self.gam1 = options.get('gam1', 0.75)
+        self.gam2 = options.get('gam2', 1.5)
         self.rho  = 0.0
 
         self.normalize = options.get('normalize', False)
@@ -196,7 +196,6 @@ class TrustRegionClass(Optimize):
 
         # Initialize variables for this step
         success = True
-        fun_old = self.fk
 
         # Solve subproblem
         self._log('Solving trust region subproblem using the "CG-Steihaug" method')
@@ -234,7 +233,7 @@ class TrustRegionClass(Optimize):
 
             # update the trust region radius
             delta_old = self.trust_radius
-            if self.rho >= self.eta2:
+            if self.rho >= self.eta2 and la.norm(sk)==delta_old:
                 delta_new = min(self.gam2*delta_old, self.trust_radius_max)
             elif self.eta1 <= self.rho < self.eta2:
                 delta_new = delta_old

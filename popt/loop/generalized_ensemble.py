@@ -5,6 +5,7 @@ import sys
 import warnings
 
 from copy import deepcopy
+from scipy.special import polygamma
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
@@ -108,7 +109,6 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
 
         self.avg_hess = np.zeros((dim,dim))
         self.avg_grad = np.zeros(dim)
-        self.nat_grad = np.zeros_like(self.theta)
 
         H = np.linalg.inv(self.corr)-np.eye(dim)
         O = np.ones((dim,dim))-np.eye(dim)
@@ -150,6 +150,58 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
             self.gradient(x, *args, **kwargs)
         
         return self.avg_hess
+    
+    def natural_gradient(self, x, *args, **kwargs):
+              # Set the ensemble state equal to the input control vector x
+        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
+
+        if args:
+            self.theta, self.corr = args
+
+        self.enZ = kwargs.get('enZ', None)
+        self.enX = kwargs.get('enX', None)
+        self.enJ = kwargs.get('enJ', None)
+
+        ne  = self.num_samples
+        nr  = self._aux_input()
+        dim = self.dim
+
+        # Sample
+        if (self.enX is None) or (self.enZ is None):
+            self.enX, self.enZ = self.sample(size=ne)
+        
+        # Evaluate
+        if self.enJ is None:
+            self.enJ = self.function(self._trafo_ensemble(x).T)
+
+        enJ = self.enJ - np.array(np.repeat(self.state_func_values, nr))
+
+        self.nat_grad = np.zeros(dim)
+        self.nat_hess = np.zeros(dim)
+        for n in range(ne):
+
+            X = self.enX[n]
+            dm_log_p = self.margs.grad_theta_log_pdf(X, self.theta, mean=x)
+            hm_log_p = self.margs.hess_theta_log_pdf(X, self.theta, mean=x)
+
+            self.nat_grad += enJ[n]*dm_log_p
+            self.nat_hess += enJ[n]*(hm_log_p + dm_log_p**2)
+        
+        # Fisher
+        fisher = self.margs.fisher(self.theta, mean=x)
+        self.nat_grad = self.nat_grad/(ne)
+        self.nat_hess = np.diag(self.nat_hess/ne)
+        return self.nat_grad
+
+    def natural_hessian(self, x, *args, **kwargs):
+
+        # Set the ensemble state equal to the input control vector x
+        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
+
+        if kwargs.get('sample', False): 
+            self.gradient(x, *args, **kwargs)
+        
+        return self.nat_hess
         
     def var2eps(self):
         var = np.diag(self.cov)
@@ -173,45 +225,61 @@ class BetaMC:
 
     def __init__(self, lb=0, ub=1):
         self.name = 'BetaMC'
-        self.lb = lb
-        self.ub = ub
+        self.lb  = lb
+        self.ub  = ub
+        self.eps = 0.001
 
     def _mc_to_ab(self, m, c):
         a = 1 + c*m
         b = 1 + c*(1-m)
         return a, b
-
-    def pdf(self, x, theta, **kwargs):
+    
+    def _get_mode(self, **kwargs):
         mode = kwargs.get('mean')
         mode = (mode-self.lb)/(self.ub-self.lb)
-        #mode = np.clip(mode, 0.001, 0.999)
+        mode = np.clip(mode, self.eps, 1-self.eps)
+        return mode
+
+    def pdf(self, x, theta, **kwargs):
+        mode = self._get_mode(**kwargs)
         a, b = self._mc_to_ab(mode, theta)
         return stats.beta(a,b, loc=self.lb, scale=self.ub-self.lb).pdf(x)
 
     def ppf(self, u, theta, **kwargs):
-        mode = kwargs.get('mean')
-        mode = (mode-self.lb)/(self.ub-self.lb)
-        #mode = np.clip(mode, 0.001, 0.999)
+        mode = self._get_mode(**kwargs)
         a, b = self._mc_to_ab(mode, theta)
         return stats.beta(a,b, loc=self.lb, scale=self.ub-self.lb).ppf(u)
     
     def grad_log_pdf(self, x, theta, **kwargs):
-        mode = kwargs.get('mean')
-        mode = (mode-self.lb)/(self.ub-self.lb)
-        #mode = np.clip(mode, 0.001, 0.999)
         u = (x-self.lb)/(self.ub-self.lb)
-        m = mode
+        m = self._get_mode(**kwargs)
         c = theta
-        return c*m/u - c*(1-u)/(1-u)
-    
+        return c*m/(u+self.eps) - c*(1-u)/(1-u+self.eps)
+
     def hess_log_pdf(self, x, theta, **kwargs):
-        mode = kwargs.get('mean')
-        mode = (mode-self.lb)/(self.ub-self.lb)
-        #mode = np.clip(mode, 0.001, 0.999)
         u = (x-self.lb)/(self.ub-self.lb)
-        m = mode
+        m = self._get_mode(**kwargs)
         c = theta
         return -c*m/u**2 - c*(1-u)/(1-u)**2
+    
+    def grad_theta_log_pdf(self, x, theta, **kwargs):
+        u = (x-self.lb)/(self.ub-self.lb)
+        m = self._get_mode(**kwargs)
+        c = theta
+        return c*np.log(u/(1-u)) - c*kappa(m,c)
+    
+    def hess_theta_log_pdf(self, x, theta, **kwargs):
+        m = self._get_mode(**kwargs)
+        c = theta
+        p1 = polygamma(1, 1+c*m)
+        p2 = polygamma(1, 1+c*(1-m))
+        return -c**2*(p1+p2)
+
+    def fisher(self, theta, **kwargs):
+        m = self._get_mode(**kwargs)
+        c = theta
+        kap = kappa(m,c)
+        return 2*c**2*kap - c**2*kap
     
 
 class Beta:
@@ -334,3 +402,8 @@ def var_to_concentration(mode, var, lb=0, ub=1):
 
     # return the positive solution
     return np.max(solution)
+
+def kappa(m,c):
+    p1 = polygamma(0, 1+c*m)
+    p2 = polygamma(0, 1+c*(1-m))
+    return p1-p2
