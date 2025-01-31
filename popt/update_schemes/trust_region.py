@@ -37,10 +37,68 @@ def TrustRegion(fun, x, jac, hess, args=(), bounds=None, callback=None, **option
         Bounds for variables. Each element of the sequence must be a tuple of two scalars, 
         representing the lower and upper bounds for that variable. Use None for one of the bounds if there are no bounds.
     
-    callback : callable, optional
-        Called after each iteration, as callback(xk), where xk is the current parameter vector.
+    callback: callable, optional
+        A callable called after each successful iteration. The class instance of LineSearch 
+        is passed as the only argument to the callback function: callback(self) 
 
-    options : dict, optional
+    **options : keyword arguments, optional
+
+    TrustRegion Options (**options)
+    -------------------------------
+    maxiter: int
+        Maximum number of iterations. Default is 20.
+    
+    trust_radius: float
+        Inital trust-region radius. Default is 1.0.
+    
+    trust_radius_max: float
+        Maximum trust-region radius. Default is 10 times initial trust_radius.
+    
+    trust_radius_min: float
+        Minimum trust-region radius. Optimization is terminated if trust_radius = trust_radius_min.
+        Default is trust_radius/100.
+    
+    rho_tol: float
+        Tolerance for rho (ratio of actual to predicted reduction). Default is 1e-6.
+        
+    eta1, eta2, gam1, gam2: float
+        Parameters for updateing the trust-region radius.
+
+        Δnew = max(gam2*Δold, Δmax)   if rho >= eta2. \n
+        Δnew = Δold                   if eta1 <= rho < eta2. \n
+        Δnew = gam1*Δold              if rho < eta1. \n
+
+        Defults:
+            eta1 = 0.001 \n
+            eta2 = 0.1 \n
+            gam1 = 0.7 \n
+            gam2 = 1.5 \n
+
+    save_folder: str
+        Name of folder to save the results to. Defaul is ./ (the current directory).
+
+    fun0: float
+        Function value of the intial control.
+
+    jac0: ndarray
+        Jacobian of the initial control.
+    
+    hess0: ndarray
+        Hessian value of the initial control.
+
+    resample: int
+        Number of jacobian re-computations allowed if a line search fails. Default is 4.
+        (useful if jacobian is stochastic)
+
+    savedata: list[str]
+        Further specification of which class variables to save to the result files.
+
+    restart: bool
+        Restart optimization from a restart file. Default is False
+
+    restartsave: bool
+        Save a restart file after each successful iteration. Default is False
+
 
     Returns
     -------
@@ -77,28 +135,20 @@ class TrustRegionClass(Optimize):
         else:
             self.callback = None
 
-        # Set options for trust-region radius
-        if self.bounds is None:
-            init_trust_radius = 1.0
-        else:
-            mean_bound_range  = np.mean([b[1]-b[0] for b in self.bounds])
-            init_trust_radius = np.sqrt(x.size)*mean_bound_range
-            
-        self.trust_radius     = options.get('trust_radius', init_trust_radius) 
+        # Set options for trust-region radius       
+        self.trust_radius     = options.get('trust_radius', 1.0) 
         self.trust_radius_max = options.get('trust_radius_max', 10*self.trust_radius)
         self.trust_radius_min = options.get('trust_radius_min', self.trust_radius/100)
 
         # Set other options
-        self.rho_tol = options.get('rho_tol', 1e-6)
+        self.resample = options.get('resample', 3)
+        self.saveit   = options.get('saveit', True)
+        self.rho_tol  = options.get('rho_tol', 1e-6)
         self.eta1 = options.get('eta1', 0.001)
-        self.eta2 = options.get('eta2', 0.25)
-        self.gam1 = options.get('gam1', 0.75)
+        self.eta2 = options.get('eta2', 0.1)
+        self.gam1 = options.get('gam1', 0.7)
         self.gam2 = options.get('gam2', 1.5)
         self.rho  = 0.0
-
-        self.normalize = options.get('normalize', False)
-        self.resample  = options.get('resample', 3)
-        self.saveit    = options.get('saveit', True)
 
         if not self.restart:
             self.start_time = time.perf_counter()
@@ -198,7 +248,7 @@ class TrustRegionClass(Optimize):
         success = True
 
         # Solve subproblem
-        self._log('Solving trust region subproblem using the "CG-Steihaug" method')
+        self._log('Solving trust region subproblem using the CG-Steihaug method')
         sk = self.solve_sub_problem_CG_Steihaug(self.jk, self.Hk, self.trust_radius)
 
         # Calculate the actual function value
@@ -233,7 +283,7 @@ class TrustRegionClass(Optimize):
 
             # update the trust region radius
             delta_old = self.trust_radius
-            if self.rho >= self.eta2 and la.norm(sk)==delta_old:
+            if self.rho >= self.eta2:
                 delta_new = min(self.gam2*delta_old, self.trust_radius_max)
             elif self.eta1 <= self.rho < self.eta2:
                 delta_new = delta_old
@@ -243,10 +293,10 @@ class TrustRegionClass(Optimize):
             # Log new trust-radius
             self.trust_radius = delta_new 
             if not (delta_old == delta_new):
-                self._log(f'Trust-radius updated: {delta_old:<15.4e} --> {delta_new:<15.4e}')
+                self._log(f'Trust-radius updated: {delta_old:<10.4e} --> {delta_new:<10.4e}')
 
             # check for convergence
-            if self.trust_radius < self.trust_radius_min:
+            if (self.trust_radius < self.trust_radius_min) or (self.iteration==self.max_iter):
                 success = False
             else:
                 # Calculate the jacobian and hessian

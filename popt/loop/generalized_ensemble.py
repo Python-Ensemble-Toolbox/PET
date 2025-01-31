@@ -52,9 +52,9 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
 
             elif marginal == 'BetaMC':
                 lb, ub = np.array(self.bounds).T
-                self.margs = BetaMC(lb, ub)
                 state = self.get_state()
                 var = np.diag(self.cov)
+                self.margs = BetaMC(lb, ub, 0.1*np.sqrt(var[0]))
                 default_theta = np.array([var_to_concentration(state[i], var[i], lb[i], ub[i]) for i in range(self.dim)])
                 self.theta = kwargs_ens.get('theta', default_theta)
                 
@@ -223,11 +223,11 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
 
 class BetaMC:
 
-    def __init__(self, lb=0, ub=1):
+    def __init__(self, lb=0, ub=1, eps=0.01):
         self.name = 'BetaMC'
         self.lb  = lb
         self.ub  = ub
-        self.eps = 0.001
+        self.eps = eps
 
     def _mc_to_ab(self, m, c):
         a = 1 + c*m
