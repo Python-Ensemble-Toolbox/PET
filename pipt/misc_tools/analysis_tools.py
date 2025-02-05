@@ -1440,10 +1440,8 @@ def limits(state, prior_info):
     """
     for var in state.keys():
         if 'limits' in prior_info[var]:
-            state[var][state[var] < prior_info[var]['limits']
-                       [0][0]] = prior_info[var]['limits'][0][0]
-            state[var][state[var] > prior_info[var]['limits']
-                       [0][1]] = prior_info[var]['limits'][0][1]
+            state[var][state[var] < prior_info[var]['limits'][0]] = prior_info[var]['limits'][0]
+            state[var][state[var] > prior_info[var]['limits'][1]] = prior_info[var]['limits'][1]
     return state
 
 

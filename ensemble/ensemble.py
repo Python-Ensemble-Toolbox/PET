@@ -363,20 +363,22 @@ class Ensemble:
 
                 # Limits, if exists
                 if limits is not None:
-                    if isinstance(limits[0], list) and len(limits) < nz or \
-                            not isinstance(limits[0], list) and len(limits) < 2 * nz:
-                        # Check if it is more than one entry and give error
-                        assert (isinstance(limits[0], list) and len(limits) == 1), \
-                            'Information from LIMITS has been given for {0} layers, whereas {1} is needed!' \
-                            .format(len(limits), nz)
-                        assert (not isinstance(limits[0], list) and len(limits) == 2), \
-                            'Information from LIMITS has been given for {0} layers, whereas {1} is needed!' \
-                            .format(len(limits) / 2, nz)
+                    self.prior_info[name]['limits'] = limits
 
-                        # Only 1 entry; copy this to all layers
-                        print(
-                            '\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
-                        self.prior_info[name]['limits'] = [limits] * nz
+                    # if isinstance(limits[0], list) and len(limits) < nz or \
+                    #         not isinstance(limits[0], list) and len(limits) < 2 * nz:
+                    #     # Check if it is more than one entry and give error
+                    #     assert (isinstance(limits[0], list) and len(limits) == 1), \
+                    #         'Information from LIMITS has been given for {0} layers, whereas {1} is needed!' \
+                    #         .format(len(limits), nz)
+                    #     assert (not isinstance(limits[0], list) and len(limits) == 2), \
+                    #         'Information from LIMITS has been given for {0} layers, whereas {1} is needed!' \
+                    #         .format(len(limits) / 2, nz)
+                    #
+                    #     # Only 1 entry; copy this to all layers
+                    #     print(
+                    #         '\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
+                    #     self.prior_info[name]['limits'] = [limits] * nz
 
             else:  # 2D grid only, or optimization case
                 nz = 1
