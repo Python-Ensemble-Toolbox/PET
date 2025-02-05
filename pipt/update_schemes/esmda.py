@@ -113,7 +113,6 @@ class esmdaMixIn(Ensemble):
                 self.real_obs_data_conv, self.aug_pred_data, self.cov_data)
 
             # Store the (mean) data misfit (also for conv. check)
-            self.data_misfit = np.mean(data_misfit)
             self.prior_data_misfit = np.mean(data_misfit)
             self.prior_data_misfit_std = np.std(data_misfit)
             self.data_misfit = np.mean(data_misfit)
