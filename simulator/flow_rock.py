@@ -4,6 +4,7 @@ from importlib import import_module
 import datetime as dt
 import numpy as np
 import os
+import pandas as pd
 from misc import ecl, grdecl
 import shutil
 import glob
@@ -19,7 +20,7 @@ from mako.runtime import Context
 from pylops.utils.wavelets import ricker
 from pylops.signalprocessing import Convolve1D
 import sys
-#sys.path.append("/home/AD.NORCERESEARCH.NO/mlie/")
+sys.path.append("/home/AD.NORCERESEARCH.NO/mlie/")
 from PyGRDECL.GRDECL_Parser import GRDECL_Parser  # https://github.com/BinWang0213/PyGRDECL/tree/master
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
@@ -166,33 +167,35 @@ class flow_rock(flow):
         tmp_s = {f'S{ph}': saturations[i] for i, ph in enumerate(phases)}
         self.sats.extend([tmp_s])
 
-
+        keywords = self.ecl_case.arrays(time)
+        keywords = [s.strip() for s in keywords]  # Remove leading/trailing spaces
         #for key in self.all_data_types:
         #if 'grav' in key:
+        densities = []
         for var in phases:
             # fluid densities
-            dens = [var + '_DEN']
-            try:
+            dens = var + '_DEN'
+            if dens in keywords:
                 tmp = self.ecl_case.cell_data(dens, time)
                 pem_input[dens] = np.array(tmp[~tmp.mask], dtype=float)
-            except:
-                pem_input[dens] = None
+                # extract densities
+                densities.append(pem_input[dens])
+            else:
+                densities = None
         # pore volumes at each assimilation step
-        try:
+        if 'RPORV' in keywords:
             tmp = self.ecl_case.cell_data('RPORV', time)
             pem_input['RPORV'] = np.array(tmp[~tmp.mask], dtype=float)
-        except:
-            pem_input['RPORV'] = None
 
         # Get elastic parameters
         if hasattr(self, 'ensemble_member') and (self.ensemble_member is not None) and \
                 (self.ensemble_member >= 0):
             self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
-                                ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
+                                dens = densities, ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init,
                                 ensembleMember=self.ensemble_member)
         else:
             self.pem.calc_props(phases, saturations, pem_input['PRESSURE'], pem_input['PORO'],
-                                ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init)
+                                dens = densities, ntg=pem_input['NTG'], Rs=pem_input['RS'], press_init=P_init)
 
     def setup_fwd_run(self, redund_sim):
         super().setup_fwd_run(redund_sim=redund_sim)
@@ -764,9 +767,28 @@ class flow_avo(flow_rock):
         self.ecl_case = ecl.EclipseCase(folder + os.sep + self.file + '.DATA') if folder[-1] != os.sep \
             else ecl.EclipseCase(folder + self.file + '.DATA')
         grid = self.ecl_case.grid()
-
+        #ecl_init = ecl.EclipseInit(ecl_case)
+        f_dim = [self.ecl_case.init.nk, self.ecl_case.init.nj, self.ecl_case.init.ni]
         # phases = self.ecl_case.init.phases
         self.sats = []
+
+        if 'baseline' in self.pem_input:  # 4D measurement
+            base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
+                                    self.startDate['day']) + dt.timedelta(days=self.pem_input['baseline'])
+            self.calc_pem(base_time)
+            # vp, vs, density in reservoir
+            self.calc_velocities(folder, save_folder, grid, -1, f_dim)
+
+            # avo data
+            # self._calc_avo_props()
+            self._calc_avo_props_active_cells(grid)
+
+            avo_baseline = self.avo_data.flatten(order="F")
+            Rpp_baseline = self.Rpp
+            vs_baseline = self.vs_sample
+            vp_baseline = self.vp_sample
+            rho_baseline = self.rho_sample
+
         vintage = []
         # loop over seismic vintages
         for v, assim_time in enumerate(self.pem_input['vintage']):
@@ -776,7 +798,7 @@ class flow_avo(flow_rock):
             self.calc_pem(time)
 
             # vp, vs, density in reservoir
-            self.calc_velocities(folder, save_folder, grid, v)
+            self.calc_velocities(folder, save_folder, grid, v, f_dim)
 
             # avo data
             #self._calc_avo_props()
@@ -786,18 +808,16 @@ class flow_avo(flow_rock):
 
             # MLIE: implement 4D avo
             if 'baseline' in self.pem_input:  # 4D measurement
-                base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
-                                        self.startDate['day']) + dt.timedelta(days=self.pem_input['baseline'])
-                self.calc_pem(base_time)
-                # vp, vs, density in reservoir
-                self.calc_velocities(folder, save_folder, grid, -1)
-
-                # avo data
-                #self._calc_avo_props()
-                self._calc_avo_props_active_cells(grid)
-
-                avo_baseline = self.avo_data.flatten(order="F")
                 avo = avo - avo_baseline
+                Rpp = self.Rpp - Rpp_baseline
+                Vs = self.vs_sample - vs_baseline
+                Vp = self.vp_sample - vp_baseline
+                rho = self.rho_sample - rho_baseline
+            else:
+                Rpp = self.Rpp
+                Vs = self.vs_sample
+                Vp = self.vp_sample
+                rho = self.rho_sample
 
 
             # XLUO: self.ensemble_member < 0 => reference reservoir model in synthetic case studies
@@ -811,7 +831,9 @@ class flow_avo(flow_rock):
             else:
                 noise_std = 0.0  # simulated data don't contain noise
 
-            save_dic = {'avo': avo, 'noise_std': noise_std, **self.avo_config}
+            #save_dic = {'avo': avo, 'noise_std': noise_std, **self.avo_config}
+            save_dic = {'avo': avo, 'noise_std': noise_std, 'Rpp': Rpp, 'Vs': Vs, 'Vp': Vp, 'rho': rho, **self.avo_config}
+
             if save_folder is not None:
                 file_name = save_folder + os.sep + f"avo_vint{v}.npz" if save_folder[-1] != os.sep \
                     else save_folder + f"avo_vint{v}.npz"
@@ -823,30 +845,50 @@ class flow_avo(flow_rock):
                 #    dump(**save_dic, f)
             np.savez(file_name, **save_dic)
 
-    def calc_velocities(self, folder, save_folder, grid, v):
+    def calc_velocities(self, folder, save_folder, grid, v, f_dim):
         # The properties in pem are only given in the active cells
         # indices of active cells:
-        if grid['ACTNUM'].shape[0] == self.NX:
-            true_indices = np.where(grid['ACTNUM'])
-        elif grid['ACTNUM'].shape[0] == self.NZ:
-            actnum = np.transpose(grid['ACTNUM'], (2, 1, 0))
-            true_indices = np.where(actnum)
-        else:
-            print('warning: dimension mismatch in line 750 flow_rock.py')
 
+
+        true_indices = np.where(grid['ACTNUM'])
+
+
+
+        # Alt 2
         if len(self.pem.getBulkVel()) == len(true_indices[0]):
-            self.vp = np.full(grid['DIMENS'], self.avo_config['vp_shale'])
+            #self.vp = np.full(f_dim, self.avo_config['vp_shale'])
+            self.vp = np.full(f_dim, np.nan)
             self.vp[true_indices] = (self.pem.getBulkVel())
-            self.vs = np.full(grid['DIMENS'], self.avo_config['vs_shale'])
+            #self.vs = np.full(f_dim, self.avo_config['vs_shale'])
+            self.vs = np.full(f_dim, np.nan)
             self.vs[true_indices] = (self.pem.getShearVel())
-            self.rho = np.full(grid['DIMENS'], self.avo_config['den_shale'])
+            #self.rho = np.full(f_dim, self.avo_config['den_shale'])
+            self.rho = np.full(f_dim, np.nan)
             self.rho[true_indices] = (self.pem.getDens())
+
         else:
             self.vp = (self.pem.getBulkVel()).reshape((self.NX, self.NY, self.NZ), order='F')
             self.vs = (self.pem.getShearVel()).reshape((self.NX, self.NY, self.NZ), order='F')
             self.rho = (self.pem.getDens()).reshape((self.NX, self.NY, self.NZ), order='F')  # in the unit of g/cm^3
 
-        save_dic = {'vp': self.vp, 'vs': self.vs, 'rho': self.vp}
+        ## Debug
+        self.bulkmod = np.full(f_dim, np.nan)
+        self.bulkmod[true_indices] = self.pem.getBulkMod()
+        self.shearmod = np.full(f_dim, np.nan)
+        self.shearmod[true_indices] = self.pem.getShearMod()
+        self.poverburden = np.full(f_dim, np.nan)
+        self.poverburden[true_indices] = self.pem.getOverburdenP()
+        self.pressure = np.full(f_dim, np.nan)
+        self.pressure[true_indices] = self.pem.getPressure()
+        self.peff = np.full(f_dim, np.nan)
+        self.peff[true_indices] = self.pem.getPeff()
+        self.porosity = np.full(f_dim, np.nan)
+        self.porosity[true_indices] = self.pem.getPorosity()
+
+        #
+
+
+        save_dic = {'vp': self.vp, 'vs': self.vs, 'rho': self.rho, 'bulkmod': self.bulkmod, 'shearmod': self.shearmod,  'Pov': self.poverburden, 'P': self.pressure,  'Peff': self.peff, 'por': self.porosity}
         if save_folder is not None:
             file_name = save_folder + os.sep + f"vp_vs_rho_vint{v}.npz" if save_folder[-1] != os.sep \
                 else save_folder + f"vp_vs_rho_vint{v}.npz"
@@ -982,9 +1024,12 @@ class flow_avo(flow_rock):
                     rho_sample[m, l, k] = rho[m, l, idx]
 
 
+
+
         # Ricker wavelet
         wavelet, t_axis, wav_center = ricker(np.arange(0, self.avo_config['wave_len'], dt),
                                              f0=self.avo_config['frequency'])
+
 
 
         # Travel time corresponds to reflectivity series
@@ -1031,9 +1076,21 @@ class flow_avo(flow_rock):
         vs_shale = self.avo_config['vs_shale']  # scalar value
         rho_shale = self.avo_config['den_shale']  # scalar value
 
+        # check if Nz, is at axis = 0, then transpose to dimensions, Nx, ny, Nz
+        if grid['ACTNUM'].shape[0] == self.NZ:
+            self.vp = np.transpose(self.vp, (2, 1, 0))
+            self.vs = np.transpose(self.vs, (2, 1, 0))
+            self.rho = np.transpose(self.rho, (2, 1, 0))
+            actnum = np.transpose(grid['ACTNUM'], (2, 1, 0))
+        else:
+            actnum = grid['ACTNUM']
+        #         #         #
+
         # Two-way travel time of the top of the reservoir
         # TOPS[:, :, 0] corresponds to the depth profile of the reservoir top on the first layer
         top_res = 2 * self.TOPS[:, :, 0] / vp_shale
+
+
 
         # Cumulative traveling time through the reservoir in vertical direction
         cum_time_res = np.cumsum(2 * self.DZ / self.vp, axis=2) + top_res[:, :, np.newaxis]
@@ -1056,7 +1113,7 @@ class flow_avo(flow_rock):
                               self.rho, rho_shale * np.ones((self.NX, self.NY, 1))), axis=2)
 
         # get indices of active cells
-        actnum = np.transpose(grid['ACTNUM'], (2, 1, 0))
+
         indices = np.where(actnum)
         a, b, c = indices
         # Combine a and b into a 2D array (each column represents a vector)
@@ -1129,6 +1186,10 @@ class flow_avo(flow_rock):
                 avo_data = np.concatenate((avo_data, trace_interp[:, :, :, np.newaxis]), axis=3)  # 4D
 
         self.avo_data = avo_data
+        self.Rpp = Rpp
+        self.vp_sample = vp_sample
+        self.vs_sample = vs_sample
+        self.rho_sample = rho_sample
 
 
     @classmethod
@@ -1256,13 +1317,7 @@ class flow_grav(flow_rock):
             # porosity, saturation, densities, and fluid mass at individual time-steps
             grav_struct[v] = self.calc_mass(time)  # calculate the mass of each fluid in each grid cell
 
-            # TODO save densities, saturation and mass for each vintage for plotting?
-            # grdecl.write(f'En_{str(self.ensemble_member)}/Vs{v+1}.grdecl', {
-            #                 'Vs': self.pem.getShearVel()*.1, 'DIMENS': grid['DIMENS']}, multi_file=False)
-            # grdecl.write(f'En_{str(self.ensemble_member)}/Vp{v+1}.grdecl', {
-            #                 'Vp': self.pem.getBulkVel()*.1, 'DIMENS': grid['DIMENS']}, multi_file=False)
-            # grdecl.write(f'En_{str(self.ensemble_member)}/rho{v+1}.grdecl',
-            #                 {'rho': self.pem.getDens(), 'DIMENS': grid['DIMENS']}, multi_file=False)
+
         if 'baseline' in self.grav_config:  # 4D measurement
             base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
                                     self.startDate['day']) + dt.timedelta(days=self.grav_config['baseline'])
@@ -1272,7 +1327,7 @@ class flow_grav(flow_rock):
 
         else:
             # seafloor gravity only work in 4D mode
-            print('Need to specify Baseline survey in pipt file')
+            print('Need to specify Baseline survey for gravity in pipt file')
 
         vintage = []
 
@@ -1291,6 +1346,21 @@ class flow_grav(flow_rock):
             # with open(file_name, "wb") as f:
             #    dump(**save_dic, f)
             np.savez(file_name, **save_dic)
+
+            # fluid masses
+            save_dic = {key: grav_struct[v][key] - grav_base[key] for key in grav_struct[v].keys()}
+            if save_folder is not None:
+                file_name = save_folder + os.sep + f"fluid_mass_vint{v}.npz" if save_folder[-1] != os.sep \
+                    else save_folder + f"fluid_mass_vint{v}.npz"
+            else:
+                if hasattr(self, 'ensemble_member') and (self.ensemble_member is not None) and \
+                        (self.ensemble_member >= 0):
+                    file_name = folder + os.sep + f"fluid_mass_vint{v}.npz" if folder[-1] != os.sep \
+                        else folder + f"fluid_mass_vint{v}.npz"
+                else:
+                    file_name = os.getcwd() + os.sep + f"fluid_mass_vint{v}.npz"
+            np.savez(file_name, **save_dic)
+
 
         # 4D response
         self.grav_result = []
@@ -1359,6 +1429,7 @@ class flow_grav(flow_rock):
         # assumes the length of each vector gives the total number of measurement points
         N_meas = (len(pos['x']))
         dg = np.zeros(N_meas)  # 1D array for dg
+        dg[:] = np.nan
 
         # total fluid mass at this time
         phases = self.ecl_case.init.phases
@@ -1375,7 +1446,7 @@ class flow_grav(flow_rock):
         for j in range(N_meas):
 
             # Calculate dg for the current measurement location (j, i)
-            dg_tmp = (z - pos['z'][j]) / ((x[j] - pos['x'][j]) ** 2 + (y[j] - pos['y'][j]) ** 2 + (
+            dg_tmp = (z - pos['z'][j]) / ((x - pos['x'][j]) ** 2 + (y - pos['y'][j]) ** 2 + (
                                 z - pos['z'][j]) ** 2) ** (3 / 2)
 
             dg[j] = np.dot(dg_tmp, dm)
@@ -1397,9 +1468,9 @@ class flow_grav(flow_rock):
         ymax = np.max(cell_centre[1])
 
         # Make a mesh of the area
-        pad = self.grav_config.get('padding_reservoir', 3000) # 3 km padding around the reservoir
+        pad = self.grav_config.get('padding_reservoir', 1500) # 3 km padding around the reservoir
         if 'padding_reservoir' not in self.grav_config:
-            print('Please specify extent of measurement locations (Padding in pipt file), using 3 km as default')
+            print('Please specify extent of measurement locations (Padding in pipt file), using 1.5 km as default')
 
         xmin -= pad
         xmax += pad
@@ -1425,8 +1496,11 @@ class flow_grav(flow_rock):
 
         # Handle seabed map or water depth scalar if defined in pipt
         if 'seabed' in self.grav_config and self.grav_config['seabed'] is not None:
-            pos['z'] = griddata((self.grav_config['seabed']['x'], self.grav_config['seabed']['y']),
-                                self.grav_config['seabed']['z'], (pos['x'], pos['y']), method='nearest')
+            # read seabed depths from file
+            water_depths = self.get_seabed_depths()
+            # get water depths at measurement locations
+            pos['z'] = griddata((water_depths['x'], water_depths['y']),
+                                np.abs(water_depths['z']), (pos['x'], pos['y']), method='nearest') # z is positive downwards
         else:
             pos['z'] = np.ones_like(pos['x']) * self.grav_config.get('water_depth', 300)
 
@@ -1436,12 +1510,26 @@ class flow_grav(flow_rock):
         #return pos
         self.grav_config['meas_location'] = pos
 
+    def get_seabed_depths(self):
+        # Path to your CSV file
+        file_path = self.grav_config['seabed']  # Replace with your actual file path
+
+        # Read the data while skipping the header comments
+        # We'll assume the header data ends before the numerical data
+        # The 'delim_whitespace' keyword in pd.read_csv is deprecated and will be removed in a future version. Use ``sep='\s+'`` instead
+        water_depths = pd.read_csv(file_path, comment='#', delim_whitespace=True, header=None)
+
+        # Give meaningful column names:
+        water_depths.columns = ['x', 'y', 'z', 'column', 'row']
+
+        return water_depths
+
     def find_cell_centers(self, grid):
 
         # Find indices where the boolean array is True
-        #indices = np.where(grid['ACTNUM'])
-        actnum = np.transpose(grid['ACTNUM'], (2, 1, 0))
-        indices = np.where(actnum)
+        indices = np.where(grid['ACTNUM'])
+        #actnum = np.transpose(grid['ACTNUM'], (2, 1, 0))
+        #indices = np.where(actnum)
         # `indices` will be a tuple of arrays: (x_indices, y_indices, z_indices)
         #nactive = len(actind)  # Number of active cells
 
@@ -1452,7 +1540,8 @@ class flow_grav(flow_rock):
         #N1, N2, N3 = grid['DIMENS']
 
 
-        b, a, c = indices
+        #b, a, c = indices
+        c, a, b = indices
         # Calculate xt, yt, zt
         xb = 0.25 * (coord[a, b, 0, 0] + coord[a, b + 1, 0, 0] + coord[a + 1, b, 0, 0] + coord[a + 1, b + 1, 0, 0])
         yb = 0.25 * (coord[a, b, 0, 1] + coord[a, b + 1, 0, 1] + coord[a + 1, b, 0, 1] + coord[a + 1, b + 1, 0, 1])
@@ -1478,7 +1567,7 @@ class flow_grav(flow_rock):
         GRAV configuration
         """
         # list of configuration parameters in the "Grav" section of teh pipt file
-        config_para_list = ['baseline', 'vintage', 'water_depth', 'padding', 'grid_spacing']
+        config_para_list = ['baseline', 'vintage', 'water_depth', 'padding', 'grid_spacing', 'seabed']
 
         if 'grav' in self.input_dict:
             self.grav_config = {}
@@ -1583,7 +1672,7 @@ class flow_grav_and_avo(flow_avo, flow_grav):
             folder = self.folder
 
         # run flow  simulator
-        #success = True #super(flow_rock, self).call_sim(folder, True)
+        #success = True
         success = super(flow_rock, self).call_sim(folder, True)
 
         # use output from flow simulator to forward model gravity response
