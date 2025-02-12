@@ -102,7 +102,7 @@ class elasticproperties:
     def calc_props(self, phases, saturations, pressure,
                    porosity, dens = None, wait_for_proc=None, ntg=None, Rs=None, press_init=None, ensembleMember=None):
         ###
-        # TODO add fluid densities here -needs to be added as optional input
+
         #
         if not isinstance(phases, list):
             phases = [phases]
@@ -118,6 +118,12 @@ class elasticproperties:
         # Load "overburden" pressures into local variable to
         # comply with remaining code parts
         poverburden = self.overburden
+
+        # debug
+        self.pressure = pressure
+        self.peff = poverburden - pressure
+        self.porosity = porosity
+
         if press_init is None:
             p_init = self.p_init
         else:
@@ -172,21 +178,31 @@ class elasticproperties:
         if p_init is None:
             p_init = [None for _ in range(len(saturations[:, 0]))]
 
+
+        if dens is not None:
+            assert (len(dens) == len(phases))
+            # Transpose makes it a no. grid cells x phases array
+            dens = np.array(dens).T
+
+        #
+        denss, bulks, shears = self._solidprops_Johansen()
+
         for i in range(len(saturations[:, 0])):
             #
             # Calculate fluid properties
             #
-            # set Rs if needed
-            densf, bulkf = \
-                self._fluidprops(self.phases,
-                                 saturations[i, :], pressure[i], Rs[i])
+            if dens is None:
+                densf, bulkf = \
+                    self._fluidprops_Wood(self.phases,
+                                          saturations[i, :], pressure[i], Rs[i])
+            else:
+                densf = self._fluid_dens(saturations[i, :], dens[i, :])
+
+                bulkf = self._fluidprops_Brie(self.phases, saturations[i, :], pressure[i])
             #
             #denss, bulks, shears = \
             #    self._solidprops(porosity[i], ntg[i], i)
 
-            #
-            denss, bulks, shears = \
-                self._solidprops_Johansen()
             #
             # Calculate dry rock moduli
             #
@@ -242,6 +258,8 @@ class elasticproperties:
             self.shearimp[i] = self.dens[i] * \
                 self.shearvel[i]
 
+
+
     def getMatchProp(self, petElProp):
         if petElProp.lower() == 'density':
             self.match_prop = self.getDens()
@@ -291,12 +309,23 @@ class elasticproperties:
     def getShearImp(self):
         return self.shearimp
 
+    def getOverburdenP(self):
+        return self.overburden
+
+    def getPressure(self):
+        return self.pressure
+
+    def getPeff(self):
+        return self.peff
+
+    def getPorosity(self):
+        return self.porosity
     #
     # ===================================================
     # Fluid properties start
     # ===================================================
     #
-    def _fluidprops(self, fphases, fsats, fpress, Rs=None):
+    def _fluidprops_Wood(self, fphases, fsats, fpress, Rs=None):
         #
         # Calculate fluid density and bulk modulus
         #
@@ -337,6 +366,104 @@ class elasticproperties:
         return fdens, fbulk
     #
     # ---------------------------------------------------
+    #
+
+    def _fluid_dens(self, fsatsp, fdensp):
+        fdens = sum(fsatsp * fdensp)
+        return fdens
+
+    def _fluidprops_Brie(self, fphases, fsats, fpress, Rs=None, e = 5):
+        #
+        # Calculate fluid density and bulk modulus BRIE et al. 1995
+        # Assumes two phases liquid and gas
+        #
+        # Input
+        #       fphases - fluid phases present; Oil
+        #                 and/or Water and/or Gas
+        #       fsats   - fluid saturation values for
+        #                 fluid phases in "fphases"
+        #       fpress  - fluid pressure value (MPa)
+        #       Rs      - Gas oil ratio. Default value None
+        #       e       - Brie's exponent (e= 5 Utsira sand filled with brine and CO2
+        #                 Figure 7 in Carcione et al. 2006 "Physics and Seismic Modeling
+        #                 for Monitoring CO 2 Storage"
+
+        #
+        # Output
+        #       fbulk - bulk modulus of fluid mixture for
+        #               pressure value "fpress" (unit
+        #               inherited from phaseprops)
+        #
+        # -----------------------------------------------
+        #
+
+
+        for i in range(len(fphases)):
+            #
+            if fphases[i].lower() in ["oil", "wat"]:
+                fsatsl = fsats[i]
+                pbulkl = self._phaseprops_Smeaheia(fphases[i], fpress, Rs)
+            elif fphases[i].lower() in ["gas"]:
+                pbulkg = self._phaseprops_Smeaheia(fphases[i], fpress, Rs)
+
+
+        fbulk = (pbulkl - pbulkg) * (fsatsl)**e + pbulkg
+
+        #
+        return fbulk
+    #
+    # ---------------------------------------------------
+    #
+    def _phaseprops_Smeaheia(self, fphase, press, Rs=None):
+        #
+        # Calculate properties for a single fluid phase
+        #
+        #
+        # Input
+        #       fphase - fluid phase; Oil, Water or Gas
+        #       press  - fluid pressure value (MPa)
+        #
+        # Output
+        #       pbulk - bulk modulus of fluid phase
+        #               "fphase" for pressure value
+        #               "press" (MPa)
+        #
+        # -----------------------------------------------
+        #
+        if fphase.lower() == "oil": # refers to water in Smeaheia
+            press_range = np.array([0.10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+            # Bo values assume Rs = 0
+            Bo_values = np.array(
+                [1.00469, 1.00430, 1.00387, 1.00345, 1.00302, 1.00260, 1.00218, 1.00176, 1.00134, 1.00092, 1.00050,
+                 1.00008, 0.99967, 0.99925, 0.99884, 0.99843, 0.99802, 0.99761, 0.99720, 0.99679, 0.99638])
+
+
+        elif fphase.lower() == "gas":
+            # Values from .DATA file for Smeaheia (converted to MPa)
+            press_range = np.array(
+                [0.101, 0.885, 1.669, 2.453, 3.238, 4.022, 4.806, 5.590, 6.2098, 7.0899, 7.6765, 8.2630, 8.8495, 9.4359,
+                 10.0222, 10.6084, 11.1945, 14.7087, 17.6334, 20.856, 23.4695, 27.5419])  # Example pressures in MPa
+            Bo_values = np.array(
+                [1.07365, 0.11758, 0.05962, 0.03863, 0.02773, 0.02100, 0.01639, 0.01298, 0.010286, 0.007578, 0.005521,
+                 0.003314, 0.003034, 0.002919, 0.002851, 0.002802, 0.002766, 0.002648, 0.002599, 0.002566, 0.002546,
+                 0.002525])  # Example formation volume factors in m^3/kg
+
+        # Calculate numerical derivative of Bo with respect to Pressure
+        dBo_dP = - np.gradient(Bo_values, press_range)
+        # Calculate isothermal compressibility (van der Waals)
+        compressibility = (1 / Bo_values) * dBo_dP  # Resulting array of compressibility values
+        bulk_mod = 1 / compressibility
+
+        #
+        # Find the index of the closest pressure value in b
+        closest_index = (np.abs(press_range - press)).argmin()
+
+        # Extract the corresponding value from a
+        pbulk = bulk_mod[closest_index]
+
+        #
+        return pbulk
+
     #
 
     def _phaseprops(self, fphase, press, Rs=None):
