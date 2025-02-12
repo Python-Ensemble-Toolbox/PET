@@ -555,7 +555,7 @@ class Ensemble:
 
             # modified by xluo, for including the simulation of the mean reservoir model
             # as used in the RLM-MAC algorithm
-            if self.keys_en['daalg'][1] == 'gies':
+            if 'daalg' in self.keys_en and self.keys_en['daalg'][1] == 'gies':
                 list_state.append({})
                 list_member_index.append(self.ne)
 
