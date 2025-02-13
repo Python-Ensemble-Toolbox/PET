@@ -55,79 +55,95 @@ def ecalc_npv(pred_data, **kwargs):
     Qwi = []
     Dd = []
     T = []
+    objective = []
+    L = None
     for i in np.arange(1, len(pred_data)):
 
-        Qop.append(np.squeeze(pred_data[i]['fopt']) - np.squeeze(pred_data[i - 1]['fopt']))
-        Qgp.append(np.squeeze(pred_data[i]['fgpt']) - np.squeeze(pred_data[i - 1]['fgpt']))
-        Qwp.append(np.squeeze(pred_data[i]['fwpt']) - np.squeeze(pred_data[i - 1]['fwpt']))
-        Qwi.append(np.squeeze(pred_data[i]['fwit']) - np.squeeze(pred_data[i - 1]['fwit']))
+        if not isinstance(pred_data[i],list):
+            pred_data[i] = [pred_data[i]]
+            if i == 1:
+                pred_data[i-1] = [pred_data[i-1]]
+        L = len(pred_data[i])
+        for l in range(L):
+            Qop.append([])
+            Qgp.append([])
+            Qwp.append([])
+            Qwi.append([])
+            Qop[l].append(np.squeeze(pred_data[i][l]['fopt']) - np.squeeze(pred_data[i - 1][l]['fopt']))
+            Qgp[l].append(np.squeeze(pred_data[i][l]['fgpt']) - np.squeeze(pred_data[i - 1][l]['fgpt']))
+            Qwp[l].append(np.squeeze(pred_data[i][l]['fwpt']) - np.squeeze(pred_data[i - 1][l]['fwpt']))
+            Qwi[l].append(np.squeeze(pred_data[i][l]['fwit']) - np.squeeze(pred_data[i - 1][l]['fwit']))
         Dd.append((report[1][i] - report[1][i - 1]).days)
         T.append((report[1][i] - report[1][0]).days)
 
-    # Write production data to .csv file for eCalc input, for each ensemble member
-    Qop = np.array(Qop).T
-    Qwp = np.array(Qwp).T
-    Qgp = np.array(Qgp).T
-    Qwi = np.array(Qwi).T
     Dd = np.array(Dd)
     T = np.array(T)
-    if len(Qop.shape) == 1:
-        Qop = np.expand_dims(Qop,0)
-        Qwp = np.expand_dims(Qwp, 0)
-        Qgp = np.expand_dims(Qgp, 0)
-        Qwi = np.expand_dims(Qwi, 0)
+    for l in range(L):
 
-    N = Qop.shape[0]
-    T = Qop.shape[1]
-    values = []
-    em_values = []
-    for n in range(N):
-        with open('ecalc_input.csv', 'w') as csvfile:
-            writer = csv.writer(csvfile, delimiter=',')
-            writer.writerow(['dd/mm/yyyy', 'GAS_PROD', 'OIL_PROD', 'WATER_INJ'])
-            for t in range(T):
-                D = report[1][t]
-                writer.writerow([D.strftime("%d/%m/%Y"), Qgp[n, t]/Dd[t], Qop[n, t]/Dd[t], Qwi[n, t]/Dd[t]])
+        objective.append([])
 
-        # Config
-        model_path = HERE / "ecalc_config.yaml"  # "drogn.yaml"
-        configuration_service = FileConfigurationService(configuration_path=model_path)
-        resource_service = FileResourceService(working_directory=model_path.parent)
-        yaml_model = YamlModel(
-            configuration_service=configuration_service,
-            resource_service=resource_service,
-            output_frequency=Frequency.NONE,
-        )
-        # comps = {c.name: id_hash for (id_hash, c) in yaml_model.graph.components.items()}
+        # Write production data to .csv file for eCalc input, for each ensemble member
+        Qop[l] = np.array(Qop[l]).T
+        Qwp[l] = np.array(Qwp[l]).T
+        Qgp[l] = np.array(Qgp[l]).T
+        Qwi[l] = np.array(Qwi[l]).T
 
-        # Compute energy, emissions
-        #model = EnergyCalculator(energy_model=yaml_model, expression_evaluator=yaml_model.variables)
-        #consumer_results = model.evaluate_energy_usage()
-        #emission_results = model.evaluate_emissions()
-        model = EnergyCalculator(graph=yaml_model.get_graph())
-        consumer_results = model.evaluate_energy_usage(yaml_model.variables)
-        emission_results = model.evaluate_emissions(yaml_model.variables, consumer_results)
+        if len(Qop[l].shape) == 1:
+            Qop[l] = np.expand_dims(Qop[l],0)
+            Qwp[l] = np.expand_dims(Qwp[l], 0)
+            Qgp[l] = np.expand_dims(Qgp[l], 0)
+            Qwi [l]= np.expand_dims(Qwi[l], 0)
 
-        # Extract
-        # energy = results_as_df(yaml_model, consumer_results, lambda r: r.component_result.energy_usage)
-        emissions = results_as_df(yaml_model, emission_results, lambda r: r['co2_fuel_gas'].rate)
-        emissions_total = emissions.sum(1).rename("emissions_total")
-        emissions_total.to_csv(HERE / "emissions.csv")
-        Qem = emissions_total.values * Dd  # total number of tons
-        em_values.append(Qem)
+        N = Qop[l].shape[0]
+        T = Qop[l].shape[1]
+        values = []
+        em_values = []
+        for n in range(N):
+            with open('ecalc_input.csv', 'w') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',')
+                writer.writerow(['dd/mm/yyyy', 'GAS_PROD', 'OIL_PROD', 'WATER_INJ'])
+                for t in range(T):
+                    D = report[1][t]
+                    writer.writerow([D.strftime("%d/%m/%Y"), Qgp[l][n, t]/Dd[t], Qop[l][n, t]/Dd[t], Qwi[l][n, t]/Dd[t]])
 
-        value = (Qop[n, :] * npv_const['wop'] + Qgp[n, :] * npv_const['wgp'] - Qwp[n, :] * npv_const['wwp'] -
-                 Qwi[n, :] * npv_const['wwi'] - Qem * npv_const['wem']) / (
-            (1 + npv_const['disc']) ** (T / 365))
-        values.append(np.sum(value))
+            # Config
+            model_path = HERE / "ecalc_config.yaml"  # "drogn.yaml"
+            configuration_service = FileConfigurationService(configuration_path=model_path)
+            resource_service = FileResourceService(working_directory=model_path.parent)
+            yaml_model = YamlModel(
+                configuration_service=configuration_service,
+                resource_service=resource_service,
+                output_frequency=Frequency.NONE,
+            )
+            # comps = {c.name: id_hash for (id_hash, c) in yaml_model.graph.components.items()}
 
-    # Save emissions for later analysis
-    np.savez('em_values.npz', em_values=np.array([em_values]))
+            # Compute energy, emissions
+            #model = EnergyCalculator(energy_model=yaml_model, expression_evaluator=yaml_model.variables)
+            #consumer_results = model.evaluate_energy_usage()
+            #emission_results = model.evaluate_emissions()
+            model = EnergyCalculator(graph=yaml_model.get_graph())
+            consumer_results = model.evaluate_energy_usage(yaml_model.variables)
+            emission_results = model.evaluate_emissions(yaml_model.variables, consumer_results)
 
-    if 'obj_scaling' in npv_const:
-        return np.array(values) / npv_const['obj_scaling']
-    else:
-        return np.array(values)
+            # Extract
+            # energy = results_as_df(yaml_model, consumer_results, lambda r: r.component_result.energy_usage)
+            emissions = results_as_df(yaml_model, emission_results, lambda r: r['co2_fuel_gas'].rate)
+            emissions_total = emissions.sum(1).rename("emissions_total")
+            emissions_total.to_csv(HERE / "emissions.csv")
+            Qem = emissions_total.values * Dd  # total number of tons
+            em_values.append(Qem)
+
+            value = (Qop[l][n, :] * npv_const['wop'] + Qgp[l][n, :] * npv_const['wgp'] - Qwp[l][n, :] * npv_const['wwp'] -
+                     Qwi[l][n, :] * npv_const['wwi'] - Qem * npv_const['wem']) / (
+                (1 + npv_const['disc']) ** (T / 365))
+            objective[l].append(np.sum(value))
+
+        # Save emissions for later inspection
+        np.savez(f'em_values_level{l}.npz', em_values=np.array([em_values]))
+
+        objective[l] = np.array(objective[l]) / npv_const.get('obj_scaling', 1)
+
+    return objective
 
 
 def results_as_df(yaml_model, results, getter) -> pd.DataFrame:

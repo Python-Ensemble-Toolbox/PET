@@ -7,6 +7,8 @@ import numpy as np
 from scipy.linalg import block_diag
 import os
 from datetime import datetime
+from copy import deepcopy
+
 from scipy.optimize import OptimizeResult
 
 
@@ -46,7 +48,7 @@ def update_optim_state(aug_state, state, list_state):
     Parameters
     ----------
     aug_state : numpy.ndarray
-        Augmented state array. OBS: 1D array.
+        Augmented state array.
     state : dict
         Dictionary of state variables for optimization.
     list_state : list
@@ -75,6 +77,73 @@ def update_optim_state(aug_state, state, list_state):
     # Return
     return state
 
+def get_list_element(list, element):
+    """
+    Retrieve the value associated with a given element in a list of tuples.
+
+    Parameters
+    ----------
+    list : list
+        A list of tuples, where each tuple contains two elements.
+    element : any
+        The element to search for in the first position of the tuples.
+
+    Returns
+    -------
+    any
+        The value associated with the given element in the list of tuples, or None if the element is not found.
+    """
+
+    # Iterate through the list to find element
+    for item in list:
+        if item[0] == element:
+            return item[1]
+
+
+def toggle_ml_state(state, ml_ne):
+
+    """
+    Toggle the state from a dictionary to a list of levels, or from a list of levels to a dictionary.
+    This is necessary when we are using multi-level ensembles.
+
+    Parameters
+    ----------
+    state : dict or list
+        The current state, either as a dictionary or a list of levels.
+    ml_ne : list
+        List of ensemble sizes for each level.
+
+    Returns
+    -------
+    new_state : dict or list
+        The toggled state, either as a list of levels or a dictionary.
+    """
+
+    if not isinstance(state,list):
+        L = len(ml_ne)  # number of levels
+
+        # initialize the state as an empty list of dictionaries with length equal self.tot_level
+        new_state = [{} for _ in range(L)]
+
+        # distribute the initial ensemble of states to the levels according to the given ensemble size.
+        start = 0 # initialize
+        for l in range(L):
+            stop = start + ml_ne[l]
+            for el in state.keys():
+                new_state[l][el] = state[el][:,start:stop]
+            start = stop
+
+        del state
+    else:  # state is a list of levels
+        new_state = {}
+        for l in range(len(state)):
+            for el in state[l].keys():
+                if el in new_state:
+                    new_state[el] = np.hstack((new_state[el], state[l][el]))
+                else:
+                    new_state[el] = state[l][el]
+
+    return new_state
 
 def corr2BlockDiagonal(state, corr):
     """

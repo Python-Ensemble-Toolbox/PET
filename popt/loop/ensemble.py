@@ -1,4 +1,6 @@
 """Descriptive description."""
+from curses import has_key
+
 # External imports
 import numpy as np
 import sys
@@ -214,7 +216,19 @@ class Ensemble(PETEnsemble):
 
         self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))  # go from nparray to dict
         self._invert_scale_state()  # ensure that state is in [lb,ub]
+
+        # Here we need to account for the possibility of having a multilevel ensemble and make a list of levels
+        if 'multilevel' in self.keys_en.keys() and len(x.shape) > 1:
+            en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
+            self.state = ot.toggle_ml_state(self.state, en_size)
+
         run_success = self.calc_prediction()  # calculate flow data
+
+        # Here we need to account for the possibility of having a multilevel ensemble and remove list of levels
+        if 'multilevel' in self.keys_en.keys() and len(x.shape) > 1:  
+            en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
+            self.state = ot.toggle_ml_state(self.state, en_size)
+
         self._scale_state()  # scale back to [0, 1]
         if run_success:
             func_values = self.obj_func(self.pred_data, input_dict=self.sim.input_dict,
@@ -287,18 +301,36 @@ class Ensemble(PETEnsemble):
         # Perturb state and function values with their mean
         state_ens = at.aug_state(self.state, list(self.state.keys()))
         pert_state = state_ens - np.dot(state_ens.mean(1)[:, None], np.ones((1, self.ne)))
-        if self.bias_file is not None:  # use bias corrections
-            self.ens_func_values *= self._bias_correction(self.state)
-            pert_obj_func = self.ens_func_values - np.mean(self.ens_func_values)
+
+        if not isinstance(self.ens_func_values,list):
+            self.ens_func_values = [self.ens_func_values]
+        start_index = 0
+        level_gradient = []
+        gradient = np.zeros(state_ens.shape[0])
+        L = len(self.ens_func_values)
+        for l in range(L):
+
+            if self.bias_file is not None:  # use bias corrections
+                self.ens_func_values[l] *= self._bias_correction(self.state)
+                pert_obj_func = self.ens_func_values[l] - np.mean(self.ens_func_values[l])
+            else:
+                pert_obj_func = self.ens_func_values[l] - np.array(np.repeat(self.state_func_values, nr))
+
+            # Calculate the gradient
+            ml_ne = self.ens_func_values[l].size
+            g_m = np.zeros(state_ens.shape[0])
+            for i in np.arange(ml_ne):
+                g_m = g_m + pert_obj_func[i] * pert_state[:, start_index + i]
+
+            start_index += ml_ne
+            level_gradient.append(g_m / (ml_ne - 1))
+
+        if 'multilevel' in self.keys_en.keys():
+            cov_wgt = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
+            for l in range(L):
+                gradient += level_gradient[l]*cov_wgt[l]
         else:
-            pert_obj_func = self.ens_func_values - np.array(np.repeat(self.state_func_values, nr))
-
-        # Calculate the gradient
-        g_m = np.zeros(state_ens.shape[0])
-        for i in np.arange(self.ne):
-            g_m = g_m + pert_obj_func[i] * pert_state[:, i]
-
-        gradient = g_m / (self.ne - 1)
+            gradient = level_gradient[0]
 
         return gradient
 
@@ -335,15 +367,32 @@ class Ensemble(PETEnsemble):
         state_ens = at.aug_state(self.state, list(self.state.keys()))
         pert_state = state_ens - np.dot(state_ens.mean(1)[:, None], np.ones((1, self.ne)))
         nr = self._aux_input()
-        pert_obj_func = self.ens_func_values - np.array(np.repeat(self.state_func_values, nr))
 
-        # Calculate the gradient for mean and covariance matrix
-        g_c = np.zeros(self.cov.shape)
-        for i in np.arange(self.ne):
-            g_c = g_c + pert_obj_func[i] * (np.outer(pert_state[:, i], pert_state[:, i]) - self.cov)
+        if not isinstance(self.ens_func_values,list):
+            self.ens_func_values = [self.ens_func_values]
+        start_index = 0
+        level_hessian = []
+        L = len(self.ens_func_values)
+        hessian = np.zeros(self.cov.shape)
+        for l in range(L):
+            pert_obj_func = self.ens_func_values[l] - np.array(np.repeat(self.state_func_values, nr))
+            ml_ne = self.ens_func_values[l].size
+            
+            # Calculate the gradient for mean and covariance matrix
+            g_c = np.zeros(self.cov.shape)
+            for i in np.arange(ml_ne):
+                g_c = g_c + pert_obj_func[i] * (np.outer(pert_state[:, start_index + i], pert_state[:, start_index + i]) - self.cov)
 
-        hessian = g_c / (self.ne - 1)
+            start_index += ml_ne
+            level_hessian.append(g_c / (ml_ne - 1))
 
+        if 'multilevel' in self.keys_en.keys():
+            cov_wgt = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
+            for l in range(L):
+                hessian += level_hessian[l]*cov_wgt[l]
+        else:
+            hessian = level_hessian[0]
+            
         return hessian
     '''
     def genopt_gradient(self, x, *args):

@@ -514,7 +514,7 @@ class Ensemble:
 
         """
 
-        if hasattr(self, 'multilevel'):
+        if isinstance(self.state,list) and hasattr(self, 'multilevel'): # assume multilevel is used if state is a list 
             success = self.calc_ml_prediction(input_state)
         else:
             # Number of parallel runs
@@ -736,6 +736,7 @@ class Ensemble:
         # loop over time instance first, and the level instance.
         self.pred_data = np.array(ml_pred_data).T.tolist()
 
-        self.treat_modeling_error(self.iteration)
+        if hasattr(self,'treat_modeling_error'):
+            self.treat_modeling_error(self.iteration)
 
         return success
