@@ -329,6 +329,7 @@ class Ensemble(PETEnsemble):
             cov_wgt = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
             for l in range(L):
                 gradient += level_gradient[l]*cov_wgt[l]
+            gradient /= self.ne
         else:
             gradient = level_gradient[0]
 
