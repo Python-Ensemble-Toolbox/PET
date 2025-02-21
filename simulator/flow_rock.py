@@ -57,6 +57,10 @@ class flow_rock(flow):
 
         self.scale = []
 
+        # Store dynamic variables in case they are provided in the state
+        self.state = None
+        self.no_flow = False
+
     def _getpeminfo(self, input_dict):
         """
         Get, and return, flow and PEM modules
@@ -86,6 +90,8 @@ class flow_rock(flow):
                     self.pem_input['overburden'] = elem[1]
                 if elem[0] == 'percentile':  # use for scaling
                     self.pem_input['percentile'] = elem[1]
+                if elem[0] == 'phases':  # get the fluid phases
+                    self.pem_input['phases'] = elem[1]
 
             pem = getattr(import_module('simulator.rockphysics.' +
                           self.pem_input['model'].split()[0]), self.pem_input['model'].split()[1])
@@ -95,16 +101,29 @@ class flow_rock(flow):
         else:
             self.pem = None
 
+    def _get_pem_input(self, type, time=None):
+        if self.no_flow:  # get variable from state
+            if type in self.state.keys():
+                return self.state[type+'_'+str(time)]
+            else:  # read parameter from file
+                param_file = self.input_dict['param_file']
+                npzfile = np.load(param_file)
+                parameter = npzfile[type]
+                npzfile.close()
+                return parameter
+        else:  # get variable of parameter from flow simulation
+            return self.ecl_case.cell_data(type,time)
+
     def calc_pem(self, time):
-        # fluid phases written to restart file from simulator run
-        phases = self.ecl_case.init.phases
+
+        # fluid phases written given as input
+        phases = self.pem_input['phases']
 
         pem_input = {}
         # get active porosity
-        tmp = self.ecl_case.cell_data('PORO')
+        tmp = self._get_pem_input('PORO')  # self.ecl_case.cell_data('PORO')
         if 'compaction' in self.pem_input:
-            multfactor = self.ecl_case.cell_data('PORV_RC', time)
-
+            multfactor = self._get_pem_input('PORV_RC', time)
             pem_input['PORO'] = np.array(multfactor[~tmp.mask] * tmp[~tmp.mask], dtype=float)
         else:
             pem_input['PORO'] = np.array(tmp[~tmp.mask], dtype=float)
@@ -114,28 +133,25 @@ class flow_rock(flow):
             if self.pem_input['ntg'] == 'no':
                 pem_input['NTG'] = None
             else:
-                tmp = self.ecl_case.cell_data('NTG')
+                tmp = self._get_pem_input('NTG')
                 pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
         else:
-            tmp = self.ecl_case.cell_data('NTG')
+            tmp = self._get_pem_input('NTG')
             pem_input['NTG'] = np.array(tmp[~tmp.mask], dtype=float)
 
-
-
         if 'RS' in self.pem_input: #ecl_case.cell_data: # to be more robust!
-            tmp = self.ecl_case.cell_data('RS', time)
+            tmp = self._get_pem_input('RS', time)
             pem_input['RS'] = np.array(tmp[~tmp.mask], dtype=float)
         else:
             pem_input['RS'] = None
             print('RS is not a variable in the ecl_case')
 
         # extract pressure
-        tmp = self.ecl_case.cell_data('PRESSURE', time)
+        tmp = self._get_pem_input('PRESSURE', time)
         pem_input['PRESSURE'] = np.array(tmp[~tmp.mask], dtype=float)
 
         if 'press_conv' in self.pem_input:
             pem_input['PRESSURE'] = pem_input['PRESSURE'] * self.pem_input['press_conv']
-
 
         if hasattr(self.pem, 'p_init'):
             P_init = self.pem.p_init * np.ones(tmp.shape)[~tmp.mask]
@@ -149,7 +165,7 @@ class flow_rock(flow):
         if 'OIL' in phases and 'WAT' in phases and 'GAS' in phases:  # This should be extended
             for var in phases:
                 if var in ['WAT', 'GAS']:
-                    tmp = self.ecl_case.cell_data('S{}'.format(var), time)
+                    tmp = self._get_pem_input('S{}'.format(var), time)
                     pem_input['S{}'.format(var)] = np.array(tmp[~tmp.mask], dtype=float)
 
             saturations = [1 - (pem_input['SWAT'] + pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)]
@@ -157,7 +173,7 @@ class flow_rock(flow):
         elif 'OIL' in phases and 'GAS' in phases:  # Smeaheia model
             for var in phases:
                 if var in ['GAS']:
-                    tmp = self.ecl_case.cell_data('S{}'.format(var), time)
+                    tmp = self._get_pem_input('S{}'.format(var), time)
                     pem_input['S{}'.format(var)] = np.array(tmp[~tmp.mask], dtype=float)
             saturations = [1 - (pem_input['SGAS']) if ph == 'OIL' else pem_input['S{}'.format(ph)] for ph in phases]
         else:
@@ -176,7 +192,7 @@ class flow_rock(flow):
             # fluid densities
             dens = var + '_DEN'
             if dens in keywords:
-                tmp = self.ecl_case.cell_data(dens, time)
+                tmp = self._get_pem_input(dens, time)
                 pem_input[dens] = np.array(tmp[~tmp.mask], dtype=float)
                 # extract densities
                 densities.append(pem_input[dens])
@@ -184,7 +200,7 @@ class flow_rock(flow):
                 densities = None
         # pore volumes at each assimilation step
         if 'RPORV' in keywords:
-            tmp = self.ecl_case.cell_data('RPORV', time)
+            tmp = self._get_pem_input('RPORV', time)
             pem_input['RPORV'] = np.array(tmp[~tmp.mask], dtype=float)
 
         # Get elastic parameters
@@ -203,6 +219,14 @@ class flow_rock(flow):
     def run_fwd_sim(self, state, member_i, del_folder=True):
         # The inherited simulator also has a run_fwd_sim. Call this.
         self.ensemble_member = member_i
+
+        # Check if dynamic variables are provided in the state. If that is the case, do not run flow simulator
+        if 'SATURATION' in state.keys() and 'PRESSURE' in state.keys():
+            self.state = {}
+            for key in state.keys():
+                self.state[key] = state[key][:,member_i]
+            self.no_flow = True
+
         self.pred_data = super().run_fwd_sim(state, member_i, del_folder=True)
 
         return self.pred_data
@@ -210,7 +234,10 @@ class flow_rock(flow):
     def call_sim(self, folder=None, wait_for_proc=False):
         # the super run_fwd_sim will invoke call_sim. Modify this such that the fluid simulator is run first.
         # Then, get the pem.
-        success = super().call_sim(folder, wait_for_proc)
+        if not self.no_flow:
+            success = super().call_sim(folder, wait_for_proc)
+        else:
+            success = True
 
         if success:
             self.ecl_case = ecl.EclipseCase(
@@ -220,8 +247,11 @@ class flow_rock(flow):
             vintage = []
             # loop over seismic vintages
             for v, assim_time in enumerate(self.pem_input['vintage']):
-                time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
-                        dt.timedelta(days=assim_time)
+                if not self.no_flow:
+                    time = dt.datetime(self.startDate['year'], self.startDate['month'], self.startDate['day']) + \
+                            dt.timedelta(days=assim_time)
+                else:
+                    time = int(v + 1)
 
                 self.calc_pem(time)
 
@@ -235,8 +265,11 @@ class flow_rock(flow):
                 vintage.append(deepcopy(self.pem.bulkimp))
 
             if hasattr(self.pem, 'baseline'):  # 4D measurement
-                base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
-                                        self.startDate['day']) + dt.timedelta(days=self.pem.baseline)
+                if not self.no_flow:
+                    base_time = dt.datetime(self.startDate['year'], self.startDate['month'],
+                                            self.startDate['day']) + dt.timedelta(days=self.pem.baseline)
+                else:
+                    v = 0
                 #
                 self.calc_pem(base_time)
 
@@ -867,9 +900,9 @@ class flow_avo(flow_rock):
             self.rho[true_indices] = (self.pem.getDens())
 
         else:
-            self.vp = (self.pem.getBulkVel()).reshape((self.NX, self.NY, self.NZ), order='F')
-            self.vs = (self.pem.getShearVel()).reshape((self.NX, self.NY, self.NZ), order='F')
-            self.rho = (self.pem.getDens()).reshape((self.NX, self.NY, self.NZ), order='F')  # in the unit of g/cm^3
+            self.vp = (self.pem.getBulkVel()).reshape((self.NX, self.NY, self.NZ))#, order='F')
+            self.vs = (self.pem.getShearVel()).reshape((self.NX, self.NY, self.NZ))#, order='F')
+            self.rho = (self.pem.getDens()).reshape((self.NX, self.NY, self.NZ))#, order='F')
 
         ## Debug
         self.bulkmod = np.full(f_dim, np.nan)
@@ -1069,7 +1102,7 @@ class flow_avo(flow_rock):
         self.avo_data = avo_data
 
 
-    def _calc_avo_props_active_cells(self, grid, dt=0.005):
+    def _calc_avo_props_active_cells(self, grid, dt=0.0005):
         # dt is the fine resolution sampling rate
         # convert properties in reservoir model to time domain
         vp_shale = self.avo_config['vp_shale']  # scalar value (code may not work for matrix value)
@@ -1610,60 +1643,10 @@ class flow_grav_and_avo(flow_avo, flow_grav):
 
     def run_fwd_sim(self, state, member_i, del_folder=True):
         # The inherited simulator also has a run_fwd_sim. Call this.
-        #self.ensemble_member = member_i
-        #self.pred_data = super().run_fwd_sim(state, member_i, del_folder=True)
-
-        #return self.pred_data
-
-        if member_i >= 0:
-            folder = 'En_' + str(member_i) + os.sep
-            if not os.path.exists(folder):
-                os.mkdir(folder)
-        else:  # XLUO: any negative member_i is considered as the index for the true model
-            assert 'truth_folder' in self.input_dict, "ensemble member index is negative, please specify " \
-                                                  "the folder containing the true model"
-            if not os.path.exists(self.input_dict['truth_folder']):
-                os.mkdir(self.input_dict['truth_folder'])
-            folder = self.input_dict['truth_folder'] + os.sep if self.input_dict['truth_folder'][-1] != os.sep \
-                else self.input_dict['truth_folder']
-            del_folder = False  # never delete this folder
-        self.folder = folder
         self.ensemble_member = member_i
+        self.pred_data = super().run_fwd_sim(state, member_i, del_folder=True)
 
-        state['member'] = member_i
-
-        # start by generating the .DATA file, using the .mako template situated in ../folder
-        self._runMako(folder, state)
-        success = False
-        rerun = self.rerun
-        while rerun >= 0 and not success:
-            success = self.call_sim(folder, True)
-            rerun -= 1
-        if success:
-            self.extract_data(member_i)
-            if del_folder:
-                if self.saveinfo is not None:  # Try to save information
-                    store_ensemble_sim_information(self.saveinfo, member_i)
-                self.remove_folder(member_i)
-            return self.pred_data
-        else:
-            if hasattr(self, 'redund_sim') and self.redund_sim is not None:
-                success = self.redund_sim.call_sim(folder, True)
-                if success:
-                    self.extract_data(member_i)
-                    if del_folder:
-                        if self.saveinfo is not None:  # Try to save information
-                            store_ensemble_sim_information(self.saveinfo, member_i)
-                        self.remove_folder(member_i)
-                    return self.pred_data
-                else:
-                    if del_folder:
-                        self.remove_folder(member_i)
-                    return False
-            else:
-                if del_folder:
-                    self.remove_folder(member_i)
-                return False
+        return self.pred_data
 
     def call_sim(self, folder=None, wait_for_proc=False, save_folder=None):
         # the super run_fwd_sim will invoke call_sim. Modify this such that the fluid simulator is run first.
