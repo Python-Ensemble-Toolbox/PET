@@ -38,7 +38,7 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
         # choose marginal
         marginal = kwargs_ens.get('marginal', 'Beta')
 
-        if marginal in ['Beta', 'BetaMC', 'Logistic', 'TruncGaussian']:
+        if marginal in ['Beta', 'BetaMC', 'Logistic', 'TruncGaussian', 'Gaussian']:
 
             self.grad_scale = 1.0
             self.hess_scale = 1.0
@@ -65,6 +65,10 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
             elif marginal == 'TruncGaussian':
                 lb, ub = np.array(self.bounds).T
                 self.margs = TruncGaussian(lb,ub)
+                self.theta = kwargs_ens.get('theta', np.sqrt(np.diag(self.cov)))
+
+            elif marginal == 'Gaussian':
+                self.margs = Gaussian()
                 self.theta = kwargs_ens.get('theta', np.sqrt(np.diag(self.cov)))
     
     def get_theta(self):
@@ -151,8 +155,8 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
         
         return self.avg_hess
     
-    def natural_gradient(self, x, *args, **kwargs):
-              # Set the ensemble state equal to the input control vector x
+    def mutation_gradient(self, x, *args, **kwargs):
+        # Set the ensemble state equal to the input control vector x
         self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
 
         if args:
@@ -188,12 +192,11 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
             self.nat_hess += enJ[n]*(hm_log_p + dm_log_p**2)
         
         # Fisher
-        fisher = self.margs.fisher(self.theta, mean=x)
-        self.nat_grad = self.nat_grad/(ne)
+        self.nat_grad = self.nat_grad/ne
         self.nat_hess = np.diag(self.nat_hess/ne)
         return self.nat_grad
 
-    def natural_hessian(self, x, *args, **kwargs):
+    def mutation_hessian(self, x, *args, **kwargs):
 
         # Set the ensemble state equal to the input control vector x
         self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
@@ -254,13 +257,13 @@ class BetaMC:
         u = (x-self.lb)/(self.ub-self.lb)
         m = self._get_mode(**kwargs)
         c = theta
-        return c*m/(u+self.eps) - c*(1-u)/(1-u+self.eps)
+        return c*m/u - c*(1-m)/(1-u)
 
     def hess_log_pdf(self, x, theta, **kwargs):
         u = (x-self.lb)/(self.ub-self.lb)
         m = self._get_mode(**kwargs)
         c = theta
-        return -c*m/u**2 - c*(1-u)/(1-u)**2
+        return -c*m/u**2 - c*(1-m)/(1-u)**2
     
     def grad_theta_log_pdf(self, x, theta, **kwargs):
         u = (x-self.lb)/(self.ub-self.lb)
@@ -274,14 +277,7 @@ class BetaMC:
         p1 = polygamma(1, 1+c*m)
         p2 = polygamma(1, 1+c*(1-m))
         return -c**2*(p1+p2)
-
-    def fisher(self, theta, **kwargs):
-        m = self._get_mode(**kwargs)
-        c = theta
-        kap = kappa(m,c)
-        return 2*c**2*kap - c**2*kap
     
-
 class Beta:
 
     name = 'Beta'
@@ -344,6 +340,47 @@ class TruncGaussian:
         mu = kwargs.get('mean')
         a, b = (self.lb - mu)/theta, (self.ub - mu)/theta
         return stats.truncnorm(a, b, loc=mu, scale=theta).ppf(u)
+    
+    def grad_log_pdf(self, x, theta, **kwargs):
+        mu = kwargs.get('mean')
+        return -(x - mu)/theta**2
+
+    def hess_log_pdf(self, x, theta, **kwargs):
+        return -1/theta**2
+    
+    def grad_theta_log_pdf(self, x, theta, **kwargs):
+        mu  = kwargs.get('mean')
+        sig = theta
+        phi = lambda z: stats.norm.pdf(z)
+        phi_d = phi((self.ub-mu)/sig) - phi((self.lb-mu)/sig) 
+        Phi_d = stats.norm.cdf((self.ub-mu)/sig) - stats.norm.cdf((self.lb-mu)/sig) 
+        return (x-mu)/sig**2 + phi_d/(sig*Phi_d)
+
+    def hess_theta_log_pdf(self, x, theta, **kwargs):
+        mu  = kwargs.get('mean')
+        sig = theta
+        phi = lambda z: stats.norm.pdf(z)
+
+        a = self.lb
+        b = self.ub
+
+        phi_d = phi((b-mu)/sig) - phi((a-mu)/sig) 
+        Phi_d = stats.norm.cdf((b-mu)/sig) - stats.norm.cdf((a-mu)/sig)
+        ratio = phi_d/Phi_d
+
+        return -1/sig**2 - mu*ratio/sig**3 + (ratio/sig)**2 + (b*phi((b-mu)/sig) - a*phi((a-mu)/sig))/(sig**3 * Phi_d)
+
+class Gaussian:
+
+    name = 'Gaussian'
+
+    def pdf(self, x, theta, **kwargs):
+        mu = kwargs.get('mean')
+        return stats.norm(loc=mu, scale=theta).pdf(x)
+
+    def ppf(self, u, theta, **kwargs):
+        mu = kwargs.get('mean')
+        return stats.norm(loc=mu, scale=theta).ppf(u)
     
     def grad_log_pdf(self, x, theta, **kwargs):
         mu = kwargs.get('mean')
