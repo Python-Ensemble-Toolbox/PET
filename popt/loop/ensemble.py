@@ -391,6 +391,7 @@ class Ensemble(PETEnsemble):
             cov_wgt = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
             for l in range(L):
                 hessian += level_hessian[l]*cov_wgt[l]
+            hessian /= self.ne
         else:
             hessian = level_hessian[0]
             
@@ -449,6 +450,9 @@ class Ensemble(PETEnsemble):
 
         state_ens = at.aug_state(self.state, list(self.state.keys()))
         self.function(state_ens, **kwargs)
+
+        if isinstance(self.ens_func_values,list):
+            self.ens_func_values = np.hstack(self.ens_func_values)
 
         self.particles[:,:(self.num_samples-self.ne)] = self.particles[:,self.resample_index]   
         #np.hstack((self.particles, state_ens))
