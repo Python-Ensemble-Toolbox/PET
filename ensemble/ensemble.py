@@ -158,9 +158,12 @@ class Ensemble:
                 if opt == 'levels':
                     self.multilevel['levels'] = [elem for elem in range(
                         int(self.keys_en['multilevel'][i][1]))]
+                    self.tot_level = int(self.keys_en['multilevel'][i][1])
+                    self.Dns_mat = [None] * self.tot_level
                 if opt == 'en_size':
                     self.multilevel['ne'] = [range(int(el))
                                              for el in self.keys_en['multilevel'][i][1]]
+                    self.ml_ne = [int(el) for el in self.keys_en['multilevel'][i][1]]
                 if opt == 'ml_error_corr':
                     # options for ML_error_corr are: bias_corr, deterministic, stochastic, telescopic
                     self.ML_error_corr = self.keys_en['multilevel'][i][1]
