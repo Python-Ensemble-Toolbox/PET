@@ -9,4 +9,4 @@ Currently, the following methods are implemented:
 - LineSearch: Gradient based method satisfying the strong Wolfie conditions
 
 The gradient and Hessian methods are compatible with SciPy, and can be used as input to scipy.optimize.minimize. 
-A POPT tutorial is found [here](https://github.com/Python-Ensemble-Toolbox/PET/blob/main/docs/tutorials/popt/tutorial_popt.ipynb).
+A POPT tutorial is found [here](https://python-ensemble-toolbox.github.io/PET/tutorials/popt/tutorial_popt).
