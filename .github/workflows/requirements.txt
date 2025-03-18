@@ -18,5 +18,5 @@ mkdocs-section-index==0.3.9
 mkdocstrings==0.26.2
 mkdocstrings-python==1.12.2
 nbclient==0.10.0
-nbconvert==7.16.4
+nbconvert==7.16.5
 nbformat==5.10.4
