@@ -772,13 +772,13 @@ class Ensemble:
         if self.ML_error_corr =='bias_corr':
             # modify self.pred_data without changing its structure. Hence, for each level (except the finest one)
             # we correct each data at each point in time.
-            for elem in self.pred_data:
-                for dat in self.pred_data[elem][-1].keys():
+            for assim_index in range(len(self.pred_data)):
+                for dat in self.pred_data[assim_index][-1].keys():
                     # extract the HF model mean
-                    ref_mean = self.pred_data[elem][-1][dat].mean(axis=1)
+                    ref_mean = self.pred_data[assim_index][-1][dat].mean(axis=1)
                         # modify each level
                     for level in range(self.tot_level - 1):
-                        self.pred_data[elem][level][dat] += (ref_mean - self.pred_data[elem][level][dat].mean(axis=1))
+                        self.pred_data[assim_index][level][dat] += (ref_mean - self.pred_data[assim_index][level][dat].mean(axis=1))
 
 
     def address_ML_error(self):
