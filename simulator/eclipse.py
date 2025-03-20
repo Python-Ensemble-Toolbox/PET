@@ -14,6 +14,7 @@ from misc import ecl, grdecl
 from shutil import rmtree, copytree  # rmtree for removing folders
 import time
 # import rips
+from glob import glob
 
 # Internal imports
 from misc.system_tools.environ_var import EclipseRunEnvironment
@@ -261,7 +262,7 @@ class eclipse:
             sys.exit(
                 'ERROR: .mako file is not in the current working directory. This file must be defined')
 
-    def run_fwd_sim(self, state, member_i, del_folder=True):
+    def run_fwd_sim(self, state, member_i, del_folder=True,nosim=False):
         """
         Setup and run the ecl_100 forward simulator. All the parameters are defined as attributes, and the name of the
         parameters are initialized in setupFwdRun. This method sets up and runs all the individual ensemble members.
@@ -278,6 +279,9 @@ class eclipse:
 
         del_folder : bool, optional
             Boolean to determine if the ensemble folder should be deleted. Default is False.
+
+        nosim : bool, optional
+            Boolean to determine if the simulation should be run. Default is False.
         """
         if hasattr(self, 'level'):
             state['level'] = self.level
@@ -300,7 +304,10 @@ class eclipse:
 
         # start by generating the .DATA file, using the .mako template situated in ../folder
         self._runMako(folder, state)
-        success = False
+        if nosim: # for hpc we only want to generate the .DATA file
+            return # exit the function
+        else:
+            success = False
         rerun = self.rerun
         while rerun >= 0 and not success:
             success = self.call_sim(folder, True)
@@ -350,6 +357,7 @@ class eclipse:
                         data_array = self.get_sim_results(key, true_data_info, member)
                         self.pred_data[prim_ind][key] = data_array
                     except:
+                        print(f'Failed to extract {key} at {prim_ind} for member {member}')
                         pass
 
     def coarsen(self, folder, ensembleMember=None):
