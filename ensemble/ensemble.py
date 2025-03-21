@@ -569,21 +569,30 @@ class Ensemble:
                 en_pred = [self.sim.run_fwd_sim(state, member_index) for state, member_index in
                            tqdm(zip(list_state, list_member_index), total=len(list_state))]
             elif self.sim.input_dict.get('hpc', False): # Run prediction in parallel on hpc
-                _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
-                           zip(list_state, list_member_index)]
-                # Run call_sim on the hpc
-                job_id=self.sim.SLURM_HPC_run(self.ne, filename=self.sim.input_dict['runfile'])
-                # Wait for the simulations to finish
-                if job_id:
-                    self.sim.wait_for_jobs(job_id)
-                else:
-                    print("Job submission failed. Exiting.")
-                # Extract the results
+                batch_size = 500 # If more than 500 ensemble members, we limit the runs to batches of 500
+                # Split the ensemble into batches of 500
                 en_pred = []
-                for member_i in list_member_index:
-                    self.sim.extract_data(member_i)
-                    en_pred.append(deepcopy(self.sim.pred_data))
-                    self.sim.remove_folder(member_i)
+                batch_en = [np.arange(start, start + batch_size) for start in
+                            np.arange(0, self.ne - batch_size, batch_size)]
+                if len(batch_en): # if self.ne is less than batch_size
+                    batch_en.append(np.arange(batch_en[-1][-1]+1, self.ne))
+                else:
+                    batch_en.append(np.arange(0, self.ne))
+                for n_e in batch_en:
+                    _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
+                               zip(list_state[n_e], list_member_index[n_e])]
+                    # Run call_sim on the hpc
+                    job_id=self.sim.SLURM_HPC_run(n_e, venv=sys.executable, filename=self.sim.input_dict['runfile'])
+                    # Wait for the simulations to finish
+                    if job_id:
+                        self.sim.wait_for_jobs(job_id)
+                    else:
+                        print("Job submission failed. Exiting.")
+                    # Extract the results
+                    for member_i in list_member_index[n_e]:
+                        self.sim.extract_data(member_i)
+                        en_pred.append(deepcopy(self.sim.pred_data))
+                        self.sim.remove_folder(member_i)
 
             else: # Run prediction in parallel using p_map
                 en_pred = p_map(self.sim.run_fwd_sim, list_state,

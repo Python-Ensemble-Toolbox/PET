@@ -95,7 +95,7 @@ class flow(eclipse):
         return finished_member
 
     @staticmethod
-    def SLURM_HPC_run(num_runs, filename=None):
+    def SLURM_HPC_run(n_e, venv, filename=None):
         """
         HPC run manager for SLURM.
 
@@ -106,7 +106,7 @@ class flow(eclipse):
         slurm_script = f"""#!/bin/bash                                                                                               
 #SBATCH --partition=comp                                                                                  
 #SBATCH --job-name=EnDA                                                                               
-#SBATCH --array=0-{num_runs - 1}                                                                            
+#SBATCH --array={n_e[0]}-{n_e[-1]}                                                                            
 #SBATCH --time=01:00:00                                                                                   
 #SBATCH --mem=4G                                                                                          
 #SBATCH --cpus-per-task=1                                                                                 
@@ -118,7 +118,7 @@ module load Python
 export LMOD_DISABLE_SAME_NAME_AUTOSWAP=no                                                                 
 module load opm-simulators                                                                                
 
-source ../../../code/venv/bin/activate                                                                    
+source {venv}                                                                    
 
 # Set folder based on SLURM_ARRAY_TASK_ID
 folder="En_${{SLURM_ARRAY_TASK_ID}}/"
