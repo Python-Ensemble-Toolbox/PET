@@ -60,7 +60,7 @@ class localization():
                 init_local = {}
                 init_local['autoadaloc'] = True
                 init_local['nstd'] = parsed_info[1][1]
-                if parsed_info[2][0] == 'type':
+                if len(parsed_info) > 2 and parsed_info[2][0] == 'type':
                     init_local['type'] = parsed_info[2][1]
             elif parsed_info[1][0].upper() == 'LOCALANALYSIS':
                 init_local = {}
