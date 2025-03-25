@@ -580,16 +580,16 @@ class Ensemble:
                     batch_en.append(np.arange(0, self.ne))
                 for n_e in batch_en:
                     _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
-                               zip(list_state[n_e], list_member_index[n_e])]
+                               zip([list_state[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
                     # Run call_sim on the hpc
-                    job_id=self.sim.SLURM_HPC_run(n_e, venv=sys.executable, filename=self.sim.input_dict['runfile'])
+                    job_id=self.sim.SLURM_HPC_run(n_e, venv=os.path.join(os.path.dirname(sys.executable),'activate'), filename=self.sim.input_dict['runfile'])
                     # Wait for the simulations to finish
                     if job_id:
                         self.sim.wait_for_jobs(job_id)
                     else:
                         print("Job submission failed. Exiting.")
                     # Extract the results
-                    for member_i in list_member_index[n_e]:
+                    for member_i in [list_member_index[curr_n] for curr_n in n_e]:
                         self.sim.extract_data(member_i)
                         en_pred.append(deepcopy(self.sim.pred_data))
                         self.sim.remove_folder(member_i)
