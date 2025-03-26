@@ -95,21 +95,37 @@ class flow(eclipse):
         return finished_member
 
     @staticmethod
-    def SLURM_HPC_run(n_e, venv, filename=None):
+    def SLURM_HPC_run(n_e, venv, kwargs):
         """
         HPC run manager for SLURM.
 
         This function will start num_runs of sim.call_sim() using job arrays in SLURM.
         """
+        # Extract the filename from the kwargs
+        filename = kwargs.get("filename", None)
         filename_str = f'"{filename.upper()}"' if filename is not None else ""
+
+        # Extract mpi flag from kwargs
+        mpi = kwargs.get("mpi", None)
+        mpi_str = f'"{mpi}"' if mpi is not None else "mpirun --bind-to none -np 1"
+
+        # set number of cpus to the number following -np in mpi_str (default is 1)
+        n_cpus = re.search(r"-np (\d+)", mpi_str).group(1)
+
+
+        # extract the sim_limit from kwargs. Default is 1 hour
+        sim_limit = kwargs.get("sim_limit", None)
+        sim_limit_str = f'--time={sim_limit}' if sim_limit is not None else "--time=01:00:00"
+
+        diff_ne = n_e[1] - n_e[0]
 
         slurm_script = f"""#!/bin/bash                                                                                               
 #SBATCH --partition=comp                                                                                  
 #SBATCH --job-name=EnDA                                                                               
-#SBATCH --array={n_e[0]}-{n_e[-1]}                                                                            
-#SBATCH --time=01:00:00                                                                                   
+#SBATCH --array=0-{diff_ne}                                                                            
+#SBATCH {sim_limit_str}                                                                                   
 #SBATCH --mem=4G                                                                                          
-#SBATCH --cpus-per-task=1                                                                                 
+#SBATCH --cpus-per-task={n_cpus}                                                                                 
 #SBATCH --export=ALL                                                                                      
 #SBATCH --output=/dev/null                                                                                
 
@@ -121,9 +137,9 @@ module load opm-simulators
 source {venv}                                                                    
 
 # Set folder based on SLURM_ARRAY_TASK_ID
-folder="En_${{SLURM_ARRAY_TASK_ID}}/"
+folder="En_${{n_e[0]+SLURM_ARRAY_TASK_ID}}/"
                                      
-python -m simulator.opm "$folder" {filename_str}                                              
+python -m simulator.opm "$folder" {filename_str} {mpi_str}                                              
 """
         script_name = "submit_test_parallel_mpi.sh"
         with open(script_name, "w") as f:
@@ -150,36 +166,47 @@ python -m simulator.opm "$folder" {filename_str}
             print("Failed to extract Job ID from sbatch output.")
             return None
 
-
-    def are_jobs_done(self,job_id):
+    def are_jobs_done(self, job_id):
         """Check if all job array tasks are completed using sacct."""
         check_cmd = ["sacct", "-j", f"{job_id}", "--format=JobID,State", "--noheader"]
 
-#        print(check_cmd)
+        #        print(check_cmd)
 
         check_result = run(check_cmd, capture_output=True, text=True)
 
-        while not len(check_result.stdout): # if spinning up
+        while not len(check_result.stdout):  # if spinning up
             time.sleep(1)
             check_result = run(check_cmd, capture_output=True, text=True)
 
-#        print(check_result.stdout)
+        #        print(check_result.stdout)
+
+        return_states = []
 
         job_states = check_result.stdout.strip().split("\n")
         for job in job_states:
             parts = job.split()
             if len(parts) >= 2:
-               state = parts[1]
-               if state not in ["COMPLETED", "FAILED", "CANCELLED"]:
+                state = parts[1]
+                if state not in ["COMPLETED", "FAILED", "CANCELLED"]:
                     return False  # A job is still running or pendin
-        return True
+                else:
+                    if state == "FAILED" or state == "CANCELLED":
+                        return_states.append(False)
+                    else:
+                        return_states.append(True)
+
+        return return_states
     
     def wait_for_jobs(self,job_id,wait_time=10):
         """Wait until all job array tasks are completed."""
         #print(f"Waiting for job array {job_id} to complete...")
 
-        while not self.are_jobs_done(job_id):
+        val = self.are_jobs_done(job_id)
+        while not val:
             time.sleep(wait_time)  # Wait for 10 seconds before checking again
+            val = self.are_jobs_done(job_id)
+
+        return val
 
         #print(f"All jobs in array {job_id} are completed.")
 
@@ -248,16 +275,17 @@ class ebos(eclipse):
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) != 3:
-        print("Usage: python -m simulator.opm <folder> <filename>")
+    if len(sys.argv) != 4:
+        print("Usage: python -m simulator.opm <folder> <filename> <mpi>")
         sys.exit(1)
 
     folder = sys.argv[1]
     filename = sys.argv[2]
+    mpi = sys.argv[3]
     options = {}
     options['sim_path'] = ''
     options['sim_flag'] = ''
-    options['mpi'] = 'mpirun --bind-to none -np 1'
+    options['mpi'] = mpi
     options['parsing-strictness'] = ''
     options['filename'] = filename
     
