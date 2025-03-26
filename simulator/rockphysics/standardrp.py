@@ -294,6 +294,7 @@ class elasticproperties:
 
     def getShearImp(self):
         return self.shearimp
+
     def getOverburdenP(self):
         return self.overburden
 
