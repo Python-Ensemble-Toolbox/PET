@@ -95,7 +95,7 @@ class flow(eclipse):
         return finished_member
 
     @staticmethod
-    def SLURM_HPC_run(n_e, venv, kwargs):
+    def SLURM_HPC_run(n_e, venv, **kwargs):
         """
         HPC run manager for SLURM.
 
@@ -117,7 +117,7 @@ class flow(eclipse):
         sim_limit = kwargs.get("sim_limit", None)
         sim_limit_str = f'--time={sim_limit}' if sim_limit is not None else "--time=01:00:00"
 
-        diff_ne = n_e[1] - n_e[0]
+        diff_ne = n_e[-1] - n_e[0]
 
         slurm_script = f"""#!/bin/bash                                                                                               
 #SBATCH --partition=comp                                                                                  
@@ -137,7 +137,7 @@ module load opm-simulators
 source {venv}                                                                    
 
 # Set folder based on SLURM_ARRAY_TASK_ID
-folder="En_${{n_e[0]+SLURM_ARRAY_TASK_ID}}/"
+folder="En_$(( {n_e[0]} + SLURM_ARRAY_TASK_ID ))/"
                                      
 python -m simulator.opm "$folder" {filename_str} {mpi_str}                                              
 """
