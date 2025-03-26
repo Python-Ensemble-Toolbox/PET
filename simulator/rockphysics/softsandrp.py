@@ -430,7 +430,7 @@ class elasticproperties:
         #
         # -----------------------------------------------
         #
-        if fphase.lower() == "oil": # refers to water in Smeaheia
+        if fphase.lower() == "wat": # refers to water in Smeaheia
             press_range = np.array([0.10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
             # Bo values assume Rs = 0
             Bo_values = np.array(
