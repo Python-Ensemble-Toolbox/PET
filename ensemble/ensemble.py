@@ -586,7 +586,7 @@ class Ensemble:
                                zip([list_state[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
                     # Run call_sim on the hpc
                     job_id=self.sim.SLURM_HPC_run(n_e, venv=os.path.join(os.path.dirname(sys.executable),'activate'),
-                                                  **self.sim.input_dict
+                                                  filename=self.sim.file,**self.sim.options
                                                   )
                     # Wait for the simulations to finish
                     if job_id:

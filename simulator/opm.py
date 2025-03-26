@@ -1,10 +1,11 @@
 """Wrap OPM-flow"""
 # External imports
 from subprocess import call, DEVNULL, run
-import os
+import os,sys
 import shutil
 import re
 import time
+from datetime import timedelta
 
 # Internal imports
 from simulator.eclipse import eclipse
@@ -95,28 +96,27 @@ class flow(eclipse):
         return finished_member
 
     @staticmethod
-    def SLURM_HPC_run(n_e, venv, **kwargs):
+    def SLURM_HPC_run(n_e, venv,filename, **kwargs):
         """
         HPC run manager for SLURM.
 
         This function will start num_runs of sim.call_sim() using job arrays in SLURM.
         """
         # Extract the filename from the kwargs
-        filename = kwargs.get("filename", None)
         filename_str = f'"{filename.upper()}"' if filename is not None else ""
 
         # Extract mpi flag from kwargs
         mpi = kwargs.get("mpi", None)
         mpi_str = f'"{mpi}"' if mpi is not None else "mpirun --bind-to none -np 1"
 
-        # set number of cpus to the number following -np in mpi_str (default is 1)
-        n_cpus = re.search(r"-np (\d+)", mpi_str).group(1)
+        # set number of tasks to the number following -np in mpi_str (default is 1)
+        n_tasks = re.search(r"-np (\d+)", mpi_str).group(1)
 
 
         # extract the sim_limit from kwargs. Default is 1 hour
         sim_limit = kwargs.get("sim_limit", None)
-        sim_limit_str = f'--time={sim_limit}' if sim_limit is not None else "--time=01:00:00"
-
+        sim_limit_str = f'--time={str(timedelta(seconds=sim_limit))}' if sim_limit is not None else "--time=01:00:00"
+        
         diff_ne = n_e[-1] - n_e[0]
 
         slurm_script = f"""#!/bin/bash                                                                                               
@@ -124,8 +124,9 @@ class flow(eclipse):
 #SBATCH --job-name=EnDA                                                                               
 #SBATCH --array=0-{diff_ne}                                                                            
 #SBATCH {sim_limit_str}                                                                                   
-#SBATCH --mem=4G                                                                                          
-#SBATCH --cpus-per-task={n_cpus}                                                                                 
+#SBATCH --mem=4G
+#SBATCH --ntasks={n_tasks}                                                                                          
+#SBATCH --cpus-per-task=2                                                                                 
 #SBATCH --export=ALL                                                                                      
 #SBATCH --output=/dev/null                                                                                
 
@@ -291,4 +292,8 @@ if __name__ == "__main__":
     
     sim = flow(input_file=options,initialize_parent=False)
     success = sim.call_sim(folder=folder)
+    if success:
+        sys.exit(0)
+    else:
+        sys.exit(1) # ensure that slurm catch the error
     #print("Success!" if success else "Failed.")
