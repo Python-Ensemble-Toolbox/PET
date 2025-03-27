@@ -154,6 +154,7 @@ class Ensemble:
         if 'multilevel' in self.keys_en:
             # parse
             self.multilevel = {}
+            self.ML_error_corr = 'none'
             for i, opt in enumerate(list(zip(*self.keys_en['multilevel']))[0]):
                 if opt == 'levels':
                     self.multilevel['levels'] = [elem for elem in range(
@@ -708,74 +709,75 @@ class Ensemble:
                 self.sim.redund_sim.setup_fwd_run(level=level)
             self.sim.setup_fwd_run(level=level)
             ml_ne = self.multilevel['ne'][level]
-            # Ensure that we put all the states in a list
-            list_state = [deepcopy({}) for _ in ml_ne]
-            for i in ml_ne:
-                if input_state is None:
-                    for key in self.state[level].keys():
-                        if self.state[level][key].ndim == 1:
-                            list_state[i][key] = deepcopy(self.state[level][key])
-                        elif self.state[level][key].ndim == 2:
-                            list_state[i][key] = deepcopy(self.state[level][key][:, i])
-                else:
-                    for key in self.state.keys():
-                        if input_state[level][key].ndim == 1:
-                            list_state[i][key] = deepcopy(input_state[level][key])
-                        elif input_state[level][key].ndim == 2:
-                            list_state[i][key] = deepcopy(input_state[level][key][:, i])
-                if self.aux_input is not None:  # several models are used
-                    list_state[i]['aux_input'] = self.aux_input[i]
+            if ml_ne:
+                # Ensure that we put all the states in a list
+                list_state = [deepcopy({}) for _ in ml_ne]
+                for i in ml_ne:
+                    if input_state is None:
+                        for key in self.state[level].keys():
+                            if self.state[level][key].ndim == 1:
+                                list_state[i][key] = deepcopy(self.state[level][key])
+                            elif self.state[level][key].ndim == 2:
+                                list_state[i][key] = deepcopy(self.state[level][key][:, i])
+                    else:
+                        for key in self.state.keys():
+                            if input_state[level][key].ndim == 1:
+                                list_state[i][key] = deepcopy(input_state[level][key])
+                            elif input_state[level][key].ndim == 2:
+                                list_state[i][key] = deepcopy(input_state[level][key][:, i])
+                    if self.aux_input is not None:  # several models are used
+                        list_state[i]['aux_input'] = self.aux_input[i]
 
-            # Index list of ensemble members
-            list_member_index = list(ml_ne)
+                # Index list of ensemble members
+                list_member_index = list(ml_ne)
 
-            # Run prediction in parallel using p_map
-            en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                            list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
+                # Run prediction in parallel using p_map
+                en_pred = p_map(self.sim.run_fwd_sim, list_state,
+                                list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
 
-            # List successful runs and crashes
-            list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
-            list_success = [indx for indx, el in enumerate(en_pred) if el is not False]
-            success = True
+                # List successful runs and crashes
+                list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
+                list_success = [indx for indx, el in enumerate(en_pred) if el is not False]
+                success = True
 
-            # Dump all information and print error if all runs have crashed
-            if not list_success:
-                self.save()
-                success = False
-                if len(list_crash) > 1:
-                    print(
-                        '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-                    self.logger.info(
-                        '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-                    sys.exit(1)
-                return success
+                # Dump all information and print error if all runs have crashed
+                if not list_success:
+                    self.save()
+                    success = False
+                    if len(list_crash) > 1:
+                        print(
+                            '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+                        self.logger.info(
+                            '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
+                        sys.exit(1)
+                    return success
 
-            # Check crashed runs
-            if list_crash:
-                # Replace crashed runs with (random) successful runs. If there are more crashed runs than successful once,
-                # we draw with replacement.
-                if len(list_crash) < len(list_success):
-                    copy_member = np.random.choice(
-                        list_success, size=len(list_crash), replace=False)
-                else:
-                    copy_member = np.random.choice(
-                        list_success, size=len(list_crash), replace=True)
+                # Check crashed runs
+                if list_crash:
+                    # Replace crashed runs with (random) successful runs. If there are more crashed runs than successful once,
+                    # we draw with replacement.
+                    if len(list_crash) < len(list_success):
+                        copy_member = np.random.choice(
+                            list_success, size=len(list_crash), replace=False)
+                    else:
+                        copy_member = np.random.choice(
+                            list_success, size=len(list_crash), replace=True)
 
-                # Insert the replaced runs in prediction list
-                for indx, el in enumerate(copy_member):
-                    print(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member '
-                          f'{el}! ---\033[92m')
-                    self.logger.info(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by '
-                                     f'ensemble member {el}! ---\033[92m')
-                    for key in self.state[level].keys():
-                        self.state[level][key][:, list_crash[indx]] = deepcopy(
-                            self.state[level][key][:, el])
-                    en_pred[list_crash[indx]] = deepcopy(en_pred[el])
+                    # Insert the replaced runs in prediction list
+                    for indx, el in enumerate(copy_member):
+                        print(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member '
+                              f'{el}! ---\033[92m')
+                        self.logger.info(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by '
+                                         f'ensemble member {el}! ---\033[92m')
+                        for key in self.state[level].keys():
+                            self.state[level][key][:, list_crash[indx]] = deepcopy(
+                                self.state[level][key][:, el])
+                        en_pred[list_crash[indx]] = deepcopy(en_pred[el])
 
-            # Convert ensemble specific result into pred_data, and filter for NONE data
-            ml_pred_data.append([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
-                                  if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
-                                  else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
+                # Convert ensemble specific result into pred_data, and filter for NONE data
+                ml_pred_data.append([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
+                                      if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
+                                      else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
 
         # loop over time instance first, and the level instance.
         self.pred_data = np.array(ml_pred_data).T.tolist()

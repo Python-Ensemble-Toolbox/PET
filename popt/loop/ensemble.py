@@ -260,6 +260,10 @@ class Ensemble(PETEnsemble):
         the generated ensemble ($X$) through the simulator to give an ensemble of objective function values
         ($J$), and in the end calculate $S$. Note that $S$ is an $N_x \times 1$ vector, where
         $N_x$ is length of the control vector and the objective function is scalar.
+        
+        Note: In the case of multi-fidelity optimization, it is possible to specify 0 members for some of the levels 
+        in order to skip these levels. In that case, cov_wgt should have the same length as the number of levels 
+        that is acutally used. 
 
         Parameters
         ----------
