@@ -169,8 +169,8 @@ class GenOpt(Optimize):
                         enJ = en_matrices['objective']
                         self.corr = self.corr_adapt(cov  = self.corr, 
                                                     step = new_step/self.alpha, 
-                                                    X = enZ.T, 
-                                                    J = np.squeeze(enJ))
+                                                    X = enZ, 
+                                                    J = enJ)
                         
                     elif callable(self.corr_adapt):
                         self.corr = self.corr - self.alpha_corr*self.corr_adapt()
