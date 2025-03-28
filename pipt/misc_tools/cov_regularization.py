@@ -365,8 +365,12 @@ class localization():
         for i in range(cf.shape[1]):
             current_cf = cf[:, i]
             est_noise_std = np.median(np.absolute(cf_s[:, i]), axis=0) / 0.6745
-            cutoff_point = np.sqrt(2*np.log(np.prod(current_cf.shape))) * est_noise_std
-            cutoff_point = nstd * est_noise_std
+            if 'threshold' in self.loc_info and self.loc_info['threshold'] == 'universal':
+                cutoff_point = np.sqrt(2*np.log(np.prod(current_cf.shape))) * est_noise_std
+            elif 'threshold' in self.loc_info and self.loc_info['threshold'] == 'fixed':
+                cutoff_point = nstd
+            else:
+                cutoff_point = nstd * est_noise_std
             if 'type' in self.loc_info and self.loc_info['type'] == 'soft':
                 current_tc = self.rational_function(1-np.absolute(current_cf),
                                                     1 - cutoff_point)
