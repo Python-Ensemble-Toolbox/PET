@@ -145,6 +145,11 @@ class localization():
         # generate the unique localization masks. Recall that the parameters: "taper_type", "anisotropi", and "range"
         # gives a unique mask.
 
+        # Check for 'threshold' key in parsed_info and copy it to init_local if found
+        for elem in parsed_info:
+            if 'threshold' in elem[0].lower():
+                init_local['threshold'] = elem[1]
+
         init_local['mask'] = {}
         # loop over all localization info to ensure that all the masks have been generated
         # Store masks with the key ('taper_function', 'anisotropi', 'range')
