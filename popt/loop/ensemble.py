@@ -1,6 +1,3 @@
-"""Descriptive description."""
-from curses import has_key
-
 # External imports
 import numpy as np
 import sys
@@ -13,7 +10,7 @@ from copy import deepcopy
 from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as PETEnsemble
-from popt.loop.dist import GenOptDistribution
+from popt.loop.extensions import GenOptExtension
 
 
 class Ensemble(PETEnsemble):
@@ -84,6 +81,9 @@ class Ensemble(PETEnsemble):
         # Number of samples to compute gradient
         self.num_samples = self.ne
 
+        # Save pred data?
+        self.save_prediction = __set__variable('save_prediction', None)
+
         # We need the limits to convert between [0, 1] and [lb, ub],
         # and we need the bounds as list of (min, max) pairs
         # Also set the state and covarianve equal to the values provided in the input.
@@ -138,10 +138,10 @@ class Ensemble(PETEnsemble):
         self.bias_points = None  # this is the points used to estimate the bias correction
 
         # Setup GenOpt
-        self.genopt = GenOptDistribution(self.get_state(), 
-                                         self.get_cov(), 
-                                         func=self.function, 
-                                         ne=self.num_samples)
+        self.genopt = GenOptExtension(self.get_state(), 
+                                      self.get_cov(), 
+                                      func=self.function, 
+                                      ne=self.num_samples)
 
     def get_state(self):
         """

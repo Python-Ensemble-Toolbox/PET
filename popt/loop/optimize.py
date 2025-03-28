@@ -1,7 +1,3 @@
-"""Descriptive description."""
-# Internal imports
-from popt.misc_tools import optim_tools as ot
-
 # External imports
 import os
 import numpy as np
@@ -97,7 +93,7 @@ class Optimize:
         self.rnd = None
 
         # Max number of iterations
-        self.max_iter = __set__variable('maxiter', 10)
+        self.max_iter = __set__variable('maxiter', 20)
 
         # Restart flag
         self.restart = __set__variable('restart', False)
@@ -119,6 +115,8 @@ class Optimize:
         # Initialize number of function and jacobi evaluations
         self.nfev = 0
         self.njev = 0
+
+        self.msg = 'Convergence was met :)'
 
     def run_loop(self):
         """
@@ -168,10 +166,11 @@ class Optimize:
                     self.save()
 
             # Check if max iterations was reached
-            if self.iteration > self.max_iter:
-                self.optimize_result['message'] = 'Iterations stopped due to max iterations reached!'
-            else:
-                self.optimize_result['message'] = 'Convergence was met :)'
+        if self.iteration > self.max_iter:
+            self.optimize_result['message'] = 'Iterations stopped due to max iterations reached!'
+        else:
+            if not isinstance(self.msg, str): self.msg = ''
+            self.optimize_result['message'] = self.msg
 
             # Logging some info to screen
             logger.info('       Optimization converged in %d iterations ', self.iteration-1)
