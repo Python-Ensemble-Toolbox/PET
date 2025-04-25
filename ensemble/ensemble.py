@@ -134,14 +134,24 @@ class Ensemble:
                 # individually).
                 self.state = {key: val for key, val in tmp_load.items()}
 
-                # Find the number of ensemble members from state variable
+                # Find the number of ensemble members from loaded state variables
                 tmp_ne = []
                 for tmp_state in self.state.keys():
                     tmp_ne.extend([self.state[tmp_state].shape[1]])
-                if max(tmp_ne) != min(tmp_ne):
-                    print('\033[1;33mInput states have different ensemble size\033[1;m')
-                    sys.exit(1)
-                self.ne = min(tmp_ne)
+
+                if 'ne' not in self.keys_en: # NE not specified in input file
+                    if max(tmp_ne) != min(tmp_ne): #Check loaded ensembles are the same size (if more than one state variable)
+                        print('\033[1;33mInput states have different ensemble size\033[1;m')
+                        sys.exit(1)
+                    self.ne = min(tmp_ne) # Use the number of ensemble members in loaded ensemble
+                else:
+                    # Use the number of ensemble members specified in input file (may be fewer than loaded)
+                    self.ne = int(self.keys_en['ne'])
+                    if self.ne < min(tmp_ne):
+                        # pick correct number of ensemble members
+                        self.state = {key: val[:,:self.ne] for key, val in self.state.items()}
+                    else:
+                        print('\033[1;33mInput states are smaller than NE\033[1;m')
         self._ext_ml_info()
 
     def _ext_ml_info(self):

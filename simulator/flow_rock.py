@@ -22,7 +22,6 @@ from mako.runtime import Context
 from pylops.utils.wavelets import ricker
 from pylops.signalprocessing import Convolve1D
 import sys
-sys.path.append("/home/AD.NORCERESEARCH.NO/mlie/")
 from PyGRDECL.GRDECL_Parser import GRDECL_Parser  # https://github.com/BinWang0213/PyGRDECL/tree/master
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
@@ -41,8 +40,6 @@ class flow_rock(flow):
         super().__init__(input_dict, filename, options)
         self._getpeminfo(input_dict)
 
-        self.dum_file_root = 'dummy.txt'
-        self.dum_entry = str(0)
         self.date_slack = None
         if 'date_slack' in input_dict:
             self.date_slack = int(input_dict['date_slack'])
@@ -738,7 +735,7 @@ class flow_avo(flow_rock):
 
         # The inherited simulator also has a run_fwd_sim. Call this.
         self.ensemble_member = member_i
-        self.pred_data = super().run_fwd_sim(state, member_i, del_folder=del_folder)
+        return super().run_fwd_sim(state, member_i, del_folder=del_folder)
 
     def call_sim(self, folder=None, wait_for_proc=False, run_reservoir_model=None, save_folder=None):
         # replace the sim2seis part (which is unusable) by avo based on Pylops
@@ -855,10 +852,7 @@ class flow_avo(flow_rock):
         # The properties in pem are only given in the active cells
         # indices of active cells:
 
-
         true_indices = np.where(grid['ACTNUM'])
-
-
 
         # Alt 2
         if len(self.pem.getBulkVel()) == len(true_indices[0]):
@@ -1037,7 +1031,6 @@ class flow_avo(flow_rock):
                                              f0=self.avo_config['frequency'])
 
 
-
         # Travel time corresponds to reflectivity series
         t = time_sample[:, :, 0:-1]
 
@@ -1095,8 +1088,6 @@ class flow_avo(flow_rock):
         # Two-way travel time of the top of the reservoir
         # TOPS[:, :, 0] corresponds to the depth profile of the reservoir top on the first layer
         top_res = 2 * self.TOPS[:, :, 0] / vp_shale
-
-
 
         # Cumulative traveling time through the reservoir in vertical direction
         cum_time_res = np.cumsum(2 * self.DZ / self.vp, axis=2) + top_res[:, :, np.newaxis]
