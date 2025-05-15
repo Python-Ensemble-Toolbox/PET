@@ -123,8 +123,8 @@ class Ensemble(PETEnsemble):
         # Inflation factor used in SmcOpt
         self.inflation_factor = None
         self.survival_factor = None
-        self.particles = np.empty((self.cov.shape[0],self.ne))
-        self.particle_values = np.empty(self.ne)
+        self.particles = []  # list in case of multilevel
+        self.particle_values = []  # list in case of multilevel
         self.resample_index = None
 
         # Initialize variables for bias correction
@@ -446,7 +446,6 @@ class Ensemble(PETEnsemble):
         # Generate ensemble of states
         if self.resample_index is None:
             self.ne = self.num_samples
-            self.resample_index = []
         else:
             self.ne = int(np.round(self.num_samples*self.survival_factor))
         self._aux_input()
@@ -455,38 +454,68 @@ class Ensemble(PETEnsemble):
         state_ens = at.aug_state(self.state, list(self.state.keys()))
         self.function(state_ens, **kwargs)
 
-        if isinstance(self.ens_func_values,list):
-            self.ens_func_values = np.hstack(self.ens_func_values)
-
-        self.particles[:,:(self.num_samples-self.ne)] = self.particles[:,self.resample_index]   
-        #np.hstack((self.particles, state_ens))
-        self.particles[:,(self.num_samples-self.ne):] = deepcopy(state_ens)
-        self.particle_values[:(self.num_samples-self.ne)] = self.particle_values[self.resample_index] 
-        # np.hstack((self.particle_values,self.ens_func_values))
-        self.particle_values[(self.num_samples - self.ne):] = deepcopy(self.ens_func_values)
+        if not isinstance(self.ens_func_values, list):
+            self.ens_func_values = [self.ens_func_values]
+        L = len(self.ens_func_values)
+        if self.resample_index is None:
+            self.resample_index = [None]*L
 
         # If bias correction is used we need to calculate the bias factors, J(u_j,m_j)/J(u_j,m)
         if self.bias_file is not None:  # use bias corrections
             self._bias_factors(self.ens_func_values, initial_state)
 
-        # Calculate the weights and ensemble sensitivity matrix
         warnings.filterwarnings('ignore')  # suppress warnings
-        weights = np.zeros(self.num_samples)
-        for i in np.arange(self.num_samples):
-            weights[i] = np.exp(np.clip(-(self.particle_values[i] - np.min(
-                self.particle_values)) * self.inflation_factor, None, 10))
+        start_index = 0
+        level_sens = []
+        sens_matrix = np.zeros(state_ens.shape[0])
+        best_ens = 0
+        best_func = 0
+        ml_ne_new_total = 0
+        for l in range(L):
 
-        weights = weights + 0.000001
-        weights = weights/np.sum(weights)  # TODO: Sjekke at disse er riktig
+            ml_ne = self.ens_func_values[l].size
+            if l == L-1:
+                ml_ne_new = self.ne - ml_ne_new_total
+            else:
+                ml_ne_new = int(np.round(ml_ne*self.survival_factor))  # new samples
+                ml_ne_new_total += ml_ne_new
+            ml_ne_surv = ml_ne - ml_ne_new  # surviving samples
 
-        sens_matrix = self.particles @ weights
-        index = np.argmin(self.particle_values)
-        best_ens = self.particles[:, index]
-        best_func = self.particle_values[index]
-        self.resample_index = np.random.choice(self.num_samples,int(np.round(self.num_samples-
-                                          self.num_samples*self.survival_factor)),replace=True,p=weights)
-        #self.particles = self.particles[:, resample_index]
-        #self.particle_values = self.particle_values[resample_index]
+            if self.resample_index[l] is None:
+                self.particles.append(deepcopy(state_ens[:, start_index:start_index + ml_ne]))
+                self.particle_values.append(deepcopy(self.ens_func_values[l]))
+            else:
+                self.particles[l][:, :ml_ne_surv] = self.particles[l][:, self.resample_index[l]]
+                self.particles[l][:, ml_ne_surv:] = deepcopy(state_ens[:, start_index:start_index + ml_ne_new])
+                self.particle_values[l][:, :ml_ne_surv] = self.particle_values[l][self.resample_index[l]]
+                self.particle_values[l][:, ml_ne_surv:] = deepcopy(self.ens_func_values[l])
+
+            # Calculate the weights and ensemble sensitivity matrix
+            weights = np.zeros(ml_ne)
+            for i in np.arange(ml_ne):
+                weights[i] = np.exp(np.clip(-(self.particle_values[l][i] - np.min(
+                    self.particle_values[l])) * self.inflation_factor, None, 10))
+
+            weights = weights + 0.000001
+            weights = weights/np.sum(weights)  # TODO: Sjekke at disse er riktig
+
+            level_sens.append(self.particles[l] @ weights)
+            if l == L-1:  # keep the best from the finest level
+                index = np.argmin(self.particle_values[l])
+                best_ens = self.particles[l][:, index]
+                best_func = self.particle_values[l][index]
+            self.resample_index[l] = np.random.choice(ml_ne,ml_ne_surv,replace=True,p=weights)
+
+            start_index += ml_ne_new
+
+        if 'multilevel' in self.keys_en.keys():
+            cov_wgt = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
+            for l in range(L):
+                sens_matrix += level_sens[l]*cov_wgt[l]
+            sens_matrix /= self.num_samples
+        else:
+            sens_matrix = level_sens[0]
+
         return sens_matrix, best_ens, best_func
 
     def _gen_state_ensemble(self):
