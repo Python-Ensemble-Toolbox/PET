@@ -487,8 +487,8 @@ class Ensemble(PETEnsemble):
             else:
                 self.particles[l][:, :ml_ne_surv] = self.particles[l][:, self.resample_index[l]]
                 self.particles[l][:, ml_ne_surv:] = deepcopy(state_ens[:, start_index:start_index + ml_ne_new])
-                self.particle_values[l][:, :ml_ne_surv] = self.particle_values[l][self.resample_index[l]]
-                self.particle_values[l][:, ml_ne_surv:] = deepcopy(self.ens_func_values[l])
+                self.particle_values[l][:ml_ne_surv] = self.particle_values[l][self.resample_index[l]]
+                self.particle_values[l][ml_ne_surv:] = deepcopy(self.ens_func_values[l])
 
             # Calculate the weights and ensemble sensitivity matrix
             weights = np.zeros(ml_ne)
