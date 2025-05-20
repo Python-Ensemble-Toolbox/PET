@@ -6,7 +6,10 @@ __author__ = {'TM', 'TB', 'ML'}
 import numpy as np
 import sys
 import multiprocessing as mp
-
+from CoolProp.CoolProp import PropsSI # http://coolprop.org/#high-level-interface-example
+import CoolProp.CoolProp as CP
+# Density of carbon dioxide at 100 bar and 25C # Smeaheia 37 degrees C
+#rho_co2 = PropsSI('D', 'T', 298.15, 'P', 100e5, 'CO2')
 from numpy.random import poisson
 
 # internal load
@@ -192,13 +195,15 @@ class elasticproperties:
             # Calculate fluid properties
             #
             if dens is None:
+                densf_SI = self._fluid_densSIprop(self.phases,
+                                          saturations[i, :], pressure[i])
                 densf, bulkf = \
                     self._fluidprops_Wood(self.phases,
                                           saturations[i, :], pressure[i], Rs[i])
             else:
                 densf = self._fluid_dens(saturations[i, :], dens[i, :])
 
-                bulkf = self._fluidprops_Brie(self.phases, saturations[i, :], pressure[i])
+                bulkf = self._fluidprops_Brie(self.phases, saturations[i, :], pressure[i], densf)
             #
             #denss, bulks, shears = \
             #    self._solidprops(porosity[i], ntg[i], i)
@@ -325,6 +330,35 @@ class elasticproperties:
     # Fluid properties start
     # ===================================================
     #
+    def _fluid_densSIprop(self, phases, fsats, press, t= 37, CO2 = None):
+
+        conv2Pa = 1e6  # MPa to Pa
+        ta = t + 273.15 # absolute temp in K
+         # fluid densities
+        fdens = 0.0
+
+        for i in range(len(phases)):
+            #
+            # Calculate mixture properties by summing
+            # over individual phase properties
+            #
+
+            var = phases[i]
+            if var == 'GAS' and CO2 is None:
+                pdens = PropsSI('D', 'T', ta, 'P', press * conv2Pa, 'Methane')
+            elif var == 'GAS' and CO2 is True:
+                pdens = PropsSI('D', 'T', ta, 'P', press * conv2Pa, 'CO2')
+            elif var == 'OIL':
+                CP.get_global_param_string('predefined_mixtures').split(',')[0:6]
+                #pdens = CP.PropsSI('D', 'T', ta, 'P', press * conv2Pa, 'Ekofisk.mix')
+                pdens = CP.PropsSI('D', 'T', ta, 'P', press * conv2Pa, 'butane')
+            elif var == 'WAT':
+                pdens = PropsSI('D', 'T|liquid', ta, 'P', press * conv2Pa, 'Water')
+
+            fdens = fdens + fsats[i] * abs(pdens)
+
+        return fdens
+
     def _fluidprops_Wood(self, fphases, fsats, fpress, Rs=None):
         #
         # Calculate fluid density and bulk modulus
@@ -372,7 +406,7 @@ class elasticproperties:
         fdens = sum(fsatsp * fdensp)
         return fdens
 
-    def _fluidprops_Brie(self, fphases, fsats, fpress, Rs=None, e = 5):
+    def _fluidprops_Brie(self, fphases, fsats, fpress, fdens, Rs=None, e = 5):
         #
         # Calculate fluid density and bulk modulus BRIE et al. 1995
         # Assumes two phases liquid and gas
@@ -382,6 +416,7 @@ class elasticproperties:
         #                 and/or Water and/or Gas
         #       fsats   - fluid saturation values for
         #                 fluid phases in "fphases"
+        #       fdens   - fluid density for given pressure and temperature
         #       fpress  - fluid pressure value (MPa)
         #       Rs      - Gas oil ratio. Default value None
         #       e       - Brie's exponent (e= 5 Utsira sand filled with brine and CO2
@@ -402,9 +437,9 @@ class elasticproperties:
             #
             if fphases[i].lower() in ["oil", "wat"]:
                 fsatsl = fsats[i]
-                pbulkl = self._phaseprops_Smeaheia(fphases[i], fpress, Rs)
+                pbulkl = self._phaseprops_Smeaheia(fphases[i], fpress, fdens, Rs)
             elif fphases[i].lower() in ["gas"]:
-                pbulkg = self._phaseprops_Smeaheia(fphases[i], fpress, Rs)
+                pbulkg = self._phaseprops_Smeaheia(fphases[i], fpress, fdens, Rs)
 
 
         fbulk = (pbulkl - pbulkg) * (fsatsl)**e + pbulkg
@@ -414,7 +449,53 @@ class elasticproperties:
     #
     # ---------------------------------------------------
     #
-    def _phaseprops_Smeaheia(self, fphase, press, Rs=None):
+    @staticmethod
+    def pseudo_p_t(pres, t, gs):
+        """Calculate the pseudoreduced temperature and pressure according to Thomas et al. 1970.
+
+        Parameters
+        ----------
+        pres : float or array-like
+            Pressure in MPa
+        t : float or array-like
+            Temperature in °C
+        gs : float
+            Gas gravity
+
+        Returns
+        -------
+        float or array-like
+            Ta: absolute temperature
+            Ppr:pseudoreduced pressure
+            Tpr:pseudoreduced temperature
+        """
+
+        # convert the temperature to absolute temperature
+        ta = t + 273.15
+        p_pr = pres / (4.892 - 0.4048 * gs)
+        t_pr = ta / (94.72 + 170.75 * gs)
+        return ta, p_pr, t_pr
+    #
+    # ---------------------------------------------------
+    #
+    @staticmethod
+    def dz_dp(p_pr, t_pr):
+        """Values for dZ/dPpr obtained from equation 10b in Batzle and Wang (1992).
+        """
+        # analytic
+        dz_dp = (0.03 + 0.00527 * (3.5 - t_pr) ** 3) + 0.109 * (3.85 - t_pr) ** 2 * 1.2 * p_pr ** 0.2 * -(
+                    0.45 + 8 * (0.56 - 1 / t_pr) ** 2) / t_pr * np.exp(
+            -(0.45 + 8 * (0.56 - 1 / t_pr) ** 2) * p_pr ** 1.2 / t_pr)
+
+        # numerical approximation
+        # dzdp= 1.938783*P_pr**0.2*(1 - 0.25974025974026*T_pr)**2*(-8*(0.56 - 1/T_pr)**2 - 0.45)*
+        # np.exp(P_pr**1.2*(-8*(0.56 - 1/T_pr)**2 - 0.45)/T_pr)/T_pr + 0.22595125*(1 - 0.285714285714286*T_pr)**3
+        # + 0.03
+        return dz_dp
+    #
+    #-----------------------------------------------------------
+    #
+    def _phaseprops_Smeaheia(self, fphase, press, fdens, Rs=None, t = 37, CO2 = None):
         #
         # Calculate properties for a single fluid phase
         #
@@ -422,6 +503,8 @@ class elasticproperties:
         # Input
         #       fphase - fluid phase; Oil, Water or Gas
         #       press  - fluid pressure value (MPa)
+        #       fdens  - fluid density (kg/m3)
+        #       t      - temperature in degrees C
         #
         # Output
         #       pbulk - bulk modulus of fluid phase
@@ -429,42 +512,96 @@ class elasticproperties:
         #               "press" (MPa)
         #
         # -----------------------------------------------
+        # References
+        #         ----------
+        #             Xu, H. (2006). Calculation of CO2 acoustic properties using Batzle-Wang equations. Geophysics, 71(2), F21-F23.
+        #         """
+
+        if fphase.lower() == "wat": # refers to pure water or brine
+            #Compute the bulk modulus of pure water as a function of temperature and pressure
+            #using Batzle and Wang (1992).
+            if np.any(press > 100):
+                print('pressures above about 100 MPa-> inaccurate estimations of water velocity')
+            w = np.array([[1.40285e+03, 1.52400e+00, 3.43700e-03, -1.19700e-05],
+                          [4.87100e+00, -1.11000e-02, 1.73900e-04, -1.62800e-06],
+                          [-4.78300e-02, 2.74700e-04, -2.13500e-06, 1.23700e-08],
+                          [1.48700e-04, -6.50300e-07, -1.45500e-08, 1.32700e-10],
+                          [-2.19700e-07, 7.98700e-10, 5.23000e-11, -4.61400e-13]])
+            v_w = sum(w[i, j] * t ** i * press ** j for i in range(5) for j in range(4)) # m/s
+            K_w = fdens * v_w ** 2 * 1e-6
+            if CO2 is True: # refers to brine
+                salinity = 35000 / 1000000
+                s1 = 1170 - 9.6 * t + 0.055 * t ** 2 - 8.5e-5 * t ** 3 + 2.6 * press - 0.0029 * t * press - 0.0476 * press ** 2
+                s15 = 780 - 10 * press + 0.16 * press ** 2
+                s2 = -820
+                v_b = v_w + s1 * salinity + s15 * salinity ** 1.5 + s2 * salinity ** 2
+                x = 300 * press - 2400 * press * salinity + t * (80 + 3 * t - 3300 * salinity - 13 * press + 47 * press * salinity)
+                rho_b = fdens + salinity * (0.668 + 0.44 * salinity + 1e-6 * x)
+                pbulk = rho_b * v_b ** 2 * 1e-6
+            else:
+                pbulk = K_w
+
+        elif fphase.lower() == "gas" and CO2 is True: # refers to CO2
+            R = 8.3145  # J.mol-1K-1 gas constant for CO2
+            gs = 1.5189  # Specific gravity #https://www.engineeringtoolbox.com/specific-gravities-gases-d_334.html
+            ta, p_pr, t_pr = self.pseudo_p_t(press, t, gs)
+
+            E = 0.109 * (3.85 - t_pr) ** 2 * np.exp(-(0.45 + 8 * (0.56 - 1 / t_pr) ** 2) * p_pr ** 1.2 / t_pr)
+            Z = (0.03 + 0.00527 * (3.5 - t_pr) ** 3) * p_pr + (0.642 * t_pr - 0.007 * t_pr ** 4 - 0.52) + E
+            rho = 28.8 * gs * press / (Z * R * ta) # g/cm3
+
+            r_0 = 0.85 + 5.6 / (p_pr + 2) + 27.1 / (p_pr + 3.5) ** 2 - 8.7 * np.exp(-0.65 * (p_pr + 1))
+            dz_dp = self.dz_dp(p_pr, t_pr)
+            pbulk = press / (1 - p_pr * dz_dp / Z) * r_0
+
+            pbulk_test = self.test_new_implementation(press)
+            print(np.max(pbulk-pbulk_test))
+
+        elif fphase.lower() == "gas": # refers to Methane
+            gs = 0.5537 #https://www.engineeringtoolbox.com/specific-gravities-gases-d_334.html
+            R = 8.3145  # J.mol-1K-1 gas constant
+            ta, p_pr, t_pr = self.pseudo_p_t(press, t, gs)
+            E = 0.109 * (3.85 - t_pr) ** 2 * np.exp(-(0.45 + 8 * (0.56 - 1 / t_pr) ** 2) * p_pr ** 1.2 / t_pr)
+            Z = (0.03 + 0.00527 * (3.5 - t_pr) ** 3) * p_pr + (0.642 * t_pr - 0.007 * t_pr ** 4 - 0.52) + E
+            rho = 28.8 * gs * press / (Z * R * ta) # g/cm3
+
+            r_0 = 0.85 + 5.6 / (p_pr + 2) + 27.1 / (p_pr + 3.5) ** 2 - 8.7 * np.exp(-0.65 * (p_pr + 1))
+            dz_dp = self.dz_dp(p_pr, t_pr)
+            pbulk = press / (1 - p_pr * dz_dp / Z) * r_0
+
+        elif fphase.lower() == "oil": #pure oil
+            # Estimate the oil bulk modulus at specific temperature and pressure.
+            v = 2096 * (fdens / (2600 - fdens)) ** 0.5 - 3.7 * t + 4.64 * press + 0.0115 * (
+                        4.12 * (1080 / fdens - 1) ** 0.5 - 1) * t * press
+            pbulk = fdens * v ** 2
+
+
         #
-        if fphase.lower() == "wat": # refers to water in Smeaheia
-            press_range = np.array([0.10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
-            # Bo values assume Rs = 0
-            Bo_values = np.array(
-                [1.00469, 1.00430, 1.00387, 1.00345, 1.00302, 1.00260, 1.00218, 1.00176, 1.00134, 1.00092, 1.00050,
-                 1.00008, 0.99967, 0.99925, 0.99884, 0.99843, 0.99802, 0.99761, 0.99720, 0.99679, 0.99638])
+        return pbulk
 
-
-        elif fphase.lower() == "gas":
-            # Values from .DATA file for Smeaheia (converted to MPa)
-            press_range = np.array(
-                [0.101, 0.885, 1.669, 2.453, 3.238, 4.022, 4.806, 5.590, 6.2098, 7.0899, 7.6765, 8.2630, 8.8495, 9.4359,
-                 10.0222, 10.6084, 11.1945, 14.7087, 17.6334, 20.856, 23.4695, 27.5419])  # Example pressures in MPa
-            Bo_values = np.array(
-                [1.07365, 0.11758, 0.05962, 0.03863, 0.02773, 0.02100, 0.01639, 0.01298, 0.010286, 0.007578, 0.005521,
-                 0.003314, 0.003034, 0.002919, 0.002851, 0.002802, 0.002766, 0.002648, 0.002599, 0.002566, 0.002546,
-                 0.002525])  # Example formation volume factors in m^3/kg
+    #
+    def test_new_implementation(self, press):
+        # Values from .DATA file for Smeaheia (converted to MPa)
+        press_range = np.array(
+            [0.101, 0.885, 1.669, 2.453, 3.238, 4.022, 4.806, 5.590, 6.2098, 7.0899, 7.6765, 8.2630, 8.8495, 9.4359,
+             10.0222, 10.6084, 11.1945, 14.7087, 17.6334, 20.856, 23.4695, 27.5419])  # Example pressures in MPa
+        Bo_values = np.array(
+            [1.07365, 0.11758, 0.05962, 0.03863, 0.02773, 0.02100, 0.01639, 0.01298, 0.010286, 0.007578, 0.005521,
+             0.003314, 0.003034, 0.002919, 0.002851, 0.002802, 0.002766, 0.002648, 0.002599, 0.002566, 0.002546,
+             0.002525])  # Example formation volume factors in m^3/kg
 
         # Calculate numerical derivative of Bo with respect to Pressure
         dBo_dP = - np.gradient(Bo_values, press_range)
         # Calculate isothermal compressibility (van der Waals)
         compressibility = (1 / Bo_values) * dBo_dP  # Resulting array of compressibility values
         bulk_mod = 1 / compressibility
-
         #
         # Find the index of the closest pressure value in b
         closest_index = (np.abs(press_range - press)).argmin()
 
         # Extract the corresponding value from a
-        pbulk = bulk_mod[closest_index]
-
-        #
-        return pbulk
-
-    #
+        pbulk_test = bulk_mod[closest_index]
+        return pbulk_test
 
     def _phaseprops(self, fphase, press, Rs=None):
         #

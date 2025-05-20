@@ -216,8 +216,7 @@ class elasticproperties:
             #
             # Density
             #
-            self.dens[i] = (porosity[i]*densf +
-                            (1-porosity[i])*denss)
+            self.dens[i] = (porosity[i]*densf + (1-porosity[i])*denss)
             #
             # Moduli
             #
