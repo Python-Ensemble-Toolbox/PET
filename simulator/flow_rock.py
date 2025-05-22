@@ -759,6 +759,7 @@ class flow_avo(flow_rock):
 
         # The inherited simulator also has a run_fwd_sim. Call this.
         self.ensemble_member = member_i
+
         #return super().run_fwd_sim(state, member_i, del_folder=del_folder)
 
 
@@ -1243,6 +1244,7 @@ class flow_avo(flow_rock):
                 f = interp1d(np.squeeze(t[ind, :]), np.squeeze(w_trace),
                              kind='nearest', fill_value='extrapolate')
                 trace_interp[ind, :] = f(t_interp)
+
 
             if i == 0:
                 avo_data = trace_interp  # 3D
@@ -2256,6 +2258,7 @@ class flow_seafloor_disp(flow_grav):
         return value
 
     def hankel_transform_order_0(self, f, r_max, num_points=1000):
+
         """
         Computes the Hankel transform of order 0 of a function f(r).
 
