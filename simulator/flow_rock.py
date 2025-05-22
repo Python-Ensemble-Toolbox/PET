@@ -26,7 +26,7 @@ from mako.runtime import Context
 from pylops.utils.wavelets import ricker
 from pylops.signalprocessing import Convolve1D
 import sys
-from PyGRDECL.GRDECL_Parser import GRDECL_Parser  # https://github.com/BinWang0213/PyGRDECL/tree/master
+#from PyGRDECL.GRDECL_Parser import GRDECL_Parser  # https://github.com/BinWang0213/PyGRDECL/tree/master
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
 from pipt.misc_tools.analysis_tools import store_ensemble_sim_information
@@ -759,14 +759,12 @@ class flow_avo(flow_rock):
 
         # The inherited simulator also has a run_fwd_sim. Call this.
         self.ensemble_member = member_i
-<<<<<<< Updated upstream
-        return super().run_fwd_sim(state, member_i, del_folder=del_folder)
-
-=======
         #return super().run_fwd_sim(state, member_i, del_folder=del_folder)
+
+
         self.pred_data = super().run_fwd_sim(state, member_i, del_folder=del_folder)
         return self.pred_data
->>>>>>> Stashed changes
+
     def call_sim(self, folder=None, wait_for_proc=False, run_reservoir_model=None, save_folder=None):
         # replace the sim2seis part (which is unusable) by avo based on Pylops
 
@@ -909,10 +907,7 @@ class flow_avo(flow_rock):
     def calc_velocities(self, folder, save_folder, grid, v, f_dim):
         # The properties in pem are only given in the active cells
         # indices of active cells:
-<<<<<<< Updated upstream
 
-=======
->>>>>>> Stashed changes
         true_indices = np.where(grid['ACTNUM'])
 
         # Alt 2
@@ -959,7 +954,7 @@ class flow_avo(flow_rock):
             save_dic = {'vp': vp, 'vs': vs, 'rho': rho}#, 'bulkmod': self.bulkmod, 'shearmod': self.shearmod,
                     #'Pov': self.poverburden, 'P': self.pressure,  'Peff': self.peff, 'por': porosity} # for debugging
         else:
-            save_dic = {'vp': vp, 'vs': vs, 'rho': rho, 'por': porosity, 'sgas': sgas, 'Pd': pdyn}
+            save_dic = {'vp': vp, 'vs': vs, 'rho': rho}#, 'por': porosity, 'sgas': sgas, 'Pd': pdyn}
 
         if save_folder is not None:
             file_name = save_folder + os.sep + f"vp_vs_rho_vint{v}.npz" if save_folder[-1] != os.sep \
@@ -1033,12 +1028,12 @@ class flow_avo(flow_rock):
                 with np.load(file) as f:
                     exec(f'self.{kw} = f[ "{kw}" ]')
                     self.NX, self.NY, self.NZ = f['NX'], f['NY'], f['NZ']
-            else:
-                reader = GRDECL_Parser(filename=file)
-                reader.read_GRDECL()
-                exec(f"self.{kw} = reader.{kw}.reshape((reader.NX, reader.NY, reader.NZ), order='F')")
-                self.NX, self.NY, self.NZ = reader.NX, reader.NY, reader.NZ
-                eval(f'np.savez("./{kw}.npz", {kw}=self.{kw}, NX=self.NX, NY=self.NY, NZ=self.NZ)')
+            #else:
+            #    reader = GRDECL_Parser(filename=file)
+            #    reader.read_GRDECL()
+            #    exec(f"self.{kw} = reader.{kw}.reshape((reader.NX, reader.NY, reader.NZ), order='F')")
+            #    self.NX, self.NY, self.NZ = reader.NX, reader.NY, reader.NZ
+            #    eval(f'np.savez("./{kw}.npz", {kw}=self.{kw}, NX=self.NX, NY=self.NY, NZ=self.NZ)')
 
     def _calc_avo_props(self, dt=0.0005):
         # dt is the fine resolution sampling rate
@@ -2260,34 +2255,7 @@ class flow_seafloor_disp(flow_grav):
 
         return value
 
-    def van_opstal_org(self, lambda_vals, z_res, z_base, poisson):
-        """
-        Compute the Van Opstal transfer function.
-
-        Args:
-        lambda_vals -- Numpy array of lambda values.
-        z_res -- Depth to reservoir [m].
-        z_base -- Distance to the basement [m].
-        poisson -- Poisson's ratio.
-
-        Returns:
-        value -- Numpy array of computed values.
-        """
-
-        term1 = np.exp(lambda_vals * z_res) * (2 * lambda_vals * z_base + 1)
-        term2 = np.exp(-lambda_vals * z_res) * (
-                    4 * lambda_vals ** 2 * z_base ** 2 + 2 * lambda_vals * z_base + (3 - 4 * poisson) ** 2)
-
-        term3_numer = (3 - 4 * poisson) * (
-                    np.exp(-lambda_vals * (2 * z_base + z_res)) - np.exp(-lambda_vals * (2 * z_base - z_res)))
-        term3_denom = 2 * ((1 - 2 * poisson) ** 2 + lambda_vals ** 2 * z_base ** 2 + (3 - 4 * poisson) * np.cosh(
-            lambda_vals * z_base) ** 2)
-
-        value = term1 - term2 - (term3_numer / term3_denom)
-
-        return value
-
-    def hankel_transform_order_0(f, r_max, num_points=1000):
+    def hankel_transform_order_0(self, f, r_max, num_points=1000):
         """
         Computes the Hankel transform of order 0 of a function f(r).
 
