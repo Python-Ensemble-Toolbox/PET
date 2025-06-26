@@ -471,11 +471,15 @@ class Ensemble(PETEnsemble):
         best_ens = 0
         best_func = 0
         ml_ne_new_total = 0
+        if 'multilevel' in self.keys_en.keys():
+            en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
+        else:
+            en_size = [self.num_samples]
         for l in range(L):
 
-            ml_ne = self.ens_func_values[l].size
-            if l == L-1:
-                ml_ne_new = self.ne - ml_ne_new_total
+            ml_ne = en_size[l] 
+            if L > 1 and l == L-1:
+                ml_ne_new = int(np.round(self.num_samples*self.survival_factor)) - ml_ne_new_total
             else:
                 ml_ne_new = int(np.round(ml_ne*self.survival_factor))  # new samples
                 ml_ne_new_total += ml_ne_new
