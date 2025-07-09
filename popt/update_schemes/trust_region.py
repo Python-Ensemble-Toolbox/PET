@@ -11,8 +11,12 @@ from scipy.optimize import OptimizeResult
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
 
+# Impors from scipy
+from scipy.optimize._trustregion_ncg import CGSteihaugSubproblem
+from scipy.optimize._trustregion_exact import IterativeSubproblem
 
-def TrustRegion(fun, x, jac, hess, args=(), bounds=None, callback=None, **options):
+
+def TrustRegion(fun, x, jac, hess, method='iterative', args=(), bounds=None, callback=None, **options):
     '''
     Trust region optimization algorithm.
 
@@ -29,6 +33,10 @@ def TrustRegion(fun, x, jac, hess, args=(), bounds=None, callback=None, **option
     
     hess : callable
         Hessian of objective function. The calling signature is `hess(x, *args)`.
+
+    method : str, optional
+        Method to use for solving the trust-region subproblem. Options are 'iterative' or 'CG-Steihaug'.
+        Default is 'iterative'.
     
     args : tuple, optional
         Extra arguments passed to the objective function and its derivatives (Jacobian, Hessian).
@@ -110,12 +118,12 @@ def TrustRegion(fun, x, jac, hess, args=(), bounds=None, callback=None, **option
         - nfev: number of function evaluations
         - njev: number of jacobian evaluations
     '''
-    tr_obj = TrustRegionClass(fun, x, jac, hess, args, bounds, callback, **options)
+    tr_obj = TrustRegionClass(fun, x, jac, hess, method, args, bounds, callback, **options)
     return tr_obj.optimize_result
 
 class TrustRegionClass(Optimize):
 
-    def __init__(self, fun, x, jac, hess, args=(), bounds=None, callback=None, **options):
+    def __init__(self, fun, x, jac, hess, method='iterative', args=(), bounds=None, callback=None, **options):
         
         # Initialize the parent class
         super().__init__(**options)
@@ -125,6 +133,7 @@ class TrustRegionClass(Optimize):
         self.xk       = x
         self.jacobian = jac
         self.hessian  = hess
+        self.method   = method
         self.args     = args
         self.bounds   = bounds
         self.options  = options
@@ -144,12 +153,18 @@ class TrustRegionClass(Optimize):
         self.resample = options.get('resample', 3)
         self.saveit   = options.get('saveit', True)
         self.rho_tol  = options.get('rho_tol', 1e-6)
-        self.eta1 = options.get('eta1', 0.001)
-        self.eta2 = options.get('eta2', 0.1)
-        self.gam1 = options.get('gam1', 0.7)
-        self.gam2 = options.get('gam2', 1.5)
+        self.eta1 = options.get('eta1', 0.1) # reduce raduis if rho < 10%
+        self.eta2 = options.get('eta2', 0.5)  # increase radius if rho > 50% 
+        self.gam1 = options.get('gam1', 0.5)  # reduce by 50%
+        self.gam2 = options.get('gam2', 1.5)  # increase by 50%
         self.rho  = 0.0
 
+        # Check if method is valid
+        if self.method not in ['iterative', 'CG-Steihaug']:
+            self.method = 'iterative'
+            raise ValueError(f'Method {self.method} is not valid!. Method is set to "iterative"')
+    
+            
         if not self.restart:
             self.start_time = time.perf_counter()
 
@@ -242,17 +257,66 @@ class TrustRegionClass(Optimize):
         if self.logger is not None:
             self.logger.info(msg)
 
+    def solve_subproblem(self, g, B, delta):
+        """
+        Solve the trust region subproblem using the iterative method.
+        (A big thanks to copilot for the help with this implementation)
+
+        Parameters:
+        g (numpy.ndarray): Gradient vector at the current point.
+        B (numpy.ndarray): Hessian matrix at the current point.
+        delta (float): Trust region radius.
+
+        Returns:
+        pk (numpy.ndarray): Step direction.
+        pk_hits_boundary (bool): True if the step hits the boundary of the trust region.
+        """
+
+        # Define quadratic model
+        quad = lambda p: self.fk + np.dot(g,p) + np.dot(p,np.dot(B,p))/2
+
+
+        if self.method == 'iterative':
+            subproblem = IterativeSubproblem(
+                x=self.xk, 
+                fun=quad, 
+                jac=lambda _: g, 
+                hess=lambda _: B,
+            )
+            pk, pk_hits_boundary = subproblem.solve(tr_radius=delta)
+        
+        elif self.method == 'CG-Steihaug':
+            subproblem = CGSteihaugSubproblem(
+                x=self.xk, 
+                fun=quad, 
+                jac=lambda _: g, 
+                hess=lambda _: B,
+            )
+            pk, pk_hits_boundary = subproblem.solve(trust_radius=delta)
+
+        else:
+            raise ValueError(f"Method {self.method} is not valid!")
+
+        return pk, pk_hits_boundary
+
+
     def calc_update(self, iter_resamp=0):
 
         # Initialize variables for this step
         success = True
 
         # Solve subproblem
-        self._log('Solving trust region subproblem using the CG-Steihaug method')
-        sk = self.solve_sub_problem_CG_Steihaug(self.jk, self.Hk, self.trust_radius)
+        self._log('Solving trust region subproblem')
+        sk, hits_boundary = self.solve_subproblem(self.jk, self.Hk, self.trust_radius)
+
+        # truncate sk to respect bounds
+        if self.bounds is not None:
+            lb = np.array(self.bounds)[:, 0]
+            ub = np.array(self.bounds)[:, 1]
+            sk = np.clip(sk, lb - self.xk, ub - self.xk)
 
         # Calculate the actual function value
-        xk_new = ot.clip_state(self.xk + sk, self.bounds)
+        xk_new  = self.xk + sk
         fun_new = self._fun(xk_new)
 
         # Calculate rho
@@ -283,7 +347,7 @@ class TrustRegionClass(Optimize):
 
             # update the trust region radius
             delta_old = self.trust_radius
-            if self.rho >= self.eta2:
+            if (self.rho >= self.eta2) and hits_boundary:
                 delta_new = min(self.gam2*delta_old, self.trust_radius_max)
             elif self.eta1 <= self.rho < self.eta2:
                 delta_new = delta_old
@@ -327,80 +391,6 @@ class TrustRegionClass(Optimize):
                 success = False
 
         return success
-
-    
-    def solve_sub_problem_CG_Steihaug(self, g, B, delta):
-        """
-        Solve the trust region subproblem using Steihaug's Conjugate Gradient method.
-        (A big thanks to copilot for the help with this implementation)
-
-        Parameters:
-        g (numpy.ndarray): Gradient vector at the current point.
-        B (numpy.ndarray): Hessian matrix at the current point.
-        delta (float): Trust region radius.
-        tol (float): Tolerance for convergence.
-        max_iter (int): Maximum number of iterations.
-
-        Returns:
-        p (numpy.ndarray): Solution vector.
-        """
-        z = np.zeros_like(g)
-        r = g
-        d = -g
-
-        # Set same default tolerance as scipy
-        tol = min(0.5, la.norm(g)**2)*la.norm(g)
-
-        if la.norm(g) <= tol:
-            return z
-
-        # make quadratic model
-        mc = lambda s: self.fk + np.dot(g,s) + np.dot(s,np.dot(B,s))/2
-
-        while True:
-            dBd = np.dot(d, np.dot(B,d))
-
-            if dBd <= 0:
-                # Solve the quadratic equation: (p + tau*d)**2 = delta**2
-                tau_lo, tau_hi = self.get_tau_at_delta(z, d, delta)
-                p_lo = z + tau_lo*d
-                p_hi = z + tau_hi*d
-
-                if mc(p_lo) < mc(p_hi): 
-                    return p_lo
-                else:
-                    return p_hi
-
-            alpha = np.dot(r,r)/dBd
-            z_new = z + alpha*d
-
-            if la.norm(z_new) >= delta:
-                # Solve the quadratic equation: (p + tau*d)**2 = delta**2, for tau > 0
-                _ , tau = self.get_tau_at_delta(z, d, delta)
-                return z + tau * d
-                
-            r_new = r + alpha*np.dot(B,d)
-
-            if la.norm(r_new) < tol:
-                return z_new
-
-            beta = np.dot(r_new,r_new)/np.dot(r,r)
-            d = -r_new + beta*d
-            r = r_new
-            z = z_new
-
-    
-    def get_tau_at_delta(self, p, d, delta):
-        """
-        Solve the quadratic equation: (p + tau*d)**2 = delta**2, for tau > 0
-        """
-        a = np.dot(d,d)
-        b = 2*np.dot(p,d)
-        c = np.dot(p,p) - delta**2
-        tau_lo = -b/(2*a) - np.sqrt(b**2 - 4*a*c)/(2*a) 
-        tau_hi = -b/(2*a) + np.sqrt(b**2 - 4*a*c)/(2*a) 
-        return tau_lo, tau_hi
-             
 
                 
 
