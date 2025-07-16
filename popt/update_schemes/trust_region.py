@@ -44,9 +44,10 @@ def TrustRegion(fun, x, jac, hess, method='iterative', args=(), bounds=None, cal
     bounds : sequence, optional
         Bounds for variables. Each element of the sequence must be a tuple of two scalars, 
         representing the lower and upper bounds for that variable. Use None for one of the bounds if there are no bounds.
+        Bounds are handle by clipping the state to the bounds before evaluating the objective function and its derivatives.
     
     callback: callable, optional
-        A callable called after each successful iteration. The class instance of LineSearch 
+        A callable called after each successful iteration. The class instance 
         is passed as the only argument to the callback function: callback(self) 
 
     **options : keyword arguments, optional
@@ -66,6 +67,9 @@ def TrustRegion(fun, x, jac, hess, method='iterative', args=(), bounds=None, cal
         Minimum trust-region radius. Optimization is terminated if trust_radius = trust_radius_min.
         Default is trust_radius/100.
     
+    trust_radius_cuts: int
+        Number of allowed trust-region radius reductions if a step is not successful. Default is 4.
+    
     rho_tol: float
         Tolerance for rho (ratio of actual to predicted reduction). Default is 1e-6.
         
@@ -81,6 +85,13 @@ def TrustRegion(fun, x, jac, hess, method='iterative', args=(), bounds=None, cal
             eta2 = 0.1 \n
             gam1 = 0.7 \n
             gam2 = 1.5 \n
+    
+    saveit: bool
+        If True, save the optimization results to a file. Default is True.
+    
+    convergence_criteria: callable
+        A callable that takes the current optimization object as an argument and returns True if the optimization should stop.
+        It can be used to implement custom convergence criteria. Default is None.
 
     save_folder: str
         Name of folder to save the results to. Defaul is ./ (the current directory).
@@ -94,9 +105,9 @@ def TrustRegion(fun, x, jac, hess, method='iterative', args=(), bounds=None, cal
     hess0: ndarray
         Hessian value of the initial control.
 
-    resample: int
-        Number of jacobian re-computations allowed if a line search fails. Default is 4.
-        (useful if jacobian is stochastic)
+    resample: bool
+        If True, resample the Jacobian and Hessian if a step is not successful. Default is False.
+        (Only makes sense if the Jacobian and Hessian are stochastic).
 
     savedata: list[str]
         Further specification of which class variables to save to the result files.
@@ -144,13 +155,21 @@ class TrustRegionClass(Optimize):
         else:
             self.callback = None
 
+        # Custom convergence criteria (callable)
+        convergence_criteria = options.get('convergence_criteria', None)
+        if callable(convergence_criteria):
+            self.convergence_criteria = self.convergence_criteria
+        else:
+            self.convergence_criteria = None
+
         # Set options for trust-region radius       
-        self.trust_radius     = options.get('trust_radius', 1.0) 
-        self.trust_radius_max = options.get('trust_radius_max', 10*self.trust_radius)
-        self.trust_radius_min = options.get('trust_radius_min', self.trust_radius/100)
+        self.trust_radius      = options.get('trust_radius', 1.0) 
+        self.trust_radius_max  = options.get('trust_radius_max', 10*self.trust_radius)
+        self.trust_radius_min  = options.get('trust_radius_min', self.trust_radius/100)
+        self.trust_radius_cuts = options.get('trust_radius_cuts', 4)
 
         # Set other options
-        self.resample = options.get('resample', 3)
+        self.resample = options.get('resample', False)
         self.saveit   = options.get('saveit', True)
         self.rho_tol  = options.get('rho_tol', 1e-6)
         self.eta1 = options.get('eta1', 0.1) # reduce raduis if rho < 10%
@@ -222,15 +241,17 @@ class TrustRegionClass(Optimize):
         return h
     
     def update_results(self):
-        res = {'fun': self.fk, 
-               'x': self.xk, 
-               'jac': self.jk,
-               'hess': self.Hk,
-               'nfev': self.nfev,
-               'njev': self.njev,
-               'nit': self.iteration,
-               'trust_radius': self.trust_radius,
-               'save_folder': self.options.get('save_folder', './')}
+        res = {
+            'fun': self.fk, 
+            'x': self.xk, 
+            'jac': self.jk,
+            'hess': self.Hk,
+            'nfev': self.nfev,
+            'njev': self.njev,
+            'nit': self.iteration,
+            'trust_radius': self.trust_radius,
+            'save_folder': self.options.get('save_folder', './')
+        }
         
         for a, arg in enumerate(self.args):
             res[f'args[{a}]'] = arg
@@ -300,7 +321,7 @@ class TrustRegionClass(Optimize):
         return pk, pk_hits_boundary
 
 
-    def calc_update(self, iter_resamp=0):
+    def calc_update(self, inner_iter=0):
 
         # Initialize variables for this step
         success = True
@@ -321,7 +342,7 @@ class TrustRegionClass(Optimize):
 
         # Calculate rho
         actual_reduction    = self.fk - fun_new
-        predicted_reduction = - np.dot(self.jk, sk) - 0.5*np.dot(sk, np.dot(self.Hk, sk))
+        predicted_reduction = - np.dot(self.jk, sk) - np.dot(sk, np.dot(self.Hk, sk))/2
         self.rho = actual_reduction/predicted_reduction
 
         if self.rho > self.rho_tol:
@@ -355,12 +376,19 @@ class TrustRegionClass(Optimize):
                 delta_new = self.gam1*delta_old
             
             # Log new trust-radius
-            self.trust_radius = delta_new 
+            self.trust_radius = np.clip(delta_new, self.trust_radius_min, self.trust_radius_max)
             if not (delta_old == delta_new):
                 self._log(f'Trust-radius updated: {delta_old:<10.4e} --> {delta_new:<10.4e}')
 
+            # Check for custom convergence
+            if callable(self.convergence_criteria):
+                if self.convergence_criteria(self):
+                    self._log('Custom convergence criteria met. Stopping optimization.')
+                    success = False
+                    return success
+
             # check for convergence
-            if (self.trust_radius < self.trust_radius_min) or (self.iteration==self.max_iter):
+            if self.iteration==self.max_iter:
                 success = False
             else:
                 # Calculate the jacobian and hessian
@@ -371,21 +399,28 @@ class TrustRegionClass(Optimize):
             self.iteration += 1
 
         else:
-            if iter_resamp < self.resample:
+            if inner_iter < self.trust_radius_cuts:
+                
+                # Log the failure
+                self._log(f'Step not successful: rho < {self.rho_tol:<10.4e}')
+                
+                # Reduce trust region radius to 75% of current value
+                self._log('Reducing trust-radius by 75%')
+                self.trust_radius = 0.25*self.trust_radius
 
-                iter_resamp += 1
+                if self.trust_radius < self.trust_radius_min:
+                    self._log(f'Trust radius {self.trust_radius} is below minimum {self.trust_radius_min}. Stopping optimization.')
+                    success = False
+                    return success
 
-                # Calculate the jacobian and hessian
-                self._log('Resampling gradient and hessian')
-                self.jk = self._jac(self.xk)
-                self.Hk = self._hess(self.xk)
-
-                # Reduce trust region radius to 50% of current value
-                self._log('Reducing trust-radius by 50%')
-                self.trust_radius = 0.5*self.trust_radius
+                # Check for resampling of Jac and Hess
+                if self.resample:
+                    self._log('Resampling gradient and hessian')
+                    self.jk = self._jac(self.xk)
+                    self.Hk = self._hess(self.xk)
 
                 # Recursivly call function
-                success = self.calc_update(iter_resamp=iter_resamp)
+                success = self.calc_update(inner_iter=inner_iter+1)
 
             else:
                 success = False
