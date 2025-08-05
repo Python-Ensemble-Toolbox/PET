@@ -10,7 +10,6 @@ from copy import deepcopy
 from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as PETEnsemble
-from popt.loop.extensions import GenOptExtension
 
 
 class Ensemble(PETEnsemble):
@@ -136,12 +135,6 @@ class Ensemble(PETEnsemble):
         self.bias_factors = None  # this is J(x_j,m_j)/J(x_j,m)
         self.bias_weights = np.ones(self.num_samples) / self.num_samples  # initialize with equal weights
         self.bias_points = None  # this is the points used to estimate the bias correction
-
-        # Setup GenOpt
-        self.genopt = GenOptExtension(self.get_state(), 
-                                      self.get_cov(), 
-                                      func=self.function, 
-                                      ne=self.num_samples)
 
     def get_state(self):
         """

@@ -9,63 +9,81 @@ from copy import deepcopy
 from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as PETEnsemble
+from simulator.simple_models import noSimulation
 
-class EnsembleOptimizationBase(PETEnsemble):
+class EnsembleOptimizationBaseClass(PETEnsemble):
     '''
     Base class for the popt ensemble
     '''
-    def __init__(self, kwargs_ens, sim, obj_func):
+    def __init__(self, options, simulator, objective):
         '''
         Parameters
         ----------
-        kwargs_ens : dict
+        options : dict
             Options for the ensemble class
         
-        sim : callable
-            The forward simulator (e.g. flow)
+        simulator : callable
+            The forward simulator (e.g. flow). If None, no simulation is performed.
         
-        obj_func : callable
+        objective : callable
             The objective function (e.g. npv)
         '''
+        if simulator is None:
+            sim = noSimulation()
+        else:
+            sim = simulator
 
         # Initialize PETEnsemble
-        super().__init__(kwargs_ens, sim)
+        super().__init__(options, sim)
 
-        self.save_prediction = kwargs_ens.get('save_prediction', None)
-        self.num_models  = kwargs_ens.get('num_models', 1)
-        self.transform   = kwargs_ens.get('transform', False)
-        self.num_samples = self.ne
-
-        # Get bounds and varaince
-        self.upper_bound = []
-        self.lower_bound = []
+        # Unpack some options
+        self.save_prediction = options.get('save_prediction', None)
+        self.num_models      = options.get('num_models', 1)
+        self.transform       = options.get('transform', False)
+        self.num_samples     = self.ne
+        
+        # Define some variables
+        self.lb = []
+        self.ub = []
         self.bounds = []
         self.cov = np.array([])
-        for name in self.prior_info.keys():
-            self.state[name] = np.asarray(self.prior_info[name]['mean'])
-            num_state_var = len(self.state[name])
-            value_cov = self.prior_info[name]['variance'] * np.ones((num_state_var,))
-            if 'limits' in self.prior_info[name].keys():
-                lb = self.prior_info[name]['limits'][0]
-                ub = self.prior_info[name]['limits'][1]
-                self.lower_bound.append(lb)
-                self.upper_bound.append(ub)
+
+        # Get bounds and varaince, and initialize state
+        for key in self.prior_info.keys():
+            variable = self.prior_info[key]
+
+            # mean
+            self.state[key] = np.asarray(variable['mean'])
+
+            # Covariance
+            dim = self.state[key].size
+            cov = variable['variance']*np.ones(dim)
+
+            if 'limits' in variable.keys():
+                lb, ub = variable['limits']
+                self.lb(lb)
+                self.ub(ub)
+
+                # transform cov to [0, 1] if transform is True
                 if self.transform:
-                    value_cov = value_cov / (ub - lb)**2
-                    np.clip(value_cov, 0, 1, out=value_cov)
-                    self.bounds += num_state_var*[(0, 1)]
+                    cov = np.clip(cov/(ub - lb)**2, 0, 1, out=cov)
+                    self.bounds += dim*[(0, 1)]
                 else:
-                    self.bounds += num_state_var*[(lb, ub)]
-                self.cov = np.append(self.cov, value_cov)
+                    self.bounds += dim*[(lb, ub)]
             else:
-                self.bounds += num_state_var*[(None, None)]
+                self.bounds += dim*[(None, None)]
+
+            # Add to covariance
+            self.cov = np.append(self.cov, cov)
             
-        
-        self._scale_state()
+        # Make cov full covariance matrix
         self.cov = np.diag(self.cov)
 
+        # Scale the state to [0, 1] if transform is True
+        self._scale_state()
+
         # Set objective function (callable)
-        self.obj_func = obj_func
+        self.obj_func = objective
 
         # Objective function values
         self.state_func_values = None
@@ -78,8 +96,13 @@ class EnsembleOptimizationBase(PETEnsemble):
         x : numpy.ndarray
             Control vector as ndarray, shape (number of controls, number of perturbations)
         """
-        x = ot.aug_optim_state(self.state, list(self.state.keys()))
-        return x
+        return ot.aug_optim_state(self.state, list(self.state.keys()))
+    
+    def vec_to_state(self, x):
+        """
+        Converts a control vector to the internal state representation.
+        """
+        return ot.update_optim_state(x, self.state, list(self.state.keys()))
 
     def get_bounds(self):
         """
@@ -112,7 +135,10 @@ class EnsembleOptimizationBase(PETEnsemble):
         else:
             self.ne = x.shape[1]
 
-        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))  # go from nparray to dict
+        # convert x to state
+        self.state = self.vec_to_state(x)  # go from nparray to dict
+
+        # run the simulation
         self._invert_scale_state()  # ensure that state is in [lb,ub]
         run_success = self.calc_prediction(save_prediction=self.save_prediction)  # calculate flow data
         self._scale_state()  # scale back to [0, 1]
@@ -147,17 +173,17 @@ class EnsembleOptimizationBase(PETEnsemble):
         """
         Transform the internal state from [lb, ub] to [0, 1]
         """
-        if self.transform and (self.upper_bound and self.lower_bound):
+        if self.transform and (self.lb and self.ub):
             for i, key in enumerate(self.state):
-                self.state[key] = (self.state[key] - self.lower_bound[i])/(self.upper_bound[i] - self.lower_bound[i])
+                self.state[key] = (self.state[key] - self.lb[i])/(self.ub[i] - self.lb[i])
                 np.clip(self.state[key], 0, 1, out=self.state[key])
 
     def _invert_scale_state(self):
         """
         Transform the internal state from [0, 1] to [lb, ub]
         """
-        if self.transform and (self.upper_bound and self.lower_bound):
+        if self.transform and (self.lb and self.ub):
             for i, key in enumerate(self.state):
                 if self.transform:
-                    self.state[key] = self.lower_bound[i] + self.state[key]*(self.upper_bound[i] - self.lower_bound[i])
-                np.clip(self.state[key], self.lower_bound[i], self.upper_bound[i], out=self.state[key])
+                    self.state[key] = self.lb[i] + self.state[key]*(self.ub[i] - self.lb[i])
+                np.clip(self.state[key], self.lb[i], self.ub[i], out=self.state[key])
