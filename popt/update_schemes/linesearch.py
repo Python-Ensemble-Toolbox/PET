@@ -204,7 +204,7 @@ class LineSearchClass(Optimize):
         self.saveit    = options.get('saveit', True)
 
         # Check method
-        valid_methods = ['GD', 'BFGS', 'Newton', 'Adam']
+        valid_methods = ['GD', 'BFGS', 'Newton']
         if not self.method in valid_methods:
             raise ValueError(f"'{self.method}' is not a valid method. Valid methods are: {valid_methods}")
         
@@ -374,13 +374,6 @@ class LineSearchClass(Optimize):
             pk = - np.matmul(self.Hk_inv, self.jk)
         if self.method == 'Newton':
             pk = - np.matmul(la.inv(self.Hk), self.jk)
-        if self.method == 'Adam':
-            if self.iteration == 1:
-                pk = - self.jk
-            else:
-                optimizer = optimizers.Adam(1)
-                pk = - optimizer.apply_update(np.zeros_like(self.xk), self.jk, iter=self.iteration-1)[1]
-                optimizer.restore_parameters()
 
         # remove components that point out of the hybercube given by [lb,ub]
         lb = np.array(self.bounds)[:, 0]
