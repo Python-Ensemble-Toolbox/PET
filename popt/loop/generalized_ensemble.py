@@ -10,33 +10,32 @@ from scipy.special import polygamma
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
-from popt.loop.base import EnsembleOptimizationBase
+from popt.loop.ensemble_base import EnsembleOptimizationBaseClass
 
-class GeneralizedEnsemble(EnsembleOptimizationBase):
+class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
 
-    def __init__(self, kwargs_ens, sim, obj_func):
+    def __init__(self, options, simulator, objective):
         '''
         Parameters
         ----------
-        kwargs_ens : dict
+        options : dict
             Options for the ensemble class
         
-        sim : callable
-            The forward simulator (e.g. flow)
+        simulator : callable
+            The forward simulator (e.g. flow). If None, no simulation is performed.
         
-        obj_func : callable
+        objective : callable
             The objective function (e.g. npv)
         '''
-        super().__init__(kwargs_ens, sim, obj_func)
-
-        self.dim   = self.get_state().size
+        super().__init__(options, simulator, objective)
 
         # construct corr matrix
         std = np.sqrt(np.diag(self.cov))
         self.corr = self.cov/np.outer(std, std)
+        self.dim  = std 
 
         # choose marginal
-        marginal = kwargs_ens.get('marginal', 'Beta')
+        marginal = options.get('marginal', 'BetaMC')
 
         if marginal in ['Beta', 'BetaMC', 'Logistic', 'TruncGaussian', 'Gaussian']:
 
@@ -45,7 +44,7 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
 
             if marginal == 'Beta':
                 self.margs = Beta()
-                self.theta = kwargs_ens.get('theta', np.array([[20.0, 20.0] for _ in range(self.dim)]))
+                self.theta = options.get('theta', np.array([[20.0, 20.0] for _ in range(self.dim)]))
                 self.eps = self.var2eps()
                 self.grad_scale = 1/(2*self.eps)
                 self.hess_scale = 1/(4*self.eps**2)
@@ -56,20 +55,20 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
                 var = np.diag(self.cov)
                 self.margs = BetaMC(lb, ub, 0.1*np.sqrt(var[0]))
                 default_theta = np.array([var_to_concentration(state[i], var[i], lb[i], ub[i]) for i in range(self.dim)])
-                self.theta = kwargs_ens.get('theta', default_theta)
+                self.theta = options.get('theta', default_theta)
                 
             elif marginal == 'Logistic':
                 self.margs = Logistic()
-                self.theta = kwargs_ens.get('theta', self.margs.var_to_scale(np.diag(self.cov)))
+                self.theta = options.get('theta', self.margs.var_to_scale(np.diag(self.cov)))
 
             elif marginal == 'TruncGaussian':
                 lb, ub = np.array(self.bounds).T
                 self.margs = TruncGaussian(lb,ub)
-                self.theta = kwargs_ens.get('theta', np.sqrt(np.diag(self.cov)))
+                self.theta = options.get('theta', np.sqrt(np.diag(self.cov)))
 
             elif marginal == 'Gaussian':
                 self.margs = Gaussian()
-                self.theta = kwargs_ens.get('theta', np.sqrt(np.diag(self.cov)))
+                self.theta = options.get('theta', np.sqrt(np.diag(self.cov)))
     
     def get_theta(self):
         return self.theta

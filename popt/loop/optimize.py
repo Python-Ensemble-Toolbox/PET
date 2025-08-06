@@ -166,7 +166,7 @@ class Optimize:
                     self.save()
 
             # Check if max iterations was reached
-            if self.iteration > self.max_iter:
+            if self.iteration >= self.max_iter:
                 self.optimize_result['message'] = 'Iterations stopped due to max iterations reached!'
             else:
                 if not isinstance(self.msg, str): self.msg = ''

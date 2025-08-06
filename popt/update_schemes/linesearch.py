@@ -13,6 +13,7 @@ from scipy.optimize._linesearch import _zoom
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
+from popt.update_schemes import optimizers
 
 def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callback=None, **options):
     '''
@@ -373,6 +374,13 @@ class LineSearchClass(Optimize):
             pk = - np.matmul(self.Hk_inv, self.jk)
         if self.method == 'Newton':
             pk = - np.matmul(la.inv(self.Hk), self.jk)
+
+        # remove components that point out of the hybercube given by [lb,ub]
+        lb = np.array(self.bounds)[:, 0]
+        ub = np.array(self.bounds)[:, 1]
+        for i in range(self.xk.size):
+            if (self.xk[i] <= lb[i] and pk[i] < 0) or (self.xk[i] >= ub[i] and pk[i] > 0):
+                pk[i] = 0
         
         # Set step_size
         step_size = self._set_step_size(pk)
