@@ -95,14 +95,14 @@ def ecalc_npv(pred_data, **kwargs):
             Qwi [l]= np.expand_dims(Qwi[l], 0)
 
         N = Qop[l].shape[0]
-        T = Qop[l].shape[1]
+        NT = Qop[l].shape[1]
         values = []
         em_values = []
         for n in range(N):
             with open('ecalc_input.csv', 'w') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',')
                 writer.writerow(['dd/mm/yyyy', 'GAS_PROD', 'OIL_PROD', 'WATER_INJ'])
-                for t in range(T):
+                for t in range(NT):
                     D = report[1][t]
                     writer.writerow([D.strftime("%d/%m/%Y"), Qgp[l][n, t]/Dd[t], Qop[l][n, t]/Dd[t], Qwi[l][n, t]/Dd[t]])
 

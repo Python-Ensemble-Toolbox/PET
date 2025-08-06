@@ -82,6 +82,9 @@ class eclipse:
         self.inv_stat = None
         self.static_state = None
 
+        # Multilevel default value
+        self.level = -1
+
     def _extInfoInputDict(self):
         """
         Extract the manditory and optional information from the input_dict dictionary.
@@ -225,6 +228,8 @@ class eclipse:
         trueOrder : 
             Gives the index-type (e.g. step,time,etc.) and the index of the true data
         """
+
+        self.level = -1  # default value
         self.__dict__.update(kwargs)  # parse kwargs input into class attributes
 
         if hasattr(self, 'reportdates'):
