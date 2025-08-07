@@ -11,6 +11,8 @@ from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as SupEnsemble
 from simulator.simple_models import noSimulation
 
+__all__ = ['EnsembleOptimizationBaseClass']
+
 class EnsembleOptimizationBaseClass(SupEnsemble):
     '''
     Base class for the popt ensemble

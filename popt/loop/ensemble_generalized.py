@@ -12,6 +12,8 @@ from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
 from popt.loop.ensemble_base import EnsembleOptimizationBaseClass
 
+__all__ = ['GeneralizedEnsemble']
+
 class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
 
     def __init__(self, options, simulator, objective):
@@ -32,7 +34,7 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
         # construct corr matrix
         std = np.sqrt(np.diag(self.cov))
         self.corr = self.cov/np.outer(std, std)
-        self.dim  = std 
+        self.dim  = std.size
 
         # choose marginal
         marginal = options.get('marginal', 'BetaMC')
