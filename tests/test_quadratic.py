@@ -41,5 +41,5 @@ def test_mod(temp_examples_dir: PosixPath):
     finally:
         os.chdir(old)
 
-    np.testing.assert_array_almost_equal(state, [0.5, 0.5, 0.5], decimal=1)
+    np.testing.assert_array_almost_equal(state, [0.5, 0.5], decimal=1)
     np.testing.assert_array_almost_equal(obj, [0.0], decimal=0)
