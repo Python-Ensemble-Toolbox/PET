@@ -5,14 +5,13 @@ import warnings
 
 from copy import deepcopy
 
-
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
-from ensemble.ensemble import Ensemble as PETEnsemble
+from popt.loop.ensemble_base import EnsembleOptimizationBaseClass
 
 
-class Ensemble(PETEnsemble):
+class GaussianEnsemble(EnsembleOptimizationBaseClass):
     """
     Class to store control states and evaluate objective functions.
 
@@ -41,7 +40,7 @@ class Ensemble(PETEnsemble):
 
     """
 
-    def __init__(self, keys_en, sim, obj_func):
+    def __init__(self, options, simulator, objective):
         """
         Parameters
         ----------
@@ -63,57 +62,7 @@ class Ensemble(PETEnsemble):
         """
 
         # Initialize PETEnsemble
-        super(Ensemble, self).__init__(keys_en, sim)
-        
-        def __set__variable(var_name=None, defalut=None):
-            if var_name in keys_en:
-                return keys_en[var_name]
-            else:
-                return defalut
-
-        # Set number of models (default 1)
-        self.num_models = __set__variable('num_models', 1)
-
-        # Set transform flag (defalult True)
-        self.transform = __set__variable('transform', True)
-
-        # Number of samples to compute gradient
-        self.num_samples = self.ne
-
-        # Save pred data?
-        self.save_prediction = __set__variable('save_prediction', None)
-
-        # We need the limits to convert between [0, 1] and [lb, ub],
-        # and we need the bounds as list of (min, max) pairs
-        # Also set the state and covarianve equal to the values provided in the input.
-        self.upper_bound = []
-        self.lower_bound = []
-        self.bounds = []
-        self.cov = np.array([])
-        for name in self.prior_info.keys():
-            self.state[name] = np.asarray(self.prior_info[name]['mean'])
-            num_state_var = len(self.state[name])
-            value_cov = self.prior_info[name]['variance'] * np.ones((num_state_var,))
-            if 'limits' in self.prior_info[name].keys():
-                lb = self.prior_info[name]['limits'][0]
-                ub = self.prior_info[name]['limits'][1]
-                self.lower_bound.append(lb)
-                self.upper_bound.append(ub)
-                if self.transform:
-                    value_cov = value_cov / (ub - lb)**2
-                    np.clip(value_cov, 0, 1, out=value_cov)
-                    self.bounds += num_state_var*[(0, 1)]
-                else:
-                    self.bounds += num_state_var*[(lb, ub)]
-            else:
-                self.bounds += num_state_var*[(None, None)]
-            self.cov = np.append(self.cov, value_cov)
-
-        self._scale_state()
-        self.cov = np.diag(self.cov)
-
-        # Set objective function (callable)
-        self.obj_func = obj_func
+        super().__init__(options, simulator, objective)
 
         # Objective function values
         self.state_func_values = None
@@ -135,36 +84,6 @@ class Ensemble(PETEnsemble):
         self.bias_factors = None  # this is J(x_j,m_j)/J(x_j,m)
         self.bias_weights = np.ones(self.num_samples) / self.num_samples  # initialize with equal weights
         self.bias_points = None  # this is the points used to estimate the bias correction
-
-    def get_state(self):
-        """
-        Returns
-        -------
-        x : numpy.ndarray
-            Control vector as ndarray, shape (number of controls, number of perturbations)
-        """
-        x = ot.aug_optim_state(self.state, list(self.state.keys()))
-        return x
-
-    def get_cov(self):
-        """
-        Returns
-        -------
-        cov : numpy.ndarray
-            Covariance matrix, shape (number of controls, number of controls)
-        """
-
-        return self.cov
-
-    def get_bounds(self):
-        """
-        Returns
-        -------
-        bounds : list
-            (min, max) pairs for each element in x. None is used to specify no bound.
-        """
-
-        return self.bounds
     
     def get_final_state(self, return_dict=False):
         """
@@ -185,56 +104,6 @@ class Ensemble(PETEnsemble):
         else:
             x = self.get_state()
         return x
-
-    def function(self, x, *args, **kwargs):
-        """
-        This is the main function called during optimization.
-
-        Parameters
-        ----------
-        x : ndarray
-            Control vector, shape (number of controls, number of perturbations)
-
-        Returns
-        -------
-        obj_func_values : numpy.ndarray
-            Objective function values, shape (number of perturbations, )
-        """
-        self._aux_input()
-
-        if len(x.shape) == 1:
-            self.ne = self.num_models
-        else:
-            self.ne = x.shape[1]
-
-        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))  # go from nparray to dict
-        self._invert_scale_state()  # ensure that state is in [lb,ub]
-
-        # Here we need to account for the possibility of having a multilevel ensemble and make a list of levels
-        if 'multilevel' in self.keys_en.keys() and len(x.shape) > 1:
-            en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
-            self.state = ot.toggle_ml_state(self.state, en_size)
-
-        run_success = self.calc_prediction()  # calculate flow data
-
-        # Here we need to account for the possibility of having a multilevel ensemble and remove list of levels
-        if 'multilevel' in self.keys_en.keys() and len(x.shape) > 1:  
-            en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
-            self.state = ot.toggle_ml_state(self.state, en_size)
-
-        self._scale_state()  # scale back to [0, 1]
-        if run_success:
-            func_values = self.obj_func(self.pred_data, input_dict=self.sim.input_dict,
-                                        true_order=self.sim.true_order, **kwargs)
-        else:
-            func_values = np.inf  # the simulations have crashed
-
-        if len(x.shape) == 1:
-            self.state_func_values = func_values
-        else:
-            self.ens_func_values = func_values
-        
-        return func_values
 
     def gradient(self, x, *args, **kwargs):
         r"""
@@ -393,17 +262,6 @@ class Ensemble(PETEnsemble):
             hessian = level_hessian[0]
             
         return hessian
-    '''
-    def genopt_gradient(self, x, *args):
-        self.genopt.update_distribution(*args)
-        gradient = self.genopt.ensemble_gradient(func=self.function, 
-                                                 x=x, 
-                                                 ne=self.num_samples)
-        return gradient
-    
-    def genopt_mutation_gradient(self, x=None, *args, **kwargs):
-        return self.genopt.ensemble_mutation_gradient(return_ensembles=kwargs['return_ensembles'])
-    '''
 
     def calc_ensemble_weights(self, x, *args, **kwargs):
         r"""
@@ -527,48 +385,14 @@ class Ensemble(PETEnsemble):
             cov = cov_blocks[i]
             temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
             shifted_ensemble = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en, 1)]).T
-            if self.upper_bound and self.lower_bound:
+            if self.lb and self.ub:
                 if self.transform:
                     np.clip(shifted_ensemble, 0, 1, out=shifted_ensemble)
                 else:
-                    np.clip(shifted_ensemble, self.lower_bound[i], self.upper_bound[i], out=shifted_ensemble)
+                    np.clip(shifted_ensemble, self.lb[i], self.ub[i], out=shifted_ensemble)
             state_en[statename] = shifted_ensemble
 
         return state_en
-
-    def _aux_input(self):
-        """
-        Set the auxiliary input used for multiple geological realizations
-        """
-
-        nr = 1  # nr is the ratio of samples over models
-        if self.num_models > 1:
-            if np.remainder(self.num_samples, self.num_models) == 0:
-                nr = int(self.num_samples / self.num_models)
-                self.aux_input = list(np.repeat(np.arange(self.num_models), nr))
-            else:
-                print('num_samples must be a multiplum of num_models!')
-                sys.exit(0)
-        return nr
-
-    def _scale_state(self):
-        """
-        Transform the internal state from [lb, ub] to [0, 1]
-        """
-        if self.transform and (self.upper_bound and self.lower_bound):
-            for i, key in enumerate(self.state):
-                self.state[key] = (self.state[key] - self.lower_bound[i])/(self.upper_bound[i] - self.lower_bound[i])
-                np.clip(self.state[key], 0, 1, out=self.state[key])
-
-    def _invert_scale_state(self):
-        """
-        Transform the internal state from [0, 1] to [lb, ub]
-        """
-        if self.transform and (self.upper_bound and self.lower_bound):
-            for i, key in enumerate(self.state):
-                if self.transform:
-                    self.state[key] = self.lower_bound[i] + self.state[key]*(self.upper_bound[i] - self.lower_bound[i])
-                np.clip(self.state[key], self.lower_bound[i], self.upper_bound[i], out=self.state[key])
 
     def _bias_correction(self, state):
         """
