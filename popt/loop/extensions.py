@@ -6,6 +6,7 @@ from scipy.special import polygamma, digamma
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 
+# NB! THIS FILE IS NOT USED ANYMORE
 
 __all__ = ['GenOptExtension']
 
