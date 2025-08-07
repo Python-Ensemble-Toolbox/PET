@@ -5,6 +5,9 @@ import logging
 import time
 import pickle
 
+# Internal imports
+import popt.misc_tools.optim_tools as ot
+
 # Gets or creates a logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # set log level
