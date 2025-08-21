@@ -239,44 +239,6 @@ class TrustRegionClass(Optimize):
         else:
             h = self.hessian(x, *self.args)
         return h
-    
-    def update_results(self):
-        res = {
-            'fun': self.fk, 
-            'x': self.xk, 
-            'jac': self.jk,
-            'hess': self.Hk,
-            'nfev': self.nfev,
-            'njev': self.njev,
-            'nit': self.iteration,
-            'trust_radius': self.trust_radius,
-            'save_folder': self.options.get('save_folder', './')
-        }
-        
-        for a, arg in enumerate(self.args):
-            res[f'args[{a}]'] = arg
-
-        if 'savedata' in self.options:
-            # Make sure "SAVEDATA" gives a list
-            if isinstance(self.options['savedata'], list):
-                savedata = self.options['savedata']
-            else:
-                savedata = [self.options['savedata']]
-
-            # Loop over variables to store in save list
-            for save_typ in savedata:
-                if save_typ in locals():
-                    res[save_typ] = eval('{}'.format(save_typ))
-                elif hasattr(self, save_typ):
-                    res[save_typ] = eval(' self.{}'.format(save_typ))
-                else:
-                    print(f'Cannot save {save_typ}!\n\n')
-
-        return OptimizeResult(res)
-
-    def _log(self, msg):
-        if self.logger is not None:
-            self.logger.info(msg)
 
     def solve_subproblem(self, g, B, delta):
         """
@@ -426,6 +388,44 @@ class TrustRegionClass(Optimize):
                 success = False
 
         return success
+    
+    def update_results(self):
+        res = {
+            'fun': self.fk, 
+            'x': self.xk, 
+            'jac': self.jk,
+            'hess': self.Hk,
+            'nfev': self.nfev,
+            'njev': self.njev,
+            'nit': self.iteration,
+            'trust_radius': self.trust_radius,
+            'save_folder': self.options.get('save_folder', './')
+        }
+        
+        for a, arg in enumerate(self.args):
+            res[f'args[{a}]'] = arg
+
+        if 'savedata' in self.options:
+            # Make sure "SAVEDATA" gives a list
+            if isinstance(self.options['savedata'], list):
+                savedata = self.options['savedata']
+            else:
+                savedata = [self.options['savedata']]
+
+            # Loop over variables to store in save list
+            for save_typ in savedata:
+                if save_typ in locals():
+                    res[save_typ] = eval('{}'.format(save_typ))
+                elif hasattr(self, save_typ):
+                    res[save_typ] = eval(' self.{}'.format(save_typ))
+                else:
+                    print(f'Cannot save {save_typ}!\n\n')
+
+        return OptimizeResult(res)
+
+    def _log(self, msg):
+        if self.logger is not None:
+            self.logger.info(msg)
 
                 
 

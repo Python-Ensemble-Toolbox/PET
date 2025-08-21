@@ -17,8 +17,10 @@ from popt.update_schemes.line_search_step import line_search, line_search_backtr
 
 # some symbols for logger
 subk = '\u2096'
+sup2 = '\u00b2'
 jac_inf_symbol = f'‖jac(x{subk})‖\u221E'
 fun_xk_symbol  = f'fun(x{subk})'
+nabla_symbol = "\u2207"
 
 
 def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callback=None, **options):
@@ -39,7 +41,7 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
     method: str
         Which optimization method to use. Default is 'GD' for 'Gradient Descent'.
         Other options are 'BFGS' for the 'Broyden–Fletcher–Goldfarb–Shanno' method,
-        and 'Newton' for the Newton method.  
+        and 'Newton-CG'.  
     
     hess: callable, optional
         Hessian function, hess(x, *args). Default is None. 
@@ -233,14 +235,12 @@ class LineSearchClass(Optimize):
         self.gtol = options.get('gtol', 1e-5) # tolerance for inf-norm of jacobian
 
         # Check method
-        valid_methods = ['GD', 'BFGS', 'Newton']
+        valid_methods = ['GD', 'BFGS', 'Newton-CG']
         if not self.method in valid_methods:
             raise ValueError(f"'{self.method}' is not a valid method. Valid methods are: {valid_methods}")
         
-        # Make sure hessian is callable if mehtod='Newton'
-        if (self.method == 'Newton') and (not callable(self.hessian)):
-            warnings.warn('Newton’s method requires a hessian, method changed to BFGS')
-            self.method = 'BFGS'
+        if (self.method == 'Newton-CG') and (self.hessian is None):
+            print(f'Warning: No hessian function provided. Finite difference approximation is used: {nabla_symbol}{sup2}f(x{subk})d ≈ ({nabla_symbol}f(x{subk}+hd)-{nabla_symbol}f(x{subk}))/h')
 
         # Calculate objective function of startpoint
         if not self.restart:
@@ -267,7 +267,7 @@ class LineSearchClass(Optimize):
             self.p_old = None
         
             # Initial results
-            self.optimize_result = self.update_results()
+            self.optimize_result = self.get_intermediate_results()
             if self.saveit:
                 ot.save_optimize_results(self.optimize_result)
             if self.logger is not None:
@@ -313,7 +313,7 @@ class LineSearchClass(Optimize):
             h = self.hessian(x)
         else:
             h = self.hessian(x, *self.args)
-        return make_matrix_psd(h)
+        return h
     
     
     def calc_update(self, iter_resamp=0):
@@ -341,8 +341,8 @@ class LineSearchClass(Optimize):
             pk = - self.jk
         if self.method == 'BFGS':
             pk = - np.matmul(self.Hk_inv, self.jk)
-        if self.method == 'Newton':
-            pk = - np.matmul(la.inv(self.Hk), self.jk)
+        if self.method == 'Newton-CG':
+            pk = newton_cg(self.jk, Hk=self.Hk, xk=self.xk, jac=self._jac, eps=1e-4)
 
         # porject search direction onto the feasible set
         if self.bounds is not None:
@@ -408,16 +408,14 @@ class LineSearchClass(Optimize):
             # Update BFGS
             if self.method == 'BFGS':
                 yk = j_new - j_old
-                if self.iteration == 1:
-                    self.Hk_inv = np.dot(yk,sk)/np.dot(yk,yk) * np.eye(sk.size)
-
+                if self.iteration == 1: self.Hk_inv = np.dot(yk,sk)/np.dot(yk,yk) * np.eye(sk.size)
                 self.Hk_inv = bfgs_update(self.Hk_inv, sk, yk)
 
             # Update status
             success = True
 
             # Save Results
-            self.optimize_result = self.update_results()
+            self.optimize_result = self.get_intermediate_results()
             if self.saveit:
                 ot.save_optimize_results(self.optimize_result)
 
@@ -473,23 +471,19 @@ class LineSearchClass(Optimize):
     
         return success
     
+    def get_intermediate_results(self):
 
-    def update_results(self):
-
-        res = {'fun': self.fk, 
-               'x': self.xk, 
-               'jac': self.jk,
-               'hess': self.Hk,
-               'hess_inv': self.Hk_inv,
-               'nfev': self.nfev,
-               'njev': self.njev,
-               'nit': self.iteration,
-               'step-size': self.step_size,
-               'method': self.method,
-               'save_folder': self.options.get('save_folder', './')}
-        
-        for a, arg in enumerate(self.args):
-            res[f'args[{a}]'] = arg
+        # Define default results
+        results = {
+            'fun': self.fk, 
+            'x': self.xk, 
+            'jac': self.jk,
+            'nfev': self.nfev,
+            'njev': self.njev,
+            'nit': self.iteration,
+            'method': self.method,
+            'save_folder': self.options.get('save_folder', './')
+        }
 
         if 'savedata' in self.options:
             # Make sure "SAVEDATA" gives a list
@@ -498,16 +492,20 @@ class LineSearchClass(Optimize):
             else:
                 savedata = [self.options['savedata']]
 
-            # Loop over variables to store in save list
-            for save_typ in savedata:
-                if save_typ in locals():
-                    res[save_typ] = eval('{}'.format(save_typ))
-                elif hasattr(self, save_typ):
-                    res[save_typ] = eval(' self.{}'.format(save_typ))
-                else:
-                    print(f'Cannot save {save_typ}!\n\n')
+            if 'args' in savedata:
+                for a, arg in enumerate(self.args):
+                    results[f'args[{a}]'] = arg
 
-        return OptimizeResult(res)
+            # Loop over variables to store in save list
+            for variable in savedata:
+                if variable in locals():
+                    results[variable] = eval('{}'.format(variable))
+                elif hasattr(self, variable):
+                    results[variable] = eval('self.{}'.format(variable))
+                else:
+                    print(f'Cannot save {variable}!\n\n')
+
+        return OptimizeResult(results)
     
     def _set_step_size(self, pk, amax):
         ''' Sets the step-size '''
@@ -589,33 +587,56 @@ def bfgs_update(Hk, sk, yk):
 
     return Hk_new
 
+def newton_cg(gk, Hk=None, maxiter=None, **kwargs):
+    print('\nRunning Newton-CG subroutine...')
 
-def get_near_psd(A):
-    eigval, eigvec = np.linalg.eig((A + A.T)/2)
-    eigval[eigval < 0] = 1.0
-    return eigvec.dot(np.diag(eigval)).dot(eigvec.T)
+    if Hk is None:
+        jac = kwargs.get('jac')
+        eps = kwargs.get('eps', 1e-4)
+        xk  = kwargs.get('xk')
 
-def make_matrix_psd(A, maxiter=100):
-    # Set beta to Frobenius norm of A
-    beta = np.linalg.norm(A, 'fro')
-    
-    # Initialize tau
-    if np.min(np.diag(A)) > 0:
-        tau = 0
-    else:
-        tau = beta/2
-    
-    for _ in range(maxiter):
-        try:
-            M = A + tau*np.eye(A.shape[0])
-            # Attempt Cholesky 
-            np.linalg.cholesky(A + tau*np.eye(A.shape[0]))
-            return M
-        except np.linalg.LinAlgError:
-            # Set new tau
-            tau = max(2*tau, beta/2)
-    
-    return None
+        # define a finite difference approximation of the Hessian times a vector
+        def Hessd(d):
+            return (jac(xk + eps*d) - gk)/eps
+
+    if maxiter is None:
+        maxiter = 20*gk.size # Same dfault as in scipy
+
+    tol = min(0.5, np.sqrt(la.norm(gk)))*la.norm(gk)
+    z = 0
+    r = gk
+    d = -r
+
+    for j in range(maxiter):
+        print('iteration: ', j)
+        if Hk is None:
+            Hd = Hessd(d)
+        else:
+            Hd = np.matmul(Hk, d)
+
+        dTHd = np.dot(d, Hd)
+
+        if dTHd <= 0:
+            print('Negative curvature detected, terminating subroutine')
+            print('\n')
+            if j == 0:
+                return -gk
+            else:
+                return z
+            
+        rold = r
+        a = np.dot(r,r)/dTHd
+        z = z + a*d
+        r = r + a*Hd
+
+        if la.norm(r) < tol:
+            print('Subroutine converged')
+            print('\n')
+            return z
+
+        b = np.dot(r, r)/np.dot(rold, rold)
+        d = -r + b*d
+
                 
 
             
