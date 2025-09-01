@@ -221,7 +221,8 @@ class LineSearchClass(Optimize):
             'rho': options.get('rho', 0.5),
             'amax': self.step_size_max,
             'maxiter': options.get('lsmaxiter', 10),
-            'method' : options.get('lsmethod', 1)
+            'method' : options.get('lsmethod', 1),
+            'logger' : self.logger.info
         }
 
         # Set other options
@@ -355,7 +356,7 @@ class LineSearchClass(Optimize):
         step_size = self._set_step_size(pk, self.step_size_max)
 
         # Perform line-search 
-        self.logger.info('Performing line search...')
+        self.logger.info('Performing line search.............')
         if self.lskwargs['method'] == 0:
             ls_res = line_search_backtracking(
                 step_size=step_size,
@@ -556,9 +557,9 @@ class LineSearchClass(Optimize):
             elif pk_val > 0:
                 amax.append((ub[i] - xk[i])/pk_val)
             else:
-                amax.append(np.inf)
-        amax = min(amax)
-        return amax
+                continue
+
+        return max(amax)
 
 
 

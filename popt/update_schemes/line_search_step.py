@@ -68,6 +68,12 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
     c1 = kwargs.get('c1', 1e-4)
     c2 = kwargs.get('c2', 0.9)
 
+    # check for logger in kwargs
+    global logger
+    logger = kwargs.get('logger', None)
+    if logger is None:
+        logger = print
+
     # assertions
     assert step_size <= amax, "Initial step size must be less than or equal to amax."
 
@@ -82,6 +88,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
             else:
                 phi.fun_val = fk
         else:
+            logger('    Evaluating Armijo condition')
             phi.fun_val = fun(xk + alpha*pk)
             ls_nfev += 1
         return phi.fun_val
@@ -96,6 +103,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
             else:
                 dphi.jac_val = jk
         else:
+            logger('    Evaluating curvature condition')
             dphi.jac_val = jac(xk + alpha*pk)
             ls_njev += 1
         return np.dot(dphi.jac_val, pk)
@@ -107,6 +115,8 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
     # Start loop
     a = [0, step_size]
     for i in range(1, maxiter+1):
+        logger(f'Line search iteration: {i-1}')
+
         # Evaluate phi(ai)
         phi_i = phi(a[i])
 
@@ -134,6 +144,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
         a.append(min(2*a[i], amax))
         
     # If we reached this point, the line search failed
+    logger('Line search failed to find a suitable step size \n')
     return None, None, None, ls_nfev, ls_njev
             
 
@@ -145,6 +156,7 @@ def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2):
     dphi_lo = df(alo)
 
     for j in range(maxiter):
+        logger(f'Line search iteration: {j+1}')
 
         tol_cubic = 0.2*(ahi-alo)
         tol_quad  = 0.1*(ahi-alo)
