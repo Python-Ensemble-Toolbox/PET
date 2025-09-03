@@ -23,7 +23,6 @@ fun_xk_symbol  = f'fun(x{subk})'
 nabla_symbol = "\u2207"
 
 
-
 def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callback=None, **options):
     '''
     A Line Search Optimizer.
