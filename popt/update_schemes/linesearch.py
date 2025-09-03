@@ -5,17 +5,14 @@ import pprint
 import warnings
 
 from numpy import linalg as la
-from functools import cache
 from scipy.optimize import OptimizeResult
-from scipy.optimize._dcsrch import DCSRCH
-from scipy.optimize._linesearch import _zoom
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
 from popt.update_schemes.line_search_step import line_search, line_search_backtracking
 
-# some symbols for logger
+# Some symbols for logger
 subk = '\u2096'
 sup2 = '\u00b2'
 jac_inf_symbol = f'‖jac(x{subk})‖\u221E'
@@ -580,7 +577,8 @@ def bfgs_update(Hk, sk, yk):
     rho = 1.0 / (yk.T @ sk)
 
     if rho <= 0:
-        raise ValueError("Non-positive curvature detected. BFGS update skipped.")
+        print('Non-positive curvature detected. BFGS update skipped....')
+        return Hk
 
     I = np.eye(Hk.shape[0])
     Vk = I - rho * sk @ yk.T
