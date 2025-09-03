@@ -18,7 +18,36 @@ class full_update():
         no localization is implemented for this method yet.
     """
 
+    def ext_Am(self, *args, **kwargs):
+        """
+        The class is initialized by calculating the required Am matrix.
+        """
+
+        delta_scaled_prior = self.state_scaling[:, None] * \
+                             np.dot(at.aug_state(self.prior_state, self.list_states), self.proj)
+
+        u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
+
+        # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
+        # zero. This part is a good place to include eventual additional truncation.
+        energy = 0
+        trunc_index = len(s_d) - 1  # inititallize
+        for c, elem in enumerate(s_d):
+            energy += elem
+            if energy / sum(s_d) >= self.trunc_energy:
+                trunc_index = c  # take the index where all energy is preserved
+                break
+        u_d, s_d, v_d = u_d[:, :trunc_index +
+                                1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
+        self.Am = np.dot(u_d, np.eye(trunc_index + 1) *
+                         ((s_d ** (-1))[:, None]))  # notation from paper
+
+
     def update(self):
+
+        if self.Am is None:
+            self.ext_Am() # do this only once 
+
         aug_state = at.aug_state(self.current_state, self.list_states)
         aug_prior_state = at.aug_state(self.prior_state, self.list_states)
 
