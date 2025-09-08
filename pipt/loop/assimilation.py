@@ -301,32 +301,20 @@ class Assimilate:
         - ST 7/6-16
         """
         if 'iteration' in self.ensemble.keys_da:
-            # Make sure ITERATION is a list
-            if not isinstance(self.ensemble.keys_da['iteration'][0], list):
-                iter_opts = [self.ensemble.keys_da['iteration']]
-            else:
-                iter_opts = self.ensemble.keys_da['iteration']
-
+            iter_opts = dict(self.ensemble.keys_da['iteration'])
             # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
-            assert 'max_iter' in list(
-                zip(*iter_opts))[0], 'MAX_ITER has not been given in ITERATION!'
-
-            # Extract max. iter
-            max_iter = [item[1] for item in iter_opts if item[0] == 'max_iter'][0]
+            try:
+                max_iter = iter_opts['max_iter']
+            except KeyError:
+                raise AssertionError('MAX_ITER has not been given in ITERATION')
 
         elif 'mda' in self.ensemble.keys_da:
-            # Make sure ITERATION is a list
-            if not isinstance(self.ensemble.keys_da['mda'][0], list):
-                iter_opts = [self.ensemble.keys_da['mda']]
-            else:
-                iter_opts = self.ensemble.keys_da['mda']
-
-            # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
-            assert 'tot_assim_steps' in list(
-                zip(*iter_opts))[0], 'TOT_ASSIM_STEPS has not been given in MDA!'
-
-            # Extract max. iter
-            max_iter = [item[1] for item in iter_opts if item[0] == 'tot_assim_steps'][0]
+            iter_opts = dict(self.ensemble.keys_da['mda'])
+            # Check if 'tot_assim_steps' has been given; if not, raise error (mandatory in MDA)
+            try:
+                max_iter = iter_opts['tot_assim_steps']
+            except KeyError:
+                raise AssertionError('TOT_ASSIM_STEPS has not been given in MDA!')
 
         else:
             max_iter = 1

@@ -3,6 +3,7 @@
 from copy import deepcopy
 import csv
 import datetime as dt
+import pandas as pd
 
 
 class Organize_input():
@@ -108,6 +109,13 @@ class Organize_input():
 
                         pred_prim.extend(csv_data)
                 self.keys_fwd['reportpoint'] = pred_prim
+
+            elif isinstance(self.keys_fwd['reportpoint'], dict):
+                self.keys_fwd['reportpoint'] = pd.date_range(**self.keys_fwd['reportpoint']).to_pydatetime().tolist()
+
+            else:
+                pass
+
 
         # Check if assimindex is given as a csv file. If so, we read and make a potential 2D list (if sequential).
         if 'assimindex' in self.keys_pr:

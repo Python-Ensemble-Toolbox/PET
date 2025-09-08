@@ -6,7 +6,7 @@ import pprint
 
 # Internal imports
 from popt.loop.optimize import Optimize
-import popt.update_schemes.optimizers as opt
+import popt.update_schemes.subroutines.optimizers as opt
 from popt.misc_tools import optim_tools as ot
 
 

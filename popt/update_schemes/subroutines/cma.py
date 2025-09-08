@@ -2,6 +2,8 @@
 import numpy as np
 from popt.misc_tools import optim_tools as ot
 
+__all__ = ['CMA']
+
 class CMA:
 
     def __init__(self, ne, dim, alpha_mu=None, n_mu=None, alpha_1=None, alpha_c=None, corr_update=False, equal_weights=True):

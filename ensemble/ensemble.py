@@ -80,7 +80,7 @@ class Ensemble:
 
         # If it is a restart run, we do not need to initialize anything, only load the self info. that exists in the
         # pickle save file. If it is not a restart run, we initialize everything below.
-        if 'restart' in self.keys_en and self.keys_en['restart'] == 'yes':
+        if ('restart' in self.keys_en) and (self.keys_en['restart'] == 'yes'):
             # Initiate a restart run
             self.logger.info('\033[92m--- Restart run initiated! ---\033[92m')
             # Check if the pickle save file exists in folder
@@ -117,7 +117,7 @@ class Ensemble:
                 self.disable_tqdm = False
 
             # extract information that is given for the prior model
-            self._ext_prior_info()
+            self.prior_info = self._extract_prior_info()
 
             # Calculate initial ensemble if IMPORTSTATICVAR has not been given in init. file.
             # Prior info. on state variables must be given by PRIOR_<STATICVAR-name> keyword.
@@ -172,243 +172,116 @@ class Ensemble:
                         self.error_comp_scheme = self.keys_en['multilevel'][i][2]
                     self.ML_corr_done = False
 
-    def _ext_prior_info(self):
-        """
+    def _extract_prior_info(self) -> dict:
+        '''
         Extract prior information on STATE from keyword(s) PRIOR_<STATE entries>.
-        """
-        # Parse prior info on each state entered in STATE.
-        # Store names given in STATE
-        if not isinstance(self.keys_en['state'], list):  # Single string
-            state_names = [self.keys_en['state']]
-        else:  # List
-            state_names = self.keys_en['state']
+        '''
 
-        # Check if PRIOR_<state names> exists for each entry in STATE
+        # Get state names as list
+        state_names = self.keys_en['state']
+        if not isinstance(state_names, list): state_names = [state_names]
+
+        # Check if PRIOR_<state names> exists for each entry in state
         for name in state_names:
-            assert 'prior_' + name in self.keys_en, \
+            assert f'prior_{name}' in self.keys_en, \
                 'PRIOR_{0} is missing! This keyword is needed to make initial ensemble for {0} entered in ' \
                 'STATE'.format(name.upper())
+        
+        # define dict to store prior information in 
+        prior_info = {name: None for name in state_names}
 
-        # Init. prior info variable
-        self.prior_info = {keys: None for keys in state_names}
-
-        # Loop over each prior keyword and make an initial. ensemble for each state in STATE,
-        # which is subsequently stored in the state dictionary. If 3D grid dimensions are inputted, information for
-        # each layer must be inputted, else the single information will be copied to all layers.
-        grid_dim = np.array([0, 0])
+        # loop over state priors
         for name in state_names:
-            # initiallize an empty dictionary inside the dictionary.
-            self.prior_info[name] = {}
-            # List the option names inputted in prior keyword
-            # opt_list = list(zip(*self.keys_da['prior_'+name]))
-            mean = None
-            self.prior_info[name]['mean'] = mean
-            vario = [None]
-            self.prior_info[name]['vario'] = vario
-            aniso = [None]
-            self.prior_info[name]['aniso'] = aniso
-            angle = [None]
-            self.prior_info[name]['angle'] = angle
-            corr_length = [None]
-            self.prior_info[name]['corr_length'] = corr_length
-            self.prior_info[name]['nx'] = self.prior_info[name]['ny'] = self.prior_info[name]['nz'] = None
+            prior = self.keys_en[f'prior_{name}']
+            
+            # Check if is a list (old way)
+            if isinstance(prior, list):
+                # list of lists - old way of inputting prior information
+                prior_dict = {}
+                for i, opt in enumerate(list(zip(*prior))[0]):
+                    if opt == 'limits':
+                        prior_dict[opt] = prior[i][1:]
+                    else:
+                        prior_dict[opt] = prior[i][1]
+                prior = prior_dict
+            else:
+                assert isinstance(prior, dict), 'PRIOR_{0} must be a dictionary or list of lists!'.format(name.upper())
 
-            # Extract info. from the prior keyword
-            for i, opt in enumerate(list(zip(*self.keys_en['prior_' + name]))[0]):
-                if opt == 'vario':  # Variogram model
-                    if not isinstance(self.keys_en['prior_' + name][i][1], list):
-                        vario = [self.keys_en['prior_' + name][i][1]]
-                    else:
-                        vario = self.keys_en['prior_' + name][i][1]
-                elif opt == 'mean':  # Mean
-                    mean = self.keys_en['prior_' + name][i][1]
-                elif opt == 'var':  # Variance
-                    if not isinstance(self.keys_en['prior_' + name][i][1], list):
-                        variance = [self.keys_en['prior_' + name][i][1]]
-                    else:
-                        variance = self.keys_en['prior_' + name][i][1]
-                elif opt == 'aniso':  # Anisotropy factor
-                    if not isinstance(self.keys_en['prior_' + name][i][1], list):
-                        aniso = [self.keys_en['prior_' + name][i][1]]
-                    else:
-                        aniso = self.keys_en['prior_' + name][i][1]
-                elif opt == 'angle':  # Anisotropy angle
-                    if not isinstance(self.keys_en['prior_' + name][i][1], list):
-                        angle = [self.keys_en['prior_' + name][i][1]]
-                    else:
-                        angle = self.keys_en['prior_' + name][i][1]
-                elif opt == 'range':  # Correlation length
-                    if not isinstance(self.keys_en['prior_' + name][i][1], list):
-                        corr_length = [self.keys_en['prior_' + name][i][1]]
-                    else:
-                        corr_length = self.keys_en['prior_' + name][i][1]
-                elif opt == 'grid':  # Grid dimensions
-                    grid_dim = self.keys_en['prior_' + name][i][1]
-                elif opt == 'limits':  # Truncation values
-                    limits = self.keys_en['prior_' + name][i][1:]
-                elif opt == 'active':  # Number of active cells (single number)
-                    active = self.keys_en['prior_' + name][i][1]
 
-            # Check if mean needs to be loaded, or if loaded
-            if type(mean) is str:
-                assert mean.endswith('.npz'), 'File name does not end with \'.npz\'!'
-                load_file = np.load(mean)
+            # load mean if in file
+            if isinstance(prior['mean'], str):
+                assert prior['mean'].endswith('.npz'), 'File name does not end with \'.npz\'!'
+                load_file = np.load(prior['mean'])
                 assert len(load_file.files) == 1, \
                     'More than one variable located in {0}. Only the mean vector can be stored in the .npz file!' \
-                    .format(mean)
-                mean = load_file[load_file.files[0]]
+                    .format(prior['mean'])
+                prior['mean'] = load_file[load_file.files[0]]
             else:  # Single number inputted, make it a list if not already
-                if not isinstance(mean, list):
-                    mean = [mean]
+                if not isinstance(prior['mean'], list):
+                    prior['mean'] = [prior['mean']]
 
-            # Check if limits exists
-            try:
-                limits
-            except NameError:
-                limits = None
+            # loop over keys in prior
+            for key in prior.keys():
+                # ensure that entry is a list
+                if (not isinstance(prior[key], list)) and (key != 'mean'):
+                    prior[key] = [prior[key]]
 
-            # check if active exists
-            try:
-                active
-            except NameError:
-                active = None
+            # change the name of some keys
+            prior['variance'] = prior.pop('var', None)
+            prior['corr_length'] = prior.pop('range', None)
 
-            # Extract x- and y-dim
-            nx = int(grid_dim[0])
-            ny = int(grid_dim[1])
+            # process grid
+            if 'grid' in prior:
+                grid_dim = prior['grid']
 
-            # Check if 3D grid inputted. If so, we check if info. has been given on all layers. In the case it has
-            # not been given, we just copy the info. given.
-            if len(grid_dim) == 3 and grid_dim[2] > 1:  # 3D
-                nz = int(grid_dim[2])
+                # check if 3D-grid
+                if (len(grid_dim) == 3) and (grid_dim[2] > 1):
+                    nz = int(grid_dim[2])
+                    prior['nz'] = nz
+                    prior['nx'] = int(grid_dim[0])
+                    prior['ny'] = int(grid_dim[1])
+                    
 
-                # Check mean when values have been inputted directly (not when mean has been loaded)
-                if isinstance(mean, list) and len(mean) < nz:
-                    # Check if it is more than one entry and give error
-                    assert len(mean) == 1, \
-                        'Information from MEAN has been given for {0} layers, whereas {1} is needed!' \
-                        .format(len(mean), nz)
+                    # Check mean when values have been inputted directly (not when mean has been loaded)
+                    mean = prior['mean']
+                    if isinstance(mean, list) and len(mean) < nz:
+                         # Check if it is more than one entry and give error
+                        assert len(mean) == 1, \
+                            'Information from MEAN has been given for {0} layers, whereas {1} is needed!' \
+                            .format(len(mean), nz)
 
-                    # Only 1 entry; copy this to all layers
-                    print(
-                        '\033[1;33mSingle entry for MEAN will be copied to all {0} layers\033[1;m'.format(nz))
-                    self.prior_info[name]['mean'] = mean * nz
+                        # Only 1 entry; copy this to all layers
+                        print(
+                            '\033[1;33mSingle entry for MEAN will be copied to all {0} layers\033[1;m'.format(nz))
+                        prior['mean'] = mean * nz
 
-                else:
-                    self.prior_info[name]['mean'] = mean
+                    #check if info. has been given on all layers. In the case it has not been given, we just copy the info. given.
+                    for key in ['vario', 'variance', 'aniso', 'angle', 'corr_length']:
+                        if key in prior.keys():
+                            val = prior[key]
+                            if len(val) < nz:
+                                # Check if it is more than one entry and give error
+                                assert len(val) == 1, \
+                                    'Information from {0} has been given for {1} layers, whereas {2} is needed!' \
+                                    .format(key.upper(), len(val), nz)
 
-                # Check variogram model
-                if len(vario) < nz:
-                    # Check if it is more than one entry and give error
-                    assert len(vario) == 1, \
-                        'Information from VARIO has been given for {0} layers, whereas {1} is needed!' \
-                        .format(len(vario), nz)
-
-                    # Only 1 entry; copy this to all layers
-                    print(
-                        '\033[1;33mSingle entry for VARIO will be copied to all {0} layers\033[1;m'.format(nz))
-                    self.prior_info[name]['vario'] = vario * nz
-
-                else:
-                    self.prior_info[name]['vario'] = vario
-
-                # Variance
-                if len(variance) < nz:
-                    # Check if it is more than one entry and give error
-                    assert len(variance) == 1, \
-                        'Information from VAR has been given for {0} layers, whereas {1} is needed!' \
-                        .format(len(variance), nz)
-
-                    # Only 1 entry; copy this to all layers
-                    print(
-                        '\033[1;33mSingle entry for VAR will be copied to all {0} layers\033[1;m'.format(nz))
-                    self.prior_info[name]['variance'] = variance * nz
+                                # Only 1 entry; copy this to all layers
+                                print(
+                                    '\033[1;33mSingle entry for {0} will be copied to all {1} layers\033[1;m'.format(key.upper(), nz))
+                                prior[key] = val * nz
 
                 else:
-                    self.prior_info[name]['variance'] = variance
+                    prior['nx'] = int(grid_dim[0])
+                    prior['ny'] = int(grid_dim[1])
+                    prior['nz'] = 1
 
-                # Aniso factor
-                if len(aniso) < nz:
-                    # Check if it is more than one entry and give error
-                    assert len(aniso) == 1, \
-                        'Information from ANISO has been given for {0} layers, whereas {1} is needed!' \
-                        .format(len(aniso), nz)
+            prior.pop('grid', None)
 
-                    # Only 1 entry; copy this to all layers
-                    print(
-                        '\033[1;33mSingle entry for ANISO will be copied to all {0} layers\033[1;m'.format(nz))
-                    self.prior_info[name]['aniso'] = aniso * nz
-
-                else:
-                    self.prior_info[name]['aniso'] = aniso
-
-                # Aniso factor
-                if len(angle) < nz:
-                    # Check if it is more than one entry and give error
-                    assert len(angle) == 1, \
-                        'Information from ANGLE has been given for {0} layers, whereas {1} is needed!' \
-                        .format(len(angle), nz)
-
-                    # Only 1 entry; copy this to all layers
-                    print(
-                        '\033[1;33mSingle entry for ANGLE will be copied to all {0} layers\033[1;m'.format(nz))
-                    self.prior_info[name]['angle'] = angle * nz
-
-                else:
-                    self.prior_info[name]['angle'] = angle
-
-                # Corr. length
-                if len(corr_length) < nz:
-                    # Check if it is more than one entry and give error
-                    assert len(corr_length) == 1, \
-                        'Information from RANGE has been given for {0} layers, whereas {1} is needed!' \
-                        .format(len(corr_length), nz)
-
-                    # Only 1 entry; copy this to all layers
-                    print(
-                        '\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
-                    self.prior_info[name]['corr_length'] = corr_length * nz
-
-                else:
-                    self.prior_info[name]['corr_length'] = corr_length
-
-                # Limits, if exists
-                if limits is not None:
-                    self.prior_info[name]['limits'] = limits
-
-                    # if isinstance(limits[0], list) and len(limits) < nz or \
-                    #         not isinstance(limits[0], list) and len(limits) < 2 * nz:
-                    #     # Check if it is more than one entry and give error
-                    #     assert (isinstance(limits[0], list) and len(limits) == 1), \
-                    #         'Information from LIMITS has been given for {0} layers, whereas {1} is needed!' \
-                    #         .format(len(limits), nz)
-                    #     assert (not isinstance(limits[0], list) and len(limits) == 2), \
-                    #         'Information from LIMITS has been given for {0} layers, whereas {1} is needed!' \
-                    #         .format(len(limits) / 2, nz)
-                    #
-                    #     # Only 1 entry; copy this to all layers
-                    #     print(
-                    #         '\033[1;33mSingle entry for RANGE will be copied to all {0} layers\033[1;m'.format(nz))
-                    #     self.prior_info[name]['limits'] = [limits] * nz
-
-            else:  # 2D grid only, or optimization case
-                nz = 1
-                self.prior_info[name]['mean'] = mean
-                self.prior_info[name]['vario'] = vario
-                self.prior_info[name]['variance'] = variance
-                self.prior_info[name]['aniso'] = aniso
-                self.prior_info[name]['angle'] = angle
-                self.prior_info[name]['corr_length'] = corr_length
-                if limits is not None:
-                    self.prior_info[name]['limits'] = limits
-                if active is not None:
-                    self.prior_info[name]['active'] = active
-
-            self.prior_info[name]['nx'] = nx
-            self.prior_info[name]['ny'] = ny
-            self.prior_info[name]['nz'] = nz
-
-        # Loop over keys and input
+            # add prior to prior_info
+            prior_info[name] = prior
+            
+        return prior_info
+                
 
     def gen_init_ensemble(self):
         """
@@ -427,21 +300,21 @@ class Ensemble:
             ind_end = 0
 
             # Extract info.
-            nz = self.prior_info[name]['nz']
-            mean = self.prior_info[name]['mean']
-            nx = self.prior_info[name]['nx']
-            ny = self.prior_info[name]['ny']
+            nx = self.prior_info[name].get('nx', 0)
+            ny = self.prior_info[name].get('ny', 0)
+            nz = self.prior_info[name].get('nz', 0)
+            mean = self.prior_info[name].get('mean', None)
+
             if nx == ny == 0:  # assume ensemble will be generated elsewhere if dimensions are zero
                 break
-            variance = self.prior_info[name]['variance']
-            corr_length = self.prior_info[name]['corr_length']
-            aniso = self.prior_info[name]['aniso']
-            vario = self.prior_info[name]['vario']
-            angle = self.prior_info[name]['angle']
-            if 'limits' in self.prior_info[name]:
-                limits = self.prior_info[name]['limits']
-            else:
-                limits = None
+
+            variance = self.prior_info[name].get('variance', None)
+            corr_length = self.prior_info[name].get('corr_length', None)
+            aniso = self.prior_info[name].get('aniso', None)
+            vario = self.prior_info[name].get('vario', None)
+            angle = self.prior_info[name].get('angle', None)
+            limits= self.prior_info[name].get('limits',None)
+            
 
             # Loop over nz to make layers of 2D priors
             for i in range(self.prior_info[name]['nz']):
