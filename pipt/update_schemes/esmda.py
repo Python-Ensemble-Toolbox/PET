@@ -70,7 +70,7 @@ class esmdaMixIn(Ensemble):
             self._ext_obs()
             self.real_obs_data_conv = deepcopy(self.real_obs_data)
             # Get state scaling and svd of scaled prior
-            self._ext_state()
+            self._ext_scaling()
             self.current_state = deepcopy(self.state)
         # Extract the inflation parameter from MDA keyword
         self.alpha = self._ext_inflation_param()
