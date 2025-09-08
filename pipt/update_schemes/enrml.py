@@ -250,36 +250,22 @@ class lmenrmlMixIn(Ensemble):
         file. These parameters include convergence tolerances and parameters for the damping parameter. Default
         values for these parameters have been given here, if they are not provided in ITERATION.
         """
+        try:
+            options = dict(self.keys_da['iteration'])
+        except:
+            options = dict([self.keys_da['iteration']])
 
-        # Predefine all the default values
-        self.data_misfit_tol = 0.01
-        self.step_tol = 0.01
-        self.lam = 100
-        self.lam_max = 1e10
-        self.lam_min = 0.01
-        self.gamma = 5
-        self.trunc_energy = 0.95
+        # unpack options
+        self.data_misfit_tol = options.get('data_misfit_tol', 0.01)
+        self.trunc_energy = options.get('energy', 0.95)
+        self.step_tol  = options.get('step_tol', 0.01)
+        self.lam       = options.get('lambda', 100)
+        self.lam_max   = options.get('lambda_max', 1e10)
+        self.lam_min   = options.get('lambda_min', 0.01)
+        self.gamma     = options.get('lambda_factor', 5)
         self.iteration = 0
 
-        # Loop over options in ITERATION and extract the parameters we want
-        for i, opt in enumerate(list(zip(*self.keys_da['iteration']))[0]):
-            if opt == 'data_misfit_tol':
-                self.data_misfit_tol = self.keys_da['iteration'][i][1]
-            if opt == 'step_tol':
-                self.step_tol = self.keys_da['iteration'][i][1]
-            if opt == 'lambda':
-                self.lam = self.keys_da['iteration'][i][1]
-            if opt == 'lambda_max':
-                self.lam_max = self.keys_da['iteration'][i][1]
-            if opt == 'lambda_min':
-                self.lam_min = self.keys_da['iteration'][i][1]
-            if opt == 'lambda_factor':
-                self.gamma = self.keys_da['iteration'][i][1]
-
-        if 'energy' in self.keys_da:
-            # initial energy (Remember to extract this)
-            self.trunc_energy = self.keys_da['energy']
-            if self.trunc_energy > 1:  # ensure that it is given as percentage
+        if self.trunc_energy > 1:  # ensure that it is given as percentage
                 self.trunc_energy /= 100.
 
 
@@ -593,33 +579,19 @@ class gnenrmlMixIn(Ensemble):
         file. These parameters include convergence tolerances and parameters for the damping parameter. Default
         values for these parameters have been given here, if they are not provided in ITERATION.
         """
+        try:
+            options = dict(self.keys_da['iteration'])
+        except:
+            options = dict([self.keys_da['iteration']])
+        
+        self.data_misfit_tol = options.get('data_misfit_tol', 0.01)
+        self.trunc_energy = options.get('energy', 0.95)
+        self.step_tol     = options.get('step_tol', 0.01)
+        self.gamma        = options.get('gamma', 0.2)
+        self.gamma_max    = options.get('gamma_max', 0.5)
+        self.gamma_factor = options.get('gamma_factor', 2.5)
 
-        # Predefine all the default values
-        self.data_misfit_tol = 0.01
-        self.step_tol = 0.01
-        self.gamma = 0.2
-        self.gamma_max = 0.5
-        self.gamma_factor = 2.5
-        self.trunc_energy = 0.95
-        self.iteration = 0
-
-        # Loop over options in ITERATION and extract the parameters we want
-        for i, opt in enumerate(list(zip(*self.keys_da['iteration']))[0]):
-            if opt == 'data_misfit_tol':
-                self.data_misfit_tol = self.keys_da['iteration'][i][1]
-            if opt == 'step_tol':
-                self.step_tol = self.keys_da['iteration'][i][1]
-            if opt == 'gamma':
-                self.gamma = self.keys_da['iteration'][i][1]
-            if opt == 'gamma_max':
-                self.gamma_max = self.keys_da['iteration'][i][1]
-            if opt == 'gamma_factor':
-                self.gamma_factor = self.keys_da['iteration'][i][1]
-
-        if 'energy' in self.keys_da:
-            # initial energy (Remember to extract this)
-            self.trunc_energy = self.keys_da['energy']
-            if self.trunc_energy > 1:  # ensure that it is given as percentage
+        if self.trunc_energy > 1:  # ensure that it is given as percentage
                 self.trunc_energy /= 100.
 
 

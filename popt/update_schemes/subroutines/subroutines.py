@@ -1,8 +1,15 @@
-# This is a an implementation of the Line Search Algorithm (Alg. 3.5) in Numerical Optimization from Nocedal 2006.
-
 import numpy as np
+import numpy.linalg as la
 from functools import cache
 from scipy.optimize._linesearch import _quadmin, _cubicmin
+
+__all__ = [
+    'line_search', 
+    'zoom', 
+    'line_search_backtracking', 
+    'bfgs_update', 
+    'newton_cg'
+] 
 
 
 def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
@@ -305,3 +312,86 @@ def line_search_backtracking(step_size, xk, pk, fun, jac, fk=None, jk=None, **kw
 
     # If we reached this point, the line search failed
     return None, None, None, ls_nfev, ls_njev  
+
+
+def bfgs_update(Hk, sk, yk):
+    """
+    Perform the BFGS update of the inverse Hessian approximation.
+
+    Parameters:
+    - Hk: np.ndarray, current inverse Hessian approximation (n x n)
+    - sk: np.ndarray, step vector (x_{k+1} - x_k), shape (n,)
+    - yk: np.ndarray, gradient difference (grad_{k+1} - grad_k), shape (n,)
+
+    Returns:
+    - Hk_new: np.ndarray, updated inverse Hessian approximation
+    """
+    sk = sk.reshape(-1, 1)
+    yk = yk.reshape(-1, 1)
+    rho = 1.0 / (yk.T @ sk)
+
+    if rho <= 0:
+        print('Non-positive curvature detected. BFGS update skipped....')
+        return Hk
+
+    I = np.eye(Hk.shape[0])
+    Vk = I - rho * sk @ yk.T
+    Hk_new = Vk @ Hk @ Vk.T + rho * sk @ sk.T
+
+    return Hk_new
+
+def newton_cg(gk, Hk=None, maxiter=None, **kwargs):
+
+    # Check for logger
+    logger = kwargs.get('logger', None)
+    if logger is None:
+        logger = print
+    
+    logger('Running Newton-CG subroutine..........')
+
+    if Hk is None:
+        jac = kwargs.get('jac')
+        eps = kwargs.get('eps', 1e-4)
+        xk  = kwargs.get('xk')
+
+        # define a finite difference approximation of the Hessian times a vector
+        def Hessd(d):
+            return (jac(xk + eps*d) - gk)/eps
+
+    if maxiter is None:
+        maxiter = 20*gk.size # Same dfault as in scipy
+
+    tol = min(0.5, np.sqrt(la.norm(gk)))*la.norm(gk)
+    z = 0
+    r = gk
+    d = -r
+
+    for j in range(maxiter):
+        logger(f'iteration: {j}')
+        if Hk is None:
+            Hd = Hessd(d)
+        else:
+            Hd = np.matmul(Hk, d)
+
+        dTHd = np.dot(d, Hd)
+
+        if dTHd <= 0:
+            logger('Negative curvature detected, terminating subroutine')
+            logger('')
+            if j == 0:
+                return -gk
+            else:
+                return z
+            
+        rold = r
+        a = np.dot(r,r)/dTHd
+        z = z + a*d
+        r = r + a*Hd
+
+        if la.norm(r) < tol:
+            logger('Subroutine converged')
+            logger('')
+            return z
+
+        b = np.dot(r, r)/np.dot(rold, rold)
+        d = -r + b*d

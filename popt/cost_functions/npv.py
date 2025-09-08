@@ -38,9 +38,7 @@ def npv(pred_data, **kwargs):
     report = kwargs.get('true_order', [])
 
     # Economic values
-    npv_const = {}
-    for name, value in keys_opt['npv_const']:
-        npv_const[name] = value
+    npv_const = dict(keys_opt['npv_const'])
 
     values = []
     for i in np.arange(1, len(pred_data)):

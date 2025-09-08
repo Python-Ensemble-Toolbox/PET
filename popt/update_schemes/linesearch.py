@@ -10,7 +10,7 @@ from scipy.optimize import OptimizeResult
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
-from popt.update_schemes.line_search_step import line_search, line_search_backtracking
+from popt.update_schemes.subroutines import line_search, line_search_backtracking, bfgs_update, newton_cg
 
 # Some symbols for logger
 subk = '\u2096'
@@ -37,8 +37,8 @@ def LineSearch(fun, x, jac, method='GD', hess=None, args=(), bounds=None, callba
     
     method: str
         Which optimization method to use. Default is 'GD' for 'Gradient Descent'.
-        Other options are 'BFGS' for the 'Broyden–Fletcher–Goldfarb–Shanno' method,
-        and 'Newton-CG'.  
+        Other options are 'BFGS' for the 'Broyden-Fletcher-Goldfarb-Shanno' method,
+        and 'Newton-CG' for the Newton-conjugate gradient method.  
     
     hess: callable, optional
         Hessian function, hess(x, *args). Default is None. 
@@ -340,7 +340,7 @@ class LineSearchClass(Optimize):
         if self.method == 'BFGS':
             pk = - np.matmul(self.Hk_inv, self.jk)
         if self.method == 'Newton-CG':
-            pk = newton_cg(self.jk, Hk=self.Hk, xk=self.xk, jac=self._jac, eps=1e-4)
+            pk = newton_cg(self.jk, Hk=self.Hk, xk=self.xk, jac=self._jac, logger=self.logger.info)
 
         # porject search direction onto the feasible set
         if self.bounds is not None:
@@ -559,82 +559,6 @@ class LineSearchClass(Optimize):
         return max(amax)
 
 
-
-def bfgs_update(Hk, sk, yk):
-    """
-    Perform the BFGS update of the inverse Hessian approximation.
-
-    Parameters:
-    - Hk: np.ndarray, current inverse Hessian approximation (n x n)
-    - sk: np.ndarray, step vector (x_{k+1} - x_k), shape (n,)
-    - yk: np.ndarray, gradient difference (grad_{k+1} - grad_k), shape (n,)
-
-    Returns:
-    - Hk_new: np.ndarray, updated inverse Hessian approximation
-    """
-    sk = sk.reshape(-1, 1)
-    yk = yk.reshape(-1, 1)
-    rho = 1.0 / (yk.T @ sk)
-
-    if rho <= 0:
-        print('Non-positive curvature detected. BFGS update skipped....')
-        return Hk
-
-    I = np.eye(Hk.shape[0])
-    Vk = I - rho * sk @ yk.T
-    Hk_new = Vk @ Hk @ Vk.T + rho * sk @ sk.T
-
-    return Hk_new
-
-def newton_cg(gk, Hk=None, maxiter=None, **kwargs):
-    print('\nRunning Newton-CG subroutine...')
-
-    if Hk is None:
-        jac = kwargs.get('jac')
-        eps = kwargs.get('eps', 1e-4)
-        xk  = kwargs.get('xk')
-
-        # define a finite difference approximation of the Hessian times a vector
-        def Hessd(d):
-            return (jac(xk + eps*d) - gk)/eps
-
-    if maxiter is None:
-        maxiter = 20*gk.size # Same dfault as in scipy
-
-    tol = min(0.5, np.sqrt(la.norm(gk)))*la.norm(gk)
-    z = 0
-    r = gk
-    d = -r
-
-    for j in range(maxiter):
-        print('iteration: ', j)
-        if Hk is None:
-            Hd = Hessd(d)
-        else:
-            Hd = np.matmul(Hk, d)
-
-        dTHd = np.dot(d, Hd)
-
-        if dTHd <= 0:
-            print('Negative curvature detected, terminating subroutine')
-            print('\n')
-            if j == 0:
-                return -gk
-            else:
-                return z
-            
-        rold = r
-        a = np.dot(r,r)/dTHd
-        z = z + a*d
-        r = r + a*Hd
-
-        if la.norm(r) < tol:
-            print('Subroutine converged')
-            print('\n')
-            return z
-
-        b = np.dot(r, r)/np.dot(rold, rold)
-        d = -r + b*d
 
                 
 

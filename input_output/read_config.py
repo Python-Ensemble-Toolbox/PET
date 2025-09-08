@@ -51,6 +51,12 @@ def read_yaml(init_file):
         y = yaml.load(fid, Loader=FullLoader)
 
     # Check for dataassim and fwdsim
+    if 'ensemble' in y.keys():
+        keys_en = y['ensemble']
+        check_mand_keywords_en(keys_en)
+    else:
+        keys_en = None
+
     if 'optim' in y.keys():
         keys_pr = y['optim']
         check_mand_keywords_opt(keys_pr)
@@ -59,16 +65,17 @@ def read_yaml(init_file):
         check_mand_keywords_da(keys_pr)
     else:
         raise KeyError
+    
     if 'fwdsim' in y.keys():
         keys_fwd = y['fwdsim']
     else:
         raise KeyError
 
     # Organize keywords
-    org = Organize_input(keys_pr, keys_fwd)
+    org = Organize_input(keys_pr, keys_fwd, keys_en)
     org.organize()
 
-    return org.get_keys_pr(), org.get_keys_fwd()
+    return org.get_keys_pr(), org.get_keys_fwd(), org.get_keys_en()
 
 
 def convert_txt_to_toml(init_file):

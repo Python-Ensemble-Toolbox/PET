@@ -8,7 +8,7 @@ import pprint
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
-import popt.update_schemes.optimizers as opt
+import popt.update_schemes.subroutines.optimizers as opt
 
 
 class EnOpt(Optimize):

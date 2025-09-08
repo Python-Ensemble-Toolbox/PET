@@ -32,9 +32,7 @@ def ren_npv(pred_data, kwargs):
     report = kwargs.get('true_order', [])
 
     # Economic values
-    npv_const = {}
-    for name, value in keys_opt['npv_const']:
-        npv_const[name] = value
+    npv_const = dict(keys_opt['npv_const'])
 
     # Loop over timesteps
     values = []

@@ -31,7 +31,7 @@ class esmdaMixIn(Ensemble):
 
         Parameters
         ----------
-        keys_da['mda'] : list
+        keys_da['mda'] : dict
             - tot_assim_steps: total number of iterations in MDA, e.g., 3
             - inflation_param: covariance inflation factors, e.g., [2, 4, 4]
 
@@ -222,17 +222,16 @@ class esmdaMixIn(Ensemble):
         alpha: list
             Data covariance inflation factor
         """
-        # Make sure MDA is a list
-        if not isinstance(self.keys_da['mda'][0], list):
-            mda_opts = [self.keys_da['mda']]
-        else:
-            mda_opts = self.keys_da['mda']
+        try:
+            mda_opts = dict(self.keys_da['mda'])
+        except:
+            mda_opts = dict([self.keys_da['mda']])
 
         # Check if INFLATION_PARAM has been provided, and if so, extract the value(s). If not, we set alpha to the
         # default value equal to the tot. no. assim. steps
-        if 'inflation_param' in list(zip(*mda_opts))[0]:
+        if 'inflation_param' in mda_opts:
             # Extract value
-            alpha_tmp = [item[1] for item in mda_opts if item[0] == 'inflation_param'][0]
+            alpha_tmp = mda_opts['inflation_param']
 
             # If one value is given, we copy it to all assim. steps. If multiple values are given, we check the
             # number of parameters corresponds to tot. no. assim. steps
@@ -279,22 +278,17 @@ class esmdaMixIn(Ensemble):
         - ST 7/6-16
         - ST 1/3-17: Changed to output list of assim. steps instead of just tot. assim. steps
         """
-        # Make sure MDA is a list
-        if not isinstance(self.keys_da['mda'][0], list):
-            mda_opts = [self.keys_da['mda']]
-        else:
-            mda_opts = self.keys_da['mda']
+        try:
+            mda_opts = dict(self.keys_da['mda'])
+        except:
+            mda_opts = dict([self.keys_da['mda']])
 
+    
         # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
-        assert 'tot_assim_steps' in list(
-            zip(*mda_opts))[0], 'TOT_ASSIM_STEPS has not been given in MDA!'
-
-        # Extract max. iter
-        tot_no_assim = int([item[1]
-                           for item in mda_opts if item[0] == 'tot_assim_steps'][0])
-
-        # Make a list of assim. steps
-        assim_steps = list(range(tot_no_assim))
+        try:
+            assim_steps = list(range(int(mda_opts['tot_assim_steps'])))
+        except KeyError:
+            raise AssertionError('TOT_ASSIM_STEPS has not been given in MDA!')
 
         # If it is a restart run, we remove simulations already done
         if self.restart is True:

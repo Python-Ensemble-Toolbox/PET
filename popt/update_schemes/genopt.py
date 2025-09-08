@@ -7,8 +7,8 @@ import time
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
-import popt.update_schemes.optimizers as opt
-from popt.update_schemes.cma import CMA
+import popt.update_schemes.subroutines.optimizers as opt
+from popt.update_schemes.subroutines.cma import CMA
 
 
 class GenOpt(Optimize):
