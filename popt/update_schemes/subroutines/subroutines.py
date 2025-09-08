@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.linalg as la
-from functools import cache
+from functools import lru_cache
 from scipy.optimize._linesearch import _quadmin, _cubicmin
 
 __all__ = [
@@ -85,7 +85,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
     assert step_size <= amax, "Initial step size must be less than or equal to amax."
 
     # Define phi and derivative of phi
-    @cache
+    @lru_cache(maxsize=None)
     def phi(alpha):
         global ls_nfev
         if (alpha == 0):
@@ -100,7 +100,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
             ls_nfev += 1
         return phi.fun_val
     
-    @cache
+    @lru_cache(maxsize=None)
     def dphi(alpha):
         global ls_njev
         if (alpha == 0):
@@ -281,7 +281,7 @@ def line_search_backtracking(step_size, xk, pk, fun, jac, fk=None, jk=None, **kw
     c1 = kwargs.get('c1', 1e-4)
 
     # Define phi and derivative of phi
-    @cache
+    @lru_cache(maxsize=None)
     def phi(alpha):
         global ls_nfev
         if (alpha == 0):
