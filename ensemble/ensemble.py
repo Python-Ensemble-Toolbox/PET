@@ -18,11 +18,14 @@ import logging
 
 # Internal imports
 import pipt.misc_tools.analysis_tools as at
+import pipt.misc_tools.extract_tools as extract
+
 from geostat.decomp import Cholesky  # Making realizations
 from pipt.misc_tools import cov_regularization
 from pipt.misc_tools import wavelet_tools as wt
 from misc import read_input_csv as rcsv
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
+
 
 
 class Ensemble:
@@ -56,11 +59,13 @@ class Ensemble:
         self.aux_input = None
 
         # Setup logger
-        logging.basicConfig(level=logging.INFO,
-                            filename='pet_logger.log',
-                            filemode='w',
-                            format='%(asctime)s : %(levelname)s : %(name)s : %(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S')
+        logging.basicConfig(
+            level=logging.INFO,
+            filename='pet_logger.log',
+            filemode='w',
+            format='%(asctime)s : %(levelname)s : %(name)s : %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
         self.logger = logging.getLogger('PET')
 
         # Check if folder contains any En_ files, and remove them!
@@ -117,7 +122,7 @@ class Ensemble:
                 self.disable_tqdm = False
 
             # extract information that is given for the prior model
-            self.prior_info = self._extract_prior_info()
+            self.prior_info = extract.extract_prior_info(self.keys_en)
 
             # Calculate initial ensemble if IMPORTSTATICVAR has not been given in init. file.
             # Prior info. on state variables must be given by PRIOR_<STATICVAR-name> keyword.
@@ -143,7 +148,12 @@ class Ensemble:
                     print('\033[1;33mInput states have different ensemble size\033[1;m')
                     sys.exit(1)
                 self.ne = min(tmp_ne)
-        self._ext_ml_info()
+
+        # extract multi-level info (if needed)
+        if 'multilevel' in self.keys_en:
+            ml_info = extract.extract_multilevel_info(self.keys_en)
+            self.multilevel, self.tot_level, self.ml_ne, self.ML_error_corr, self.error_comp_scheme, self.ML_corr_done = ml_info
+        #self._ext_ml_info()
 
     def _ext_ml_info(self):
         '''
@@ -172,117 +182,7 @@ class Ensemble:
                         self.error_comp_scheme = self.keys_en['multilevel'][i][2]
                     self.ML_corr_done = False
 
-    def _extract_prior_info(self) -> dict:
-        '''
-        Extract prior information on STATE from keyword(s) PRIOR_<STATE entries>.
-        '''
-
-        # Get state names as list
-        state_names = self.keys_en['state']
-        if not isinstance(state_names, list): state_names = [state_names]
-
-        # Check if PRIOR_<state names> exists for each entry in state
-        for name in state_names:
-            assert f'prior_{name}' in self.keys_en, \
-                'PRIOR_{0} is missing! This keyword is needed to make initial ensemble for {0} entered in ' \
-                'STATE'.format(name.upper())
-        
-        # define dict to store prior information in 
-        prior_info = {name: None for name in state_names}
-
-        # loop over state priors
-        for name in state_names:
-            prior = self.keys_en[f'prior_{name}']
-            
-            # Check if is a list (old way)
-            if isinstance(prior, list):
-                # list of lists - old way of inputting prior information
-                prior_dict = {}
-                for i, opt in enumerate(list(zip(*prior))[0]):
-                    if opt == 'limits':
-                        prior_dict[opt] = prior[i][1:]
-                    else:
-                        prior_dict[opt] = prior[i][1]
-                prior = prior_dict
-            else:
-                assert isinstance(prior, dict), 'PRIOR_{0} must be a dictionary or list of lists!'.format(name.upper())
-
-
-            # load mean if in file
-            if isinstance(prior['mean'], str):
-                assert prior['mean'].endswith('.npz'), 'File name does not end with \'.npz\'!'
-                load_file = np.load(prior['mean'])
-                assert len(load_file.files) == 1, \
-                    'More than one variable located in {0}. Only the mean vector can be stored in the .npz file!' \
-                    .format(prior['mean'])
-                prior['mean'] = load_file[load_file.files[0]]
-            else:  # Single number inputted, make it a list if not already
-                if not isinstance(prior['mean'], list):
-                    prior['mean'] = [prior['mean']]
-
-            # loop over keys in prior
-            for key in prior.keys():
-                # ensure that entry is a list
-                if (not isinstance(prior[key], list)) and (key != 'mean'):
-                    prior[key] = [prior[key]]
-
-            # change the name of some keys
-            prior['variance'] = prior.pop('var', None)
-            prior['corr_length'] = prior.pop('range', None)
-
-            # process grid
-            if 'grid' in prior:
-                grid_dim = prior['grid']
-
-                # check if 3D-grid
-                if (len(grid_dim) == 3) and (grid_dim[2] > 1):
-                    nz = int(grid_dim[2])
-                    prior['nz'] = nz
-                    prior['nx'] = int(grid_dim[0])
-                    prior['ny'] = int(grid_dim[1])
-                    
-
-                    # Check mean when values have been inputted directly (not when mean has been loaded)
-                    mean = prior['mean']
-                    if isinstance(mean, list) and len(mean) < nz:
-                         # Check if it is more than one entry and give error
-                        assert len(mean) == 1, \
-                            'Information from MEAN has been given for {0} layers, whereas {1} is needed!' \
-                            .format(len(mean), nz)
-
-                        # Only 1 entry; copy this to all layers
-                        print(
-                            '\033[1;33mSingle entry for MEAN will be copied to all {0} layers\033[1;m'.format(nz))
-                        prior['mean'] = mean * nz
-
-                    #check if info. has been given on all layers. In the case it has not been given, we just copy the info. given.
-                    for key in ['vario', 'variance', 'aniso', 'angle', 'corr_length']:
-                        if key in prior.keys():
-                            val = prior[key]
-                            if len(val) < nz:
-                                # Check if it is more than one entry and give error
-                                assert len(val) == 1, \
-                                    'Information from {0} has been given for {1} layers, whereas {2} is needed!' \
-                                    .format(key.upper(), len(val), nz)
-
-                                # Only 1 entry; copy this to all layers
-                                print(
-                                    '\033[1;33mSingle entry for {0} will be copied to all {1} layers\033[1;m'.format(key.upper(), nz))
-                                prior[key] = val * nz
-
-                else:
-                    prior['nx'] = int(grid_dim[0])
-                    prior['ny'] = int(grid_dim[1])
-                    prior['nz'] = 1
-
-            prior.pop('grid', None)
-
-            # add prior to prior_info
-            prior_info[name] = prior
-            
-        return prior_info
-                
-
+    
     def gen_init_ensemble(self):
         """
         Generate the initial ensemble of (joint) state vectors using the GeoStat class in the "geostat" package.
@@ -352,6 +252,80 @@ class Ensemble:
         
         # Save the ensemble for later inspection
         np.savez('prior.npz', **self.state)
+
+    def generate_state_ensemble(self):
+        # Initialize GeoStat
+        generator = Cholesky()
+
+        # Initialize state and cov
+        enX  = {}
+        covX = {}
+
+        # Loop over statenames in prior_info
+        for name in self.prior_info.keys():
+            # Init. indices to pick out correct mean vector for each layer
+            ind_end = 0
+
+            # Extract info.
+            nx = self.prior_info[name].get('nx', 0)
+            ny = self.prior_info[name].get('ny', 0)
+            nz = self.prior_info[name].get('nz', 0)
+            mean = self.prior_info[name].get('mean', None)
+
+            if nx == ny == 0:  # assume ensemble will be generated elsewhere if dimensions are zero
+                break
+
+            variance = self.prior_info[name].get('variance', None)
+            corr_length = self.prior_info[name].get('corr_length', None)
+            aniso = self.prior_info[name].get('aniso', None)
+            vario = self.prior_info[name].get('vario', None)
+            angle = self.prior_info[name].get('angle', None)
+            limits= self.prior_info[name].get('limits',None)
+
+            # Loop over nz to make layers of 2D priors
+            for i in range(self.prior_info[name]['nz']):
+                # If mean is scalar, no covariance matrix is needed
+
+                if type(self.prior_info[name]['mean']).__module__ == 'numpy':
+                    # Generate covariance matrix
+                    cov = generator.gen_cov2d(
+                        nx, 
+                        ny, 
+                        variance[i], 
+                        corr_length[i], 
+                        aniso[i], 
+                        angle[i], 
+                        vario[i]
+                    )
+                else:
+                    cov = np.array(variance[i])
+
+                # Pick out the mean vector for the current layer
+                ind_start = ind_end
+                ind_end = int((i + 1) * (len(mean) / nz))
+                mean_layer = mean[ind_start:ind_end]
+
+                # Generate realizations. If LIMITS have been entered, they must be taken account for here
+                if limits is None:
+                    real = generator.gen_real(mean_layer, cov, self.ne)
+                else:
+                    real = generator.gen_real(mean_layer, cov, self.ne, limits)
+
+                # Stack realizations for each layer
+                if i == 0:
+                    real_out = real
+                else:
+                    real_out = np.vstack((real_out, real))
+
+            # Fill in dicts
+            enX[name] = real_out
+            covX[name]= cov
+
+        idX_state = {key: enX[key].shape for key in enX}
+        enX = np.vstack([enX[key] for key in enX])
+
+        return enX, idX_state, covX
+
 
     def get_list_assim_steps(self):
         """

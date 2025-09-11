@@ -61,7 +61,7 @@ def read_yaml(init_file):
         keys_pr = y['optim']
         check_mand_keywords_opt(keys_pr)
     elif 'dataassim' in y.keys():
-        keys_pr = y['datasssim']
+        keys_pr = y['dataassim']
         check_mand_keywords_da(keys_pr)
     else:
         raise KeyError

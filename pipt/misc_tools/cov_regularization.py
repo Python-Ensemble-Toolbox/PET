@@ -37,6 +37,7 @@ import datetime as dt
 from shutil import rmtree
 from scipy import sparse
 from scipy.spatial import distance
+from typing import Union
 
 # internal import
 import pipt.misc_tools.analysis_tools as at
@@ -47,13 +48,12 @@ class localization():
     # TODO: Check field dimensions, should always ensure that we can provide i ,j ,k (x, y, z)
     ###
 
-    def __init__(self, parsed_info, assimIndex, data_typ, free_parameter, ne):
+    def __init__(self, parsed_info: list, assimIndex, data_typ, free_parameter, ne):
         """
         Format the parsed info from the input file, and generate the unique localization masks
         """
         # if the next element is a .p file (pickle), assume that this has been correctly formated and can be automatically
         # imported. NB: it is important that we use the pickle format since we have a dictionary containing dictionaries
-
         # to make this as robust as possible, we always try to load the file
         try:
             if parsed_info[1][0].upper() == 'AUTOADALOC':
