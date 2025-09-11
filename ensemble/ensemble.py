@@ -147,7 +147,7 @@ class Ensemble:
                     print('\033[1;33mInput states have different ensemble size\033[1;m')
                     sys.exit(1)
                 self.ne = min(tmp_ne)
-                gi
+                
         if 'multilevel' in self.keys_en:
             ml_info = extract.extract_multilevel_info(self.keys_en)
             self.multilevel, self.tot_level, self.ml_ne, self.ML_error_corr, self.error_comp_scheme, self.ML_corr_done = ml_info
