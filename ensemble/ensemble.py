@@ -128,9 +128,10 @@ class Ensemble:
             # Prior info. on state variables must be given by PRIOR_<STATICVAR-name> keyword.
             if 'importstaticvar' not in self.keys_en:
                 self.ne = int(self.keys_en['ne'])
+                self.enX, self.idX, self.cov_prior = self.generate_state_ensemble()
 
                 # Output = self.state, self.cov_prior
-                self.gen_init_ensemble()
+                #self.gen_init_ensemble()
 
             else:
                 # State variable imported as a Numpy save file
