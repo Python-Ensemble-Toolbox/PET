@@ -5,7 +5,7 @@ from fnmatch import filter  # to check if wildcard name is in list
 from importlib import import_module
 
 
-def init_da(da_input, fwd_input, sim):
+def init_da(da_input, en_input, sim):
     "initialize the ensemble object based on the DA inputs"
 
     assert len(
@@ -15,4 +15,4 @@ def init_da(da_input, fwd_input, sim):
                         da_input['daalg'][0]), f'{da_input["daalg"][1]}_{da_input["analysis"]}')
 
     # Init. update scheme class, and get an object of that class
-    return da_import(da_input, fwd_input, sim)
+    return da_import(da_input, en_input, sim)

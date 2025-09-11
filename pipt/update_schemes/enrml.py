@@ -47,13 +47,13 @@ class lmenrmlMixIn(Ensemble):
     update_methods_ns. This class must therefore facititate many different update schemes.
     """
 
-    def __init__(self, keys_da, keys_fwd, sim):
+    def __init__(self, keys_da, keys_en, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da, keys_fwd, sim)
+        super().__init__(keys_da, keys_en, sim)
 
         if self.restart is False:
             # Save prior state in separate variable
@@ -288,13 +288,13 @@ class gnenrmlMixIn(Ensemble):
     update_methods_ns. This class must therefore facititate many different update schemes.
     """
 
-    def __init__(self, keys_da, keys_fwd, sim):
+    def __init__(self, keys_da, keys_en, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da, keys_fwd, sim)
+        super().__init__(keys_da, keys_en, sim)
 
         if self.restart is False:
             # Save prior state in separate variable

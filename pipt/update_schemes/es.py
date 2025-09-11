@@ -21,13 +21,13 @@ class esMixIn():
     structure and `enkf` is inherited to get `calc_analysis`, so we do not have to implement it again.
     """
 
-    def __init__(self, keys_da, keys_fwd, sim):
+    def __init__(self, keys_da, keys_en, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
         """
         # Pass init. file to Simultaneous parent class (Python searches parent classes from left to right).
-        super().__init__(keys_da, keys_fwd, sim)
+        super().__init__(keys_da, keys_en, sim)
 
         if self.restart is False:
             # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices

@@ -63,7 +63,7 @@ class Ensemble(PETEnsemble):
 
 
         # do the initiallization of the PETensemble
-        super(Ensemble, self).__init__(keys_en, sim)
+        super(Ensemble, self).__init__(keys_da|keys_en, sim)
 
         # set logger
         self.logger = logging.getLogger('PET.PIPT')

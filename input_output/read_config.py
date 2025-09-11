@@ -55,7 +55,7 @@ def read_yaml(init_file):
         keys_en = y['ensemble']
         check_mand_keywords_en(keys_en)
     else:
-        keys_en = None
+        keys_en = {}
 
     if 'optim' in y.keys():
         keys_pr = y['optim']
@@ -109,7 +109,7 @@ def read_toml(init_file):
         keys_en = t['ensemble']
         check_mand_keywords_en(keys_en)
     else:
-        keys_en = None
+        keys_en = {}
     if 'optim' in t.keys():
         keys_pr = t['optim']
         check_mand_keywords_opt(keys_pr)
