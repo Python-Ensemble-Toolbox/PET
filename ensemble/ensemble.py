@@ -18,6 +18,7 @@ import logging
 
 # Internal imports
 import pipt.misc_tools.analysis_tools as at
+import pipt.misc_tools.extract_tools as extract
 from geostat.decomp import Cholesky  # Making realizations
 from pipt.misc_tools import cov_regularization
 from pipt.misc_tools import wavelet_tools as wt
@@ -120,7 +121,7 @@ class Ensemble:
                 self.disable_tqdm = False
 
             # extract information that is given for the prior model
-            self.prior_info = self._extract_prior_info()
+            self.prior_info = extract.extract_prior_info(self.keys_en)
 
             # Calculate initial ensemble if IMPORTSTATICVAR has not been given in init. file.
             # Prior info. on state variables must be given by PRIOR_<STATICVAR-name> keyword.
@@ -146,7 +147,11 @@ class Ensemble:
                     print('\033[1;33mInput states have different ensemble size\033[1;m')
                     sys.exit(1)
                 self.ne = min(tmp_ne)
-        self._ext_ml_info()
+                gi
+        if 'multilevel' in self.keys_en:
+            ml_info = extract.extract_multilevel_info(self.keys_en)
+            self.multilevel, self.tot_level, self.ml_ne, self.ML_error_corr, self.error_comp_scheme, self.ML_corr_done = ml_info
+        #self._ext_ml_info()
 
     def _ext_ml_info(self):
         '''
@@ -245,79 +250,6 @@ class Ensemble:
         
         # Save the ensemble for later inspection
         np.savez('prior.npz', **self.state)
-
-    def generate_state_ensemble(self):
-        # Initialize GeoStat
-        generator = Cholesky()
-
-        # Initialize state and cov
-        enX  = {}
-        covX = {}
-
-        # Loop over statenames in prior_info
-        for name in self.prior_info.keys():
-            # Init. indices to pick out correct mean vector for each layer
-            ind_end = 0
-
-            # Extract info.
-            nx = self.prior_info[name].get('nx', 0)
-            ny = self.prior_info[name].get('ny', 0)
-            nz = self.prior_info[name].get('nz', 0)
-            mean = self.prior_info[name].get('mean', None)
-
-            if nx == ny == 0:  # assume ensemble will be generated elsewhere if dimensions are zero
-                break
-
-            variance = self.prior_info[name].get('variance', None)
-            corr_length = self.prior_info[name].get('corr_length', None)
-            aniso = self.prior_info[name].get('aniso', None)
-            vario = self.prior_info[name].get('vario', None)
-            angle = self.prior_info[name].get('angle', None)
-            limits= self.prior_info[name].get('limits',None)
-
-            # Loop over nz to make layers of 2D priors
-            for i in range(self.prior_info[name]['nz']):
-                # If mean is scalar, no covariance matrix is needed
-
-                if type(self.prior_info[name]['mean']).__module__ == 'numpy':
-                    # Generate covariance matrix
-                    cov = generator.gen_cov2d(
-                        nx, 
-                        ny, 
-                        variance[i], 
-                        corr_length[i], 
-                        aniso[i], 
-                        angle[i], 
-                        vario[i]
-                    )
-                else:
-                    cov = np.array(variance[i])
-
-                # Pick out the mean vector for the current layer
-                ind_start = ind_end
-                ind_end = int((i + 1) * (len(mean) / nz))
-                mean_layer = mean[ind_start:ind_end]
-
-                # Generate realizations. If LIMITS have been entered, they must be taken account for here
-                if limits is None:
-                    real = generator.gen_real(mean_layer, cov, self.ne)
-                else:
-                    real = generator.gen_real(mean_layer, cov, self.ne, limits)
-
-                # Stack realizations for each layer
-                if i == 0:
-                    real_out = real
-                else:
-                    real_out = np.vstack((real_out, real))
-
-            # Fill in dicts
-            enX[name] = real_out
-            covX[name]= cov
-
-        idX_state = {key: enX[key].shape for key in enX}
-        enX = np.vstack([enX[key] for key in enX])
-
-        return enX, idX_state, covX
 
 
     def get_list_assim_steps(self):
