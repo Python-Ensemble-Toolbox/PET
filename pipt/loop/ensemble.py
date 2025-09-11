@@ -17,8 +17,9 @@ from geostat.decomp import Cholesky
 from ensemble.ensemble import Ensemble as PETEnsemble
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
-from pipt.misc_tools import cov_regularization
+from pipt.misc_tools.cov_regularization import localization, _calc_distance
 import pipt.misc_tools.analysis_tools as at
+import pipt.misc_tools.extract_tools as extract
 
 
 class Ensemble(PETEnsemble):
@@ -113,15 +114,24 @@ class Ensemble(PETEnsemble):
 
             # Initialize localization
             if 'localization' in self.keys_da:
-                self.localization = cov_regularization.localization(self.keys_da['localization'],
-                                                                    self.keys_da['truedataindex'],
-                                                                    self.keys_da['datatype'],
-                                                                    self.keys_da['staticvar'],
-                                                                    self.ne)
+                
+                if isinstance(self.keys_da['localization'], dict):
+                    # Make 2D list of Dict (this should only be temporary)
+                    loc_info = [[key, value] for key, value in self.keys_da['localization'].items()]
+                    self.keys_da['localization'] = loc_info
+
+                self.localization = localization(
+                    self.keys_da['localization'],
+                    self.keys_da['truedataindex'],
+                    self.keys_da['datatype'],
+                    self.keys_da['staticvar'],
+                    self.ne
+                )
             # Initialize local analysis
             if 'localanalysis' in self.keys_da:
-                self.local_analysis = at.init_local_analysis(
-                    init=self.keys_da['localanalysis'], state=self.state.keys())
+                self.local_analysis = extract.extract_local_analysis_info(self.keys_da['localanalysis'], self.state.keys())
+                #self.local_analysis = at.init_local_analysis(
+                #    init=self.keys_da['localanalysis'], state=self.state.keys())
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_da['datatype']}
                               for _ in self.obs_data]
@@ -769,7 +779,7 @@ class Ensemble(PETEnsemble):
             self.list_datatypes = [elem for elem in self.list_datatypes if
                                    elem in self.local_analysis['update_mask'][state]]
             self.list_states = [deepcopy(state)]
-            self._ext_state()  # scaling for this state
+            self._ext_scaling()  # scaling for this state
             if 'localization' in self.keys_da:
                 self.localization.loc_info['field'] = self.state_scaling.shape
             del self.cov_data
@@ -799,7 +809,7 @@ class Ensemble(PETEnsemble):
                                        elem in self.local_analysis['update_mask'][state][state_indx]]
                 if len(self.list_datatypes):
                     self.list_states = [deepcopy(state)]
-                    self._ext_state()  # scaling for this state
+                    self._ext_scaling()  # scaling for this state
                     if 'localization' in self.keys_da:
                         self.localization.loc_info['field'] = self.state_scaling.shape
                     del self.cov_data
@@ -826,7 +836,7 @@ class Ensemble(PETEnsemble):
 
         for state in self.local_analysis['cell_parameter']:
             self.list_states = [deepcopy(state)]
-            self._ext_state()  # scaling for this state
+            self._ext_scaling()  # scaling for this state
             orig_state_scaling = deepcopy(self.state_scaling)
             param_position = self.local_analysis['parameter_position'][state]
             field_size = param_position.shape
@@ -863,7 +873,7 @@ class Ensemble(PETEnsemble):
                             if 'localization' in self.keys_da:
                                 self.localization.loc_info['field'] = (
                                     len(self.cell_index),)
-                                self.localization.loc_info['distance'] = cov_regularization._calc_distance(
+                                self.localization.loc_info['distance'] = _calc_distance(
                                     self.local_analysis['data_position'],
                                     self.local_analysis['unique'],
                                     current_data_list, self.assim_index,
