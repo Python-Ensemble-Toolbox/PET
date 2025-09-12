@@ -48,6 +48,7 @@ class Ensemble(PETEnsemble):
             - assimindex: index for the data that will be used for assimilation
             - datatype: list with the name of the datatypes
             - staticvar: name of the static variables
+            - dynamicvar: name of the dynamic variables
             - datavar: data variance, e.g., provided as a .csv file
 
         keys_en : dict
@@ -56,6 +57,9 @@ class Ensemble(PETEnsemble):
             - ne: number of perturbations used to compute the gradient
             - state: name of state variables passed to the .mako file
             - prior_<name>: the prior information the state variables, including mean, variance and variable limits
+
+            NB: If keys_en is empty dict, it is assumed that the prior info is contained in keys_da.
+            The merged dict keys_da|keys_en is what is sent to the parent class. 
 
         sim : callable
             The forward simulator (e.g. flow)
@@ -90,7 +94,7 @@ class Ensemble(PETEnsemble):
 
             # Prepare sparse representation
             if 'compress' in self.keys_da:
-                self._org_sparse_representation()
+                self.sparse_info = extract.organize_sparse_representation(self.keys_da['compress'])
 
             self._org_obs_data()
             self._org_data_var()
@@ -100,12 +104,13 @@ class Ensemble(PETEnsemble):
                          np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
 
             # If we have dynamic state variables, we allocate keys for them in 'state'. Since we do not know the size
-            #  of the arrays of the dynamic variables, we only allocate an NE list to be filled in later (in
+            # of the arrays of the dynamic variables, we only allocate an NE list to be filled in later (in
             # calc_forecast)
             if 'dynamicvar' in self.keys_da:
-                dyn_var = self.keys_da['dynamicvar'] if isinstance(self.keys_da['dynamicvar'], list) else \
-                    [self.keys_da['dynamicvar']]
-                for name in dyn_var:
+                dyn_vars = self.keys_da['dynamicvar']
+                if not isinstance(dyn_vars, list):
+                    dyn_vars = [dyn_vars]
+                for name in dyn_vars:
                     self.state[name] = [None] * self.ne
 
             # Option to store the dictionaries containing observed data and data variance
@@ -114,12 +119,6 @@ class Ensemble(PETEnsemble):
 
             # Initialize localization
             if 'localization' in self.keys_da:
-                
-                if isinstance(self.keys_da['localization'], dict):
-                    # Make 2D list of Dict (this should only be temporary)
-                    loc_info = [[key, value] for key, value in self.keys_da['localization'].items()]
-                    self.keys_da['localization'] = loc_info
-
                 self.localization = localization(
                     self.keys_da['localization'],
                     self.keys_da['truedataindex'],
@@ -127,11 +126,10 @@ class Ensemble(PETEnsemble):
                     self.keys_da['staticvar'],
                     self.ne
                 )
+                
             # Initialize local analysis
             if 'localanalysis' in self.keys_da:
                 self.local_analysis = extract.extract_local_analysis_info(self.keys_da['localanalysis'], self.state.keys())
-                #self.local_analysis = at.init_local_analysis(
-                #    init=self.keys_da['localanalysis'], state=self.state.keys())
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_da['datatype']}
                               for _ in self.obs_data]
@@ -501,35 +499,6 @@ class Ensemble(PETEnsemble):
                     est_noise = np.power(self.sparse_data[vintage].est_noise, 2)
                     self.datavar[i][datatype[j]] = est_noise  # override the given value
                     vintage = vintage + 1
-
-    def _org_sparse_representation(self):
-        """
-        Function for reading input to wavelet sparse representation of data.
-        """
-        self.sparse_info = {}
-        parsed_info = self.keys_da['compress']
-        dim = [int(elem) for elem in parsed_info[0][1]]
-        # flip to align with flow / eclipse
-        self.sparse_info['dim'] = [dim[2], dim[1], dim[0]]
-        self.sparse_info['mask'] = []
-        for vint in range(1, len(parsed_info[1])):
-            if not os.path.exists(parsed_info[1][vint]):
-                mask = np.ones(self.sparse_info['dim'], dtype=bool)
-                np.savez(f'mask_{vint-1}.npz', mask=mask)
-            else:
-                mask = np.load(parsed_info[1][vint])['mask']
-            self.sparse_info['mask'].append(mask.flatten())
-        self.sparse_info['level'] = parsed_info[2][1]
-        self.sparse_info['wname'] = parsed_info[3][1]
-        self.sparse_info['colored_noise'] = True if parsed_info[4][1] == 'yes' else False
-        self.sparse_info['threshold_rule'] = parsed_info[5][1]
-        self.sparse_info['th_mult'] = parsed_info[6][1]
-        self.sparse_info['use_hard_th'] = True if parsed_info[7][1] == 'yes' else False
-        self.sparse_info['keep_ca'] = True if parsed_info[8][1] == 'yes' else False
-        self.sparse_info['inactive_value'] = parsed_info[9][1]
-        self.sparse_info['use_ensemble'] = True if parsed_info[10][1] == 'yes' else None
-        self.sparse_info['order'] = parsed_info[11][1]
-        self.sparse_info['min_noise'] = parsed_info[12][1]
 
     def _ext_obs(self):
         self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,

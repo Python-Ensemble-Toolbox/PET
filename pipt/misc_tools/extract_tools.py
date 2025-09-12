@@ -2,12 +2,15 @@
 __all__ = [
     'extract_prior_info',
     'extract_multilevel_info',
-    'extract_local_analysis_info'
+    'extract_local_analysis_info',
+    'organize_sparse_representation'
+    'list_to_dict'
 ]
 
 # Imports 
 import numpy as np
 import pickle
+import os
 
 from scipy.spatial import cKDTree
 from typing import Union
@@ -35,14 +38,7 @@ def extract_prior_info(keys: dict) -> dict:
         
         # Check if is a list (old way)
         if isinstance(prior, list):
-            # list of lists - old way of inputting prior information
-            prior_dict = {}
-            for i, opt in enumerate(list(zip(*prior))[0]):
-                if opt == 'limits':
-                    prior_dict[opt] = prior[i][1:]
-                else:
-                    prior_dict[opt] = prior[i][1]
-            prior = prior_dict
+            prior = list_to_dict(prior)
         else:
             assert isinstance(prior, dict), f'PRIOR_{name.upper()} must be a dictionary or list of lists!'
 
@@ -125,22 +121,15 @@ def extract_prior_info(keys: dict) -> dict:
     return prior_info
 
 
-def extract_multilevel_info(keys: dict) -> dict:
+def extract_multilevel_info(keys: Union[dict, list]) -> dict:
     '''
     Extract the info needed for ML simulations. Note if the ML keyword is not in keys_en we initialize
     such that we only have one level -- the high fidelity one
     '''
-    try:
-        ml_info = dict(keys['multilevel'])
-    except:
-        # In this case it is a list which is converted into a dict
-        ml_info = {}
-        for line in keys['multilevel']:
-            if len(line) > 2:
-                ml_info[line[0]] = line[1:]
-            else:
-                ml_info[line[0]] = line[1]
-
+    if isinstance(keys, list):
+        ml_info = list_to_dict(keys)
+    assert isinstance(ml_info, dict)
+    
     # Set levels
     levels = int(ml_info['levels'])
     ml_info['levels'] = [elem for elem in range(levels)]
@@ -167,7 +156,8 @@ def extract_multilevel_info(keys: dict) -> dict:
 def extract_local_analysis_info(keys: Union[dict, list], state: list) -> dict:
     # Check if keys are list, and make it a dict if not
     if isinstance(keys, list):
-        keys = dict(keys)
+        keys = list_to_dict(keys)
+    assert isinstance(keys, dict)
 
     # Initialize local dict
     local = {
@@ -231,5 +221,90 @@ def extract_local_analysis_info(keys: Union[dict, list], state: list) -> dict:
                 [data_ind[count] for count, val in enumerate(in_region) if val])
 
         return local
+    
 
-        
+def organize_sparse_representation(info: Union[dict,list]) -> dict:
+    """
+    Function for reading input to wavelet sparse representation of data.
+
+    This function takes a dictionary (or a list convertible to a dictionary) describing
+    the configuration for wavelet sparse representation, standardizes boolean options
+    (interpreting 'yes'/'no' as True/False), loads or creates mask files, and collects
+    all relevant parameters into a new dictionary suitable for downstream processing.
+
+    Parameters
+    ----------
+    info : dict or list
+        Input configuration for sparse representation. If a list, it will be converted
+        to a dictionary. Expected keys include:
+            - 'dim': list of 3 ints, the dimensions of the data grid.
+            - 'mask': list of filenames for mask arrays.
+            - 'level', 'wname', 'threshold_rule', 'th_mult', 'order', 'min_noise',
+              'colored_noise', 'use_hard_th', 'keep_ca', 'inactive_value', 'use_ensemble'.
+
+    Returns
+    -------
+    sparse : dict
+        Dictionary containing the processed sparse representation configuration,
+        with masks loaded or created, dimensions flipped for compatibility, and
+        all options standardized.
+    """
+    # Ensure a dict
+    if isinstance(info, list):
+        info = list_to_dict(info)
+    assert isinstance(info, dict)
+
+    # Redefine all 'yes' and 'no' values to bool
+    for key, val in info.items():
+        if val == 'yes': info[key] == True
+        if val == 'no':  info[key] == False
+
+    # Intial dict
+    sparse = {}
+
+    # Flip dim to align with flow/eclipse
+    dim = [int(x) for x in info['dim']]
+    sparse['dim'] = [dim[2], dim[1], dim[0]]
+
+    # Read mask_files
+    sparse['mask'] = [] 
+    for idx, filename in enumerate(info['mask'], start=1):
+        if not os.path.exists(filename):
+            mask = np.ones(sparse['dim'], dtype=bool)
+            np.savez(f'mask_{idx}.npz', mask=mask)
+        else:
+            mask = np.load(filename)['mask']
+        sparse['mask'].append(mask.flatten())
+
+    # Read rest of keywords
+    sparse['level'] = info['level']
+    sparse['wname'] = info['wname']
+    sparse['threshold_rule'] = info['threshold_rule']
+    sparse['th_mult'] = info['th_mult']
+    sparse['order'] = info['order']
+    sparse['min_noise'] = info['min_noise']
+    sparse['colored_noise'] = info.get('colored_noise', False)
+    sparse['use_hard_th'] = info.get('use_hard_th', False)
+    sparse['keep_ca'] = info.get('keep_ca', False)
+    sparse['inactive_value'] = info['inactive_value']
+    sparse['use_ensemble'] = info.get('use_ensemble', None)
+
+    return sparse
+    
+   
+def list_to_dict(info_list: list) -> dict:
+    assert isinstance(info_list)
+    # Initialize and loop over entries
+    info_dict = {}
+    for entry in info_list:
+        if not isinstance(entry, list):
+            entry = [entry]
+        # Fill in values
+        if len(entry) == 1:
+            info_dict[str(entry[0])] = None
+        elif len(entry) == 2:
+            info_dict[str(entry[0])] = entry[1]
+        else:
+            info_dict[str(entry[0])] = entry[1:]
+
+    return info_dict

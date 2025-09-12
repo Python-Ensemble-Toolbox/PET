@@ -50,9 +50,9 @@ class approx_update():
             data_size = [[self.obs_data[int(time)][data].size if self.obs_data[int(time)][data] is not None else 0
                           for data in self.list_datatypes] for time in self.assim_index[1]]
 
-            f = self.keys_da['localization']
+            #f = self.keys_da['localization']
 
-            if f[1][0] == 'autoadaloc':
+            if 'autoadaloc' in self.localization.loc_info:
 
                 # Mean state and perturbation matrix
                 mean_state = np.mean(aug_state, 1)
@@ -101,7 +101,7 @@ class approx_update():
                 except:
                     self.step = (weight*(np.dot(pert_state, X))).dot(scaled_delta_data)
 
-            elif sum(['dist_loc' in el for el in f]) >= 1:
+            elif ('dist_loc' in self.keys_da['localization'].keys()) or ('dist_loc' in self.keys_da['localization'].values()):
                 local_mask = self.localization.localize(self.list_datatypes, [self.keys_da['truedataindex'][int(elem)]
                                                                               for elem in self.assim_index[1]],
                                                         self.list_states, self.ne, self.prior_info, data_size)

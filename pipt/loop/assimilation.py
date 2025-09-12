@@ -16,7 +16,7 @@ from copy import copy
 from importlib import import_module
 
 # Internal imports
-from pipt.misc_tools import qaqc_tools
+from pipt.misc_tools.qaqc_tools import QAQC
 from pipt.loop.ensemble import Ensemble
 from misc.system_tools.environ_var import OpenBlasSingleThread
 from pipt.misc_tools import analysis_tools as at
@@ -83,15 +83,20 @@ class Assimilate:
         success_iter = True
 
         # Initiallize progressbar
-        pbar_out = tqdm(total=self.max_iter,
-                        desc='Iterations (Obj. func. val: )', position=0)
+        pbar_out = tqdm(total=self.max_iter, desc='Iterations (Obj. func. val: )', position=0)
 
         # Check if we want to perform a Quality Assurance of the forecast
         qaqc = None
-        if 'qa' in self.ensemble.sim.input_dict or 'qc' in self.ensemble.keys_da:
-            qaqc = qaqc_tools.QAQC({**self.ensemble.keys_da, **self.ensemble.sim.input_dict},
-                                   self.ensemble.obs_data, self.ensemble.datavar, self.ensemble.logger,
-                                   self.ensemble.prior_info, self.ensemble.sim, self.ensemble.prior_state)
+        if ('qa' in self.ensemble.sim.input_dict) or ('qc' in self.ensemble.keys_da):
+            qaqc = QAQC(
+                self.ensemble.keys_da|self.ensemble.sim.input_dict,
+                self.ensemble.obs_data, 
+                self.ensemble.datavar, 
+                self.ensemble.logger,
+                self.ensemble.prior_info, 
+                self.ensemble.sim, 
+                self.ensemble.prior_state
+            )
 
         # Run a while loop until max. iterations or convergence is reached
         while self.ensemble.iteration < self.max_iter and conv is False:
@@ -107,20 +112,17 @@ class Assimilate:
 
                 if 'qa' in self.ensemble.keys_da:  # Check if we want to perform a Quality Assurance of the forecast
                     # set updated prediction, state and lam
-                    qaqc.set(self.ensemble.pred_data,
-                             self.ensemble.state, self.ensemble.lam)
+                    qaqc.set(self.ensemble.pred_data, self.ensemble.state, self.ensemble.lam)
                     # Level 1,2 all data, and subspace
                     qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))
                     qaqc.calc_coverage()  # Compute data coverage
-                    qaqc.calc_kg({'plot_all_kg': True, 'only_log': False,
-                                 'num_store': 5})  # Compute kalman gain
+                    qaqc.calc_kg({'plot_all_kg': True, 'only_log': False, 'num_store': 5})  # Compute kalman gain
 
                 success_iter = True
 
                 # always store prior forcast, unless specifically told not to
                 if 'nosave' not in self.ensemble.keys_da:
-                    np.savez('prior_forecast.npz', **
-                             {'pred_data': self.ensemble.pred_data})
+                    np.savez('prior_forecast.npz', pred_data=self.ensemble.pred_data)
 
             # For the remaining iterations we start by applying the analysis and finish by running the forecast
             else:
