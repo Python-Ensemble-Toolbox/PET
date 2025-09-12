@@ -115,6 +115,7 @@ class eclipse:
         self.options['sim_path'] = ''
         self.options['sim_flag'] = ''
         self.options['mpi'] = ''
+        self.options['mpiarray'] = ''
         self.options['parsing-strictness'] = ''
         # Loop over options in SIMOPTIONS and extract the parameters we want
         if 'simoptions' in self.input_dict:
@@ -127,6 +128,8 @@ class eclipse:
                     self.options['sim_flag'] = self.input_dict['simoptions'][i][1]
                 if opt == 'mpi':
                     self.options['mpi'] = self.input_dict['simoptions'][i][1]
+                if opt == 'mpiarray':
+                    self.options['mpiarray'] = self.input_dict['simoptions'][i][1]
                 if opt == 'parsing-strictness':
                     self.options['parsing-strictness'] = self.input_dict['simoptions'][i][1]
         if 'sim_limit' in self.input_dict:

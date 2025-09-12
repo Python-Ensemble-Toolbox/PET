@@ -167,6 +167,85 @@ python -m simulator.opm "$folder" {filename_str} {mpi_str}
             print("Failed to extract Job ID from sbatch output.")
             return None
 
+    @staticmethod
+    def SLURM_ARRAY_HPC_run(n_e, venv, filename, **kwargs):
+        """
+        HPC run manager for Slurm array jobs.
+        Each ensemble member runs independently in its own task.
+
+        Parameters
+        ----------
+        n_e : list[int]
+            Indices of ensemble members to simulate.
+        venv : str
+            Path to Python virtual environment activate script.
+        filename : str
+            Simulation input file.
+        kwargs : dict
+            Extra simulation options. Recognized:
+            - sim_limit (float seconds or str HH:MM:SS)
+            - mem (default "4G")
+            - cpus_per_task (default 2)
+        """
+
+        # Start and end indices for the array
+        start_idx = n_e[0]
+        end_idx = n_e[-1]
+        num_tasks = end_idx - start_idx
+
+        # Extract options
+        sim_limit = kwargs.get("sim_limit", None)
+        if sim_limit is not None:
+            if isinstance(sim_limit, (int, float)):
+                from datetime import timedelta
+                sim_limit_str = f'--time={str(timedelta(seconds=sim_limit))}'
+            else:
+                sim_limit_str = f'--time={sim_limit}'
+        else:
+            sim_limit_str = "--time=02:00:00"
+
+        mem = kwargs.get("mem", "4G")
+        cpus_per_task = kwargs.get("cpus_per_task", 1)
+
+        slurm_script = f"""#!/bin/bash
+#SBATCH --job-name=EnDA_array
+#SBATCH --partition=comp
+#SBATCH --array=0-{num_tasks}
+#SBATCH --cpus-per-task={cpus_per_task}
+#SBATCH --mem={mem}
+#SBATCH {sim_limit_str}
+#SBATCH --output=logs/job_%A_%a.out
+#SBATCH --error=logs/job_%A_%a.err
+
+module load Python
+export LMOD_DISABLE_SAME_NAME_AUTOSWAP=no
+module load opm-simulators
+source {venv}
+
+IDX=$(( {start_idx} + SLURM_ARRAY_TASK_ID ))
+FOLDER="En_$IDX/"
+
+python -m simulator.opm "$FOLDER" {filename} ""
+"""
+
+        script_name = "submit_array.sh"
+        with open(script_name, "w") as f:
+            f.write(slurm_script)
+
+        os.chmod(script_name, 0o755)
+
+        result = run(["sbatch", script_name], capture_output=True, text=True)
+
+        os.remove(script_name)
+
+        match = re.search(r"Submitted batch job (\d+)", result.stdout)
+        if match:
+            return match.group(1)
+        else:
+            print("Job submission failed:", result.stderr)
+        return None
+
+            
     def are_jobs_done(self, job_id):
         """Check if all job array tasks are completed using sacct."""
         check_cmd = ["sacct", "-j", f"{job_id}", "--format=JobID,State", "--noheader"]
