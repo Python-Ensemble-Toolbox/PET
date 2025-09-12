@@ -3,7 +3,8 @@ __all__ = [
     'extract_prior_info',
     'extract_multilevel_info',
     'extract_local_analysis_info',
-    'organize_sparse_representation'
+    'extract_maxiter',
+    'organize_sparse_representation',
     'list_to_dict'
 ]
 
@@ -290,6 +291,30 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
     sparse['use_ensemble'] = info.get('use_ensemble', None)
 
     return sparse
+
+
+def extract_maxiter(keys: dict) -> dict:
+
+    if 'iteration' in keys:
+        if isinstance(keys['iteration'], list): 
+            keys['iteration'] = list_to_dict(keys['iteration'])
+        try:
+            max_iter = keys['iteration']['max_iter']
+        except KeyError:
+                raise AssertionError('MAX_ITER has not been given in ITERATION')
+        
+    elif 'mda' in keys:
+        if isinstance(keys['mda'], list): 
+            keys['mda'] = list_to_dict(keys['mda'])
+        try:
+            max_iter = keys['mda']['max_iter']
+        except KeyError:
+                raise AssertionError('MAX_ITER has not been given in MDA')
+
+    else:
+        max_iter = 1
+
+    return max_iter
     
    
 def list_to_dict(info_list: list) -> dict:

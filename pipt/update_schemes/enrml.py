@@ -3,6 +3,7 @@ EnRML type schemes
 """
 # External imports
 import pipt.misc_tools.analysis_tools as at
+import pipt.misc_tools.extract_tools as extract
 from geostat.decomp import Cholesky
 from pipt.loop.ensemble import Ensemble
 from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
@@ -251,10 +252,9 @@ class lmenrmlMixIn(Ensemble):
         file. These parameters include convergence tolerances and parameters for the damping parameter. Default
         values for these parameters have been given here, if they are not provided in ITERATION.
         """
-        try:
-            options = dict(self.keys_da['iteration'])
-        except:
-            options = dict([self.keys_da['iteration']])
+        options = self.keys_da['iteration']
+        if isinstance(options, list):
+            options = extract.list_to_dict(options)
 
         # unpack options
         self.data_misfit_tol = options.get('data_misfit_tol', 0.01)
@@ -580,10 +580,9 @@ class gnenrmlMixIn(Ensemble):
         file. These parameters include convergence tolerances and parameters for the damping parameter. Default
         values for these parameters have been given here, if they are not provided in ITERATION.
         """
-        try:
-            options = dict(self.keys_da['iteration'])
-        except:
-            options = dict([self.keys_da['iteration']])
+        options = self.keys_da['iteration']
+        if isinstance(options, list):
+            options = extract.list_to_dict(options)
         
         self.data_misfit_tol = options.get('data_misfit_tol', 0.01)
         self.trunc_energy = options.get('energy', 0.95)

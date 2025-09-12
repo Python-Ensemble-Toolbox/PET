@@ -20,6 +20,7 @@ from pipt.misc_tools.qaqc_tools import QAQC
 from pipt.loop.ensemble import Ensemble
 from misc.system_tools.environ_var import OpenBlasSingleThread
 from pipt.misc_tools import analysis_tools as at
+import pipt.misc_tools.extract_tools as extract
 
 
 class Assimilate:
@@ -50,7 +51,7 @@ class Assimilate:
             if hasattr(ensemble, 'max_iter'):
                 self.max_iter = self.ensemble.max_iter
             else:
-                self.max_iter = self._ext_max_iter()
+                self.max_iter = extract.extract_maxiter(self.ensemble.keys_da)
 
             # Within variables
             self.why_stop = None    # Output of why iter. loop stopped
@@ -280,48 +281,6 @@ class Assimilate:
                             else:
                                 self.ensemble.pred_data[i][el][:, index] = deepcopy(
                                     self.ensemble.pred_data[i][el][:, new_index])
-
-    def _ext_max_iter(self):
-        """
-        Extract max iterations from ITERATION keyword in DATAASSIM part (mandatory keyword for iteration loops).
-
-        Parameters
-        ----------
-        keys_da : dict
-            A dictionary containing all keywords from DATAASSIM part.
-
-            - 'iteration' : object
-                Information for iterative methods.
-
-        Returns
-        -------
-        max_iter : int
-            The maximum number of iterations allowed before abort.
-
-        Changelog
-        ---------
-        - ST 7/6-16
-        """
-        if 'iteration' in self.ensemble.keys_da:
-            iter_opts = dict(self.ensemble.keys_da['iteration'])
-            # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
-            try:
-                max_iter = iter_opts['max_iter']
-            except KeyError:
-                raise AssertionError('MAX_ITER has not been given in ITERATION')
-
-        elif 'mda' in self.ensemble.keys_da:
-            iter_opts = dict(self.ensemble.keys_da['mda'])
-            # Check if 'tot_assim_steps' has been given; if not, raise error (mandatory in MDA)
-            try:
-                max_iter = iter_opts['tot_assim_steps']
-            except KeyError:
-                raise AssertionError('TOT_ASSIM_STEPS has not been given in MDA!')
-
-        else:
-            max_iter = 1
-        # Return max. iter
-        return max_iter
 
     def _save_iteration_information(self):
         """
