@@ -485,6 +485,8 @@ class Ensemble:
                         if sim_status[c_member]:
                             self.sim.extract_data(member_i)
                             en_pred.append(deepcopy(self.sim.pred_data))
+                            if self.sim.saveinfo is not None:  # Try to save information
+                                store_ensemble_sim_information(self.sim.saveinfo, member_i)
                         else:
                             en_pred.append(False)
                         self.sim.remove_folder(member_i)
