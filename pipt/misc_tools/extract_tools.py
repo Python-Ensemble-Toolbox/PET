@@ -318,7 +318,7 @@ def extract_maxiter(keys: dict) -> dict:
     
    
 def list_to_dict(info_list: list) -> dict:
-    assert isinstance(info_list)
+    assert isinstance(info_list, list)
     # Initialize and loop over entries
     info_dict = {}
     for entry in info_list:
