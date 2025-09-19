@@ -119,9 +119,11 @@ class eclipse:
         
         simoptions = self.input_dict['simoptions']
         self.options = {}
+
         self.options['sim_path'] = simoptions.get('sim_path', '')
         self.options['sim_flag'] = simoptions.get('sim_flag', '')
         self.options['mpi'] = simoptions.get('mpi', '')
+        self.options['mpiarray'] = simoptions.get('mpiarray', '')
         self.options['parsing-strictness'] = simoptions.get('parsing-strictness', '')
         
         if 'sim_limit' in self.input_dict:

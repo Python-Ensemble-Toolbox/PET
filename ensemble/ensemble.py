@@ -356,11 +356,23 @@ class Ensemble:
                     batch_en.append(np.arange(0, self.ne))
                 for n_e in batch_en:
                     _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
-                               zip([list_state[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
+                            zip([list_state[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
                     # Run call_sim on the hpc
-                    job_id=self.sim.SLURM_HPC_run(n_e, venv=os.path.join(os.path.dirname(sys.executable),'activate'),
-                                                  filename=self.sim.file,**self.sim.options
-                                                  )
+                    if self.sim.options['mpiarray']:
+                        job_id = self.sim.SLURM_ARRAY_HPC_run(
+                                                            n_e,
+                                                            venv=os.path.join(os.path.dirname(sys.executable), 'activate'),
+                                                            filename=self.sim.file,
+                                                            **self.sim.options
+                                                        )
+                    else:
+                        job_id=self.sim.SLURM_HPC_run(
+                                                    n_e, 
+                                                    venv=os.path.join(os.path.dirname(sys.executable),'activate'),
+                                                    filename=self.sim.file,
+                                                    **self.sim.options
+                                                    )
+                    
                     # Wait for the simulations to finish
                     if job_id:
                         sim_status = self.sim.wait_for_jobs(job_id)
@@ -372,10 +384,11 @@ class Ensemble:
                         if sim_status[c_member]:
                             self.sim.extract_data(member_i)
                             en_pred.append(deepcopy(self.sim.pred_data))
+                            if self.sim.saveinfo is not None:  # Try to save information
+                                store_ensemble_sim_information(self.sim.saveinfo, member_i)
                         else:
                             en_pred.append(False)
                         self.sim.remove_folder(member_i)
-
             else: # Run prediction in parallel using p_map
                 en_pred = p_map(self.sim.run_fwd_sim, list_state,
                                 list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
