@@ -37,9 +37,11 @@ import datetime as dt
 from shutil import rmtree
 from scipy import sparse
 from scipy.spatial import distance
+from typing import Union
 
 # internal import
 import pipt.misc_tools.analysis_tools as at
+from pipt.misc_tools.extract_tools import list_to_dict
 
 
 class localization():
@@ -47,13 +49,116 @@ class localization():
     # TODO: Check field dimensions, should always ensure that we can provide i ,j ,k (x, y, z)
     ###
 
-    def __init__(self, parsed_info, assimIndex, data_typ, free_parameter, ne):
+    def __init__(self, parsed_info: Union[dict,list], assimIndex: list, data_typ: list, free_parameter: list, ne: int):
         """
         Format the parsed info from the input file, and generate the unique localization masks
         """
+        # Make parsed_info to a dict
+        if isinstance(parsed_info, list):
+            parsed_info = list_to_dict(parsed_info)
+        assert isinstance(parsed_info, dict)
+
+        # Initialize
+        init_local = {}
+
+        # Assert field keyword in parsed_info
+        assert 'field' in parsed_info
+        init_local['field'] = [int(elem) for elem in parsed_info['field']]
+
+        # Check for ACTNUM
+        init_local['actnum'] = None
+        if 'actnum' in parsed_info:
+            file = parsed_info['actnum']
+            assert file.endswith('.npz') # this must be a .npz file!!
+            init_local['actnum'] = np.load(file)
+
+        # Check for threshold
+        if 'threshold' in parsed_info:
+            init_local['threshold'] = parsed_info['threshold']
+   
+        # Check localization method/type
+        try:
+            if 'autoadaloc' in parsed_info:
+                init_local = {'autoadaloc': True, 'nstd': parsed_info['autoadaloc']}
+                if 'type' in parsed_info:
+                    init_local['type'] = parsed_info['type']
+            elif 'localanalysis' in parsed_info:
+                init_local = {'localanalysis': True}
+                if 'type' in parsed_info:
+                    init_local['type'] = parsed_info['type']
+                if 'range' in parsed_info:
+                    init_local['range'] = float(parsed_info['range'])
+            else:
+                # Load from pickle file
+                picklefile = None
+                for key, val in parsed_info.items():
+                    if (str(val).endswith('.p')) or (str(val).endswith('.pkl')):
+                        picklefile = key
+                        break
+                init_local = pickle.load(open(parsed_info[picklefile], 'rb'))
+
+        except:
+            # no file could be loaded, initiallize the outer dictionary
+            init_local = {}
+            for time in assimIndex:
+                for datum in data_typ:
+                    for parameter in free_parameter:
+                        init_local[(datum, time, parameter)] = {
+                            'taper_func': None,
+                            'position': None,
+                            'anisotropi': None,
+                            'range': None
+                        }
+            # If you expect a key with a CSV filename, find it:
+            csv_key = next((k for k in parsed_info if str(k).endswith('.csv')), None)
+            if csv_key:
+                with open(csv_key) as csv_file:
+                    reader = csv.reader(csv_file)
+                    info = [elem for elem in reader]
+                info = [item for sublist in info for item in sublist]
+            # Else find the key-string that contains the info
+            else:
+                for key, val in parsed_info.items():
+                    if len(key.split(',')) > 1:
+                        info = key.split(',')
+                        break
+                    else:
+                        info = []
+
+            for elem in info:
+                # If a predefined mask is to be imported the localization keyword must be
+                # [import filename.npz]
+                # where filename is the name of the .npz file to be uploaded.
+                tmp_info = elem.split()
+
+                # format the data and time elements
+                if len(tmp_info) == 11:  # data has only one name
+                    name = (tmp_info[8].lower(), float(tmp_info[9]), tmp_info[10].lower())
+                else:
+                    name = (tmp_info[8].lower() + ' ' + tmp_info[9].lower(),
+                            float(tmp_info[10]), tmp_info[11].lower())
+
+                # assert if the data to be localized actually exists
+                if name in init_local.keys():
+
+                    # input the correct info into the localization dictionary
+                    init_local[name]['taper_func'] = tmp_info[0]
+                    if tmp_info[0] == 'import':
+                        # if a predefined mask is to be imported, the name is the following element.
+                        init_local[name]['file'] = tmp_info[1]
+                    else:
+                        # the position can span over multiple cells, e.g., 55:100. Hence keep this input as a string
+                        init_local[name]['position'] = [
+                            [int(float(tmp_info[1])), int(float(tmp_info[2])), int(float(tmp_info[3]))]]
+                        init_local[name]['range'] = [int(tmp_info[4]), int(
+                            tmp_info[5])]  # the range is always an integer
+                        init_local[name]['anisotropi'] = [
+                            float(tmp_info[6]), float(tmp_info[7])]
+
+
+        '''
         # if the next element is a .p file (pickle), assume that this has been correctly formated and can be automatically
         # imported. NB: it is important that we use the pickle format since we have a dictionary containing dictionaries
-
         # to make this as robust as possible, we always try to load the file
         try:
             if parsed_info[1][0].upper() == 'AUTOADALOC':
@@ -126,21 +231,7 @@ class localization():
                             tmp_info[5])]  # the range is always an integer
                         init_local[name]['anisotropi'] = [
                             float(tmp_info[6]), float(tmp_info[7])]
-
-        # fist element of the parsed info is field size
-        assert parsed_info[0][0].upper() == 'FIELD'
-        init_local['field'] = [int(elem) for elem in parsed_info[0][1]]
-
-        # check if final parsed info is the actnum
-        try:
-            if parsed_info[2][0].upper() == 'ACTNUM':
-                assert parsed_info[2][1].endswith('.npz')  # this must be a .npz file!!
-                tmp_file = np.load(parsed_info[2][1])
-                init_local['actnum'] = tmp_file['actnum']
-            else:
-                init_local['actnum'] = None
-        except:
-            init_local['actnum'] = None
+        '''
 
         # generate the unique localization masks. Recall that the parameters: "taper_type", "anisotropi", and "range"
         # gives a unique mask.

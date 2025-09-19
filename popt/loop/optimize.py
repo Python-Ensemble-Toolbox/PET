@@ -72,13 +72,6 @@ class Optimize:
         options : dict
             Optimization options
         """
-
-        def __set__variable(var_name=None, defalut=None):
-            if var_name in options:
-                return options[var_name]
-            else:
-                return defalut
-
         # Set the logger
         self.logger = logger
 
@@ -96,16 +89,16 @@ class Optimize:
         self.rnd = None
 
         # Max number of iterations
-        self.max_iter = __set__variable('maxiter', 20)
+        self.max_iter = options.get('maxiter', 20)
 
         # Restart flag
-        self.restart = __set__variable('restart', False)
+        self.restart = options.get('restart', False)
 
         # Save restart information flag
-        self.restartsave = __set__variable('restartsave', False)
+        self.restartsave = options.get('restartsave', False)
 
         # Optimze with external penalty function for constraints, provide r_0 as input
-        self.epf = __set__variable('epf', {})
+        self.epf = options.get('epf', {})
         self.epf_iteration = 0
 
         # Initialize variables (set in subclasses)
@@ -128,23 +121,16 @@ class Optimize:
 
         # If it is a restart run, we load the self info that exists in the pickle save file.
         if self.restart:
-
-            # Check if the pickle save file exists in folder
-            assert (self.pickle_restart_file in [f for f in os.listdir('.') if os.path.isfile(f)]), \
-                'The restart file "{0}" does not exist in folder. Cannot restart!'.format(self.pickle_restart_file)
-
-            # Load restart file
-            self.load()
-
+            try:
+                self.load()
+            except (FileNotFoundError, pickle.UnpicklingError) as e:
+                raise RuntimeError(f"Failed to load restart file '{self.pickle_restart_file}': {e}")
             # Set the random generator to be the saved value
             np.random.set_state(self.rnd)
-
         else:
-
             # delete potential restart files to avoid any problems
             if self.pickle_restart_file in [f for f in os.listdir('.') if os.path.isfile(f)]:
                 os.remove(self.pickle_restart_file)
-
             self.iteration += 1
 
         # Check if external penalty function (epf) for handling constraints should be used

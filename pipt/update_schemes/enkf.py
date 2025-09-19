@@ -23,13 +23,13 @@ class enkfMixIn(Ensemble):
     ordering of data. If only one-step EnKF is to be done, use `es` instead.
     """
 
-    def __init__(self, keys_da, keys_fwd, sim):
+    def __init__(self, keys_da, keys_en, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da, keys_fwd, sim)
+        super().__init__(keys_da, keys_en, sim)
 
         self.prev_data_misfit = None
 

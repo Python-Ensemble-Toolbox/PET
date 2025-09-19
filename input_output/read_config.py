@@ -55,13 +55,13 @@ def read_yaml(init_file):
         keys_en = y['ensemble']
         check_mand_keywords_en(keys_en)
     else:
-        keys_en = None
+        keys_en = {}
 
     if 'optim' in y.keys():
         keys_pr = y['optim']
         check_mand_keywords_opt(keys_pr)
     elif 'dataassim' in y.keys():
-        keys_pr = y['datasssim']
+        keys_pr = y['dataassim']
         check_mand_keywords_da(keys_pr)
     else:
         raise KeyError
@@ -109,7 +109,7 @@ def read_toml(init_file):
         keys_en = t['ensemble']
         check_mand_keywords_en(keys_en)
     else:
-        keys_en = None
+        keys_en = {}
     if 'optim' in t.keys():
         keys_pr = t['optim']
         check_mand_keywords_opt(keys_pr)

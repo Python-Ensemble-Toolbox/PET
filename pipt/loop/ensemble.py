@@ -17,8 +17,9 @@ from geostat.decomp import Cholesky
 from ensemble.ensemble import Ensemble as PETEnsemble
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
-from pipt.misc_tools import cov_regularization
+from pipt.misc_tools.cov_regularization import localization, _calc_distance
 import pipt.misc_tools.analysis_tools as at
+import pipt.misc_tools.extract_tools as extract
 
 
 class Ensemble(PETEnsemble):
@@ -47,6 +48,7 @@ class Ensemble(PETEnsemble):
             - assimindex: index for the data that will be used for assimilation
             - datatype: list with the name of the datatypes
             - staticvar: name of the static variables
+            - dynamicvar: name of the dynamic variables
             - datavar: data variance, e.g., provided as a .csv file
 
         keys_en : dict
@@ -56,13 +58,16 @@ class Ensemble(PETEnsemble):
             - state: name of state variables passed to the .mako file
             - prior_<name>: the prior information the state variables, including mean, variance and variable limits
 
+            NB: If keys_en is empty dict, it is assumed that the prior info is contained in keys_da.
+            The merged dict keys_da|keys_en is what is sent to the parent class. 
+
         sim : callable
             The forward simulator (e.g. flow)
         """
 
 
         # do the initiallization of the PETensemble
-        super(Ensemble, self).__init__(keys_en, sim)
+        super(Ensemble, self).__init__(keys_da|keys_en, sim)
 
         # set logger
         self.logger = logging.getLogger('PET.PIPT')
@@ -89,7 +94,7 @@ class Ensemble(PETEnsemble):
 
             # Prepare sparse representation
             if 'compress' in self.keys_da:
-                self._org_sparse_representation()
+                self.sparse_info = extract.organize_sparse_representation(self.keys_da['compress'])
 
             self._org_obs_data()
             self._org_data_var()
@@ -99,12 +104,13 @@ class Ensemble(PETEnsemble):
                          np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
 
             # If we have dynamic state variables, we allocate keys for them in 'state'. Since we do not know the size
-            #  of the arrays of the dynamic variables, we only allocate an NE list to be filled in later (in
+            # of the arrays of the dynamic variables, we only allocate an NE list to be filled in later (in
             # calc_forecast)
             if 'dynamicvar' in self.keys_da:
-                dyn_var = self.keys_da['dynamicvar'] if isinstance(self.keys_da['dynamicvar'], list) else \
-                    [self.keys_da['dynamicvar']]
-                for name in dyn_var:
+                dyn_vars = self.keys_da['dynamicvar']
+                if not isinstance(dyn_vars, list):
+                    dyn_vars = [dyn_vars]
+                for name in dyn_vars:
                     self.state[name] = [None] * self.ne
 
             # Option to store the dictionaries containing observed data and data variance
@@ -113,15 +119,17 @@ class Ensemble(PETEnsemble):
 
             # Initialize localization
             if 'localization' in self.keys_da:
-                self.localization = cov_regularization.localization(self.keys_da['localization'],
-                                                                    self.keys_da['truedataindex'],
-                                                                    self.keys_da['datatype'],
-                                                                    self.keys_da['staticvar'],
-                                                                    self.ne)
+                self.localization = localization(
+                    self.keys_da['localization'],
+                    self.keys_da['truedataindex'],
+                    self.keys_da['datatype'],
+                    self.keys_da['staticvar'],
+                    self.ne
+                )
+                
             # Initialize local analysis
             if 'localanalysis' in self.keys_da:
-                self.local_analysis = at.init_local_analysis(
-                    init=self.keys_da['localanalysis'], state=self.state.keys())
+                self.local_analysis = extract.extract_local_analysis_info(self.keys_da['localanalysis'], self.state.keys())
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_da['datatype']}
                               for _ in self.obs_data]
@@ -492,35 +500,6 @@ class Ensemble(PETEnsemble):
                     self.datavar[i][datatype[j]] = est_noise  # override the given value
                     vintage = vintage + 1
 
-    def _org_sparse_representation(self):
-        """
-        Function for reading input to wavelet sparse representation of data.
-        """
-        self.sparse_info = {}
-        parsed_info = self.keys_da['compress']
-        dim = [int(elem) for elem in parsed_info[0][1]]
-        # flip to align with flow / eclipse
-        self.sparse_info['dim'] = [dim[2], dim[1], dim[0]]
-        self.sparse_info['mask'] = []
-        for vint in range(1, len(parsed_info[1])):
-            if not os.path.exists(parsed_info[1][vint]):
-                mask = np.ones(self.sparse_info['dim'], dtype=bool)
-                np.savez(f'mask_{vint-1}.npz', mask=mask)
-            else:
-                mask = np.load(parsed_info[1][vint])['mask']
-            self.sparse_info['mask'].append(mask.flatten())
-        self.sparse_info['level'] = parsed_info[2][1]
-        self.sparse_info['wname'] = parsed_info[3][1]
-        self.sparse_info['colored_noise'] = True if parsed_info[4][1] == 'yes' else False
-        self.sparse_info['threshold_rule'] = parsed_info[5][1]
-        self.sparse_info['th_mult'] = parsed_info[6][1]
-        self.sparse_info['use_hard_th'] = True if parsed_info[7][1] == 'yes' else False
-        self.sparse_info['keep_ca'] = True if parsed_info[8][1] == 'yes' else False
-        self.sparse_info['inactive_value'] = parsed_info[9][1]
-        self.sparse_info['use_ensemble'] = True if parsed_info[10][1] == 'yes' else None
-        self.sparse_info['order'] = parsed_info[11][1]
-        self.sparse_info['min_noise'] = parsed_info[12][1]
-
     def _ext_obs(self):
         self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
                                                        self.list_datatypes)
@@ -769,7 +748,7 @@ class Ensemble(PETEnsemble):
             self.list_datatypes = [elem for elem in self.list_datatypes if
                                    elem in self.local_analysis['update_mask'][state]]
             self.list_states = [deepcopy(state)]
-            self._ext_state()  # scaling for this state
+            self._ext_scaling()  # scaling for this state
             if 'localization' in self.keys_da:
                 self.localization.loc_info['field'] = self.state_scaling.shape
             del self.cov_data
@@ -799,7 +778,7 @@ class Ensemble(PETEnsemble):
                                        elem in self.local_analysis['update_mask'][state][state_indx]]
                 if len(self.list_datatypes):
                     self.list_states = [deepcopy(state)]
-                    self._ext_state()  # scaling for this state
+                    self._ext_scaling()  # scaling for this state
                     if 'localization' in self.keys_da:
                         self.localization.loc_info['field'] = self.state_scaling.shape
                     del self.cov_data
@@ -826,7 +805,7 @@ class Ensemble(PETEnsemble):
 
         for state in self.local_analysis['cell_parameter']:
             self.list_states = [deepcopy(state)]
-            self._ext_state()  # scaling for this state
+            self._ext_scaling()  # scaling for this state
             orig_state_scaling = deepcopy(self.state_scaling)
             param_position = self.local_analysis['parameter_position'][state]
             field_size = param_position.shape
@@ -863,7 +842,7 @@ class Ensemble(PETEnsemble):
                             if 'localization' in self.keys_da:
                                 self.localization.loc_info['field'] = (
                                     len(self.cell_index),)
-                                self.localization.loc_info['distance'] = cov_regularization._calc_distance(
+                                self.localization.loc_info['distance'] = _calc_distance(
                                     self.local_analysis['data_position'],
                                     self.local_analysis['unique'],
                                     current_data_list, self.assim_index,

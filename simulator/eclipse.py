@@ -19,6 +19,7 @@ from glob import glob
 # Internal imports
 from misc.system_tools.environ_var import EclipseRunEnvironment
 from pipt.misc_tools.analysis_tools import store_ensemble_sim_information
+from pipt.misc_tools.extract_tools import list_to_dict
 
 
 class eclipse:
@@ -111,27 +112,20 @@ class eclipse:
 
         # In the ecl framework, all reference to the filename should be uppercase
         self.file = self.input_dict['runfile'].upper()
+
+        # Extract sim options
+        if isinstance(self.input_dict['simoptions'], list):
+            self.input_dict['simoptions'] = list_to_dict(self.input_dict['simoptions'])
+        
+        simoptions = self.input_dict['simoptions']
         self.options = {}
-        self.options['sim_path'] = ''
-        self.options['sim_flag'] = ''
-        self.options['mpi'] = ''
-        self.options['mpiarray'] = ''
-        self.options['parsing-strictness'] = ''
-        # Loop over options in SIMOPTIONS and extract the parameters we want
-        if 'simoptions' in self.input_dict:
-            if type(self.input_dict['simoptions'][0]) == str:
-                self.input_dict['simoptions'] = [self.input_dict['simoptions']]
-            for i, opt in enumerate(list(zip(*self.input_dict['simoptions']))[0]):
-                if opt == 'sim_path':
-                    self.options['sim_path'] = self.input_dict['simoptions'][i][1]
-                if opt == 'sim_flag':
-                    self.options['sim_flag'] = self.input_dict['simoptions'][i][1]
-                if opt == 'mpi':
-                    self.options['mpi'] = self.input_dict['simoptions'][i][1]
-                if opt == 'mpiarray':
-                    self.options['mpiarray'] = self.input_dict['simoptions'][i][1]
-                if opt == 'parsing-strictness':
-                    self.options['parsing-strictness'] = self.input_dict['simoptions'][i][1]
+
+        self.options['sim_path'] = simoptions.get('sim_path', '')
+        self.options['sim_flag'] = simoptions.get('sim_flag', '')
+        self.options['mpi'] = simoptions.get('mpi', '')
+        self.options['mpiarray'] = simoptions.get('mpiarray', '')
+        self.options['parsing-strictness'] = simoptions.get('parsing-strictness', '')
+        
         if 'sim_limit' in self.input_dict:
             self.options['sim_limit'] = self.input_dict['sim_limit']
 

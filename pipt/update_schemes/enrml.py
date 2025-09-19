@@ -3,6 +3,7 @@ EnRML type schemes
 """
 # External imports
 import pipt.misc_tools.analysis_tools as at
+import pipt.misc_tools.extract_tools as extract
 from geostat.decomp import Cholesky
 from pipt.loop.ensemble import Ensemble
 from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
@@ -13,7 +14,7 @@ import pkgutil
 import inspect
 import numpy as np
 import copy as cp
-from scipy.linalg import cholesky, solve
+from scipy.linalg import cholesky, solve, inv, lu_solve, lu_factor
 
 import importlib.util
 
@@ -38,6 +39,7 @@ else:
         pass
 
 # Internal imports
+from pipt.misc_tools.analysis_tools import aug_state
 
 
 class lmenrmlMixIn(Ensemble):
@@ -46,13 +48,13 @@ class lmenrmlMixIn(Ensemble):
     update_methods_ns. This class must therefore facititate many different update schemes.
     """
 
-    def __init__(self, keys_da, keys_fwd, sim):
+    def __init__(self, keys_da, keys_en, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da, keys_fwd, sim)
+        super().__init__(keys_da, keys_en, sim)
 
         if self.restart is False:
             # Save prior state in separate variable
@@ -250,10 +252,9 @@ class lmenrmlMixIn(Ensemble):
         file. These parameters include convergence tolerances and parameters for the damping parameter. Default
         values for these parameters have been given here, if they are not provided in ITERATION.
         """
-        try:
-            options = dict(self.keys_da['iteration'])
-        except:
-            options = dict([self.keys_da['iteration']])
+        options = self.keys_da['iteration']
+        if isinstance(options, list):
+            options = extract.list_to_dict(options)
 
         # unpack options
         self.data_misfit_tol = options.get('data_misfit_tol', 0.01)
@@ -287,13 +288,13 @@ class gnenrmlMixIn(Ensemble):
     update_methods_ns. This class must therefore facititate many different update schemes.
     """
 
-    def __init__(self, keys_da, keys_fwd, sim):
+    def __init__(self, keys_da, keys_en, sim):
         """
         The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
         `pipt.input_output.pipt_init.ReadInitFile`.
         """
         # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da, keys_fwd, sim)
+        super().__init__(keys_da, keys_en, sim)
 
         if self.restart is False:
             # Save prior state in separate variable
@@ -579,10 +580,9 @@ class gnenrmlMixIn(Ensemble):
         file. These parameters include convergence tolerances and parameters for the damping parameter. Default
         values for these parameters have been given here, if they are not provided in ITERATION.
         """
-        try:
-            options = dict(self.keys_da['iteration'])
-        except:
-            options = dict([self.keys_da['iteration']])
+        options = self.keys_da['iteration']
+        if isinstance(options, list):
+            options = extract.list_to_dict(options)
         
         self.data_misfit_tol = options.get('data_misfit_tol', 0.01)
         self.trunc_energy = options.get('energy', 0.95)
@@ -720,7 +720,7 @@ class co_lm_enrml(lmenrmlMixIn, approx_update):
 
         else:
             _, self.aug_pred_data = at.aug_obs_pred_data(
-                self.obs_data, self.pred_data, assim_index, self.list_datatypes)
+                self.obs_data, self.pred_data, self.assim_index, self.list_datatypes)
 
         # Mean pred_data and perturbation matrix with scaling
         mean_preddata = np.mean(self.aug_pred_data, 1)
@@ -1055,11 +1055,11 @@ class gn_enrml(lmenrmlMixIn):
                 self.lam = self.lam + (self.lam_max - self.lam) * \
                     2 ** (-(self.iteration) / (self.gamma - 1))
                 success = True
-                self.current_state = deepcopy(self.state)
+                self.current_state = cp.deepcopy(self.state)
             elif self.data_misfit < self.prev_data_misfit and self.data_misfit_std >= self.prev_data_misfit_std:
                 # Accept itaration, but keep lam the same
                 success = True
-                self.current_state = deepcopy(self.state)
+                self.current_state = cp.deepcopy(self.state)
             else:  # Reject iteration, and decrease step length
                 self.lam = self.lam / self.gamma
                 success = False

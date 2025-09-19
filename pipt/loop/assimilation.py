@@ -16,10 +16,11 @@ from copy import copy
 from importlib import import_module
 
 # Internal imports
-from pipt.misc_tools import qaqc_tools
+from pipt.misc_tools.qaqc_tools import QAQC
 from pipt.loop.ensemble import Ensemble
 from misc.system_tools.environ_var import OpenBlasSingleThread
 from pipt.misc_tools import analysis_tools as at
+import pipt.misc_tools.extract_tools as extract
 
 
 class Assimilate:
@@ -50,7 +51,7 @@ class Assimilate:
             if hasattr(ensemble, 'max_iter'):
                 self.max_iter = self.ensemble.max_iter
             else:
-                self.max_iter = self._ext_max_iter()
+                self.max_iter = extract.extract_maxiter(self.ensemble.keys_da)
 
             # Within variables
             self.why_stop = None    # Output of why iter. loop stopped
@@ -83,15 +84,20 @@ class Assimilate:
         success_iter = True
 
         # Initiallize progressbar
-        pbar_out = tqdm(total=self.max_iter,
-                        desc='Iterations (Obj. func. val: )', position=0)
+        pbar_out = tqdm(total=self.max_iter, desc='Iterations (Obj. func. val: )', position=0)
 
         # Check if we want to perform a Quality Assurance of the forecast
         qaqc = None
-        if 'qa' in self.ensemble.sim.input_dict or 'qc' in self.ensemble.keys_da:
-            qaqc = qaqc_tools.QAQC({**self.ensemble.keys_da, **self.ensemble.sim.input_dict},
-                                   self.ensemble.obs_data, self.ensemble.datavar, self.ensemble.logger,
-                                   self.ensemble.prior_info, self.ensemble.sim, self.ensemble.prior_state)
+        if ('qa' in self.ensemble.sim.input_dict) or ('qc' in self.ensemble.keys_da):
+            qaqc = QAQC(
+                self.ensemble.keys_da|self.ensemble.sim.input_dict,
+                self.ensemble.obs_data, 
+                self.ensemble.datavar, 
+                self.ensemble.logger,
+                self.ensemble.prior_info, 
+                self.ensemble.sim, 
+                self.ensemble.prior_state
+            )
 
         # Run a while loop until max. iterations or convergence is reached
         while self.ensemble.iteration < self.max_iter and conv is False:
@@ -107,20 +113,17 @@ class Assimilate:
 
                 if 'qa' in self.ensemble.keys_da:  # Check if we want to perform a Quality Assurance of the forecast
                     # set updated prediction, state and lam
-                    qaqc.set(self.ensemble.pred_data,
-                             self.ensemble.state, self.ensemble.lam)
+                    qaqc.set(self.ensemble.pred_data, self.ensemble.state, self.ensemble.lam)
                     # Level 1,2 all data, and subspace
                     qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))
                     qaqc.calc_coverage()  # Compute data coverage
-                    qaqc.calc_kg({'plot_all_kg': True, 'only_log': False,
-                                 'num_store': 5})  # Compute kalman gain
+                    qaqc.calc_kg({'plot_all_kg': True, 'only_log': False, 'num_store': 5})  # Compute kalman gain
 
                 success_iter = True
 
                 # always store prior forcast, unless specifically told not to
                 if 'nosave' not in self.ensemble.keys_da:
-                    np.savez('prior_forecast.npz', **
-                             {'pred_data': self.ensemble.pred_data})
+                    np.savez('prior_forecast.npz', pred_data=self.ensemble.pred_data)
 
             # For the remaining iterations we start by applying the analysis and finish by running the forecast
             else:
@@ -278,48 +281,6 @@ class Assimilate:
                             else:
                                 self.ensemble.pred_data[i][el][:, index] = deepcopy(
                                     self.ensemble.pred_data[i][el][:, new_index])
-
-    def _ext_max_iter(self):
-        """
-        Extract max iterations from ITERATION keyword in DATAASSIM part (mandatory keyword for iteration loops).
-
-        Parameters
-        ----------
-        keys_da : dict
-            A dictionary containing all keywords from DATAASSIM part.
-
-            - 'iteration' : object
-                Information for iterative methods.
-
-        Returns
-        -------
-        max_iter : int
-            The maximum number of iterations allowed before abort.
-
-        Changelog
-        ---------
-        - ST 7/6-16
-        """
-        if 'iteration' in self.ensemble.keys_da:
-            iter_opts = dict(self.ensemble.keys_da['iteration'])
-            # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
-            try:
-                max_iter = iter_opts['max_iter']
-            except KeyError:
-                raise AssertionError('MAX_ITER has not been given in ITERATION')
-
-        elif 'mda' in self.ensemble.keys_da:
-            iter_opts = dict(self.ensemble.keys_da['mda'])
-            # Check if 'tot_assim_steps' has been given; if not, raise error (mandatory in MDA)
-            try:
-                max_iter = iter_opts['tot_assim_steps']
-            except KeyError:
-                raise AssertionError('TOT_ASSIM_STEPS has not been given in MDA!')
-
-        else:
-            max_iter = 1
-        # Return max. iter
-        return max_iter
 
     def _save_iteration_information(self):
         """
