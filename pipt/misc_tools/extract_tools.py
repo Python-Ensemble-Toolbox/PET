@@ -49,7 +49,7 @@ def extract_prior_info(keys: dict) -> dict:
                 assert prior['mean'].endswith('.npz'), 'File name does not end with \'.npz\'!'
                 mean_file = np.load(prior['mean'])
                 assert len(mean_file.files) == 1, \
-                    f'More than one variable located in {prior['mean']}. Only the mean vector can be stored in the .npz file!' 
+                    f"More than one variable located in {prior['mean']}. Only the mean vector can be stored in the .npz file!" 
                 prior['mean'] = mean_file[mean_file.files[0]]
             else:  # Single number inputted, make it a list if not already
                 if not isinstance(prior['mean'], list):
