@@ -519,7 +519,7 @@ class LineSearchClass(Optimize):
         else:
             if (self.step_size_adapt == 1) and (np.dot(pk, self.jk) != 0):
                 alpha = 2*(self.fk - self.f_old)/np.dot(pk, self.jk)
-            elif (self.step_size_adapt == 2) and (np.dot(pk, self.jk) == 0):
+            elif (self.step_size_adapt == 2) and (np.dot(pk, self.jk) != 0):
                 slope_old = np.dot(self.p_old, self.j_old)
                 slope_new = np.dot(pk, self.jk)
                 alpha = self.step_size*slope_old/slope_new
