@@ -58,7 +58,8 @@ class lmenrmlMixIn(Ensemble):
 
         if self.restart is False:
             # Save prior state in separate variable
-            self.prior_state = cp.deepcopy(self.state)
+            #self.prior_state = cp.deepcopy(self.state)
+            self.prior_enX = cp.deepcopy(self.enX) # not sure if this is wise!
 
             # Extract parameters like conv. tol. and damping param. from ITERATION keyword in DATAASSIM
             self._ext_iter_param()
@@ -77,8 +78,7 @@ class lmenrmlMixIn(Ensemble):
             self.check_assimindex_simultaneous()
             # define the assimilation index
             self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
-            # define the list of states
-            self.list_states = list(self.state.keys())
+
             # define the list of datatypes
             self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
                 self.obs_data, self.assim_index)
@@ -87,7 +87,8 @@ class lmenrmlMixIn(Ensemble):
             self._ext_obs()
             # Get state scaling and svd of scaled prior
             self._ext_scaling()
-            self.current_state = cp.deepcopy(self.state)
+
+    
 
     def calc_analysis(self):
         """
@@ -119,25 +120,24 @@ class lmenrmlMixIn(Ensemble):
         else:
             # Mean pred_data and perturbation matrix with scaling
             if len(self.scale_data.shape) == 1:
-                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
+                self.pert_preddata = (self.scale_data ** -1)[:, None] * np.dot(self.aug_pred_data, self.proj)
             else:
-                self.pert_preddata = solve(
-                    self.scale_data, np.dot(self.aug_pred_data, self.proj))
+                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
-            aug_state = at.aug_state(self.current_state, self.list_states)
-            self.update()  # run ordinary analysis
+            # Calculate update to get the step (found in update_methods_ns)
+            self.update()
+
+            # Update the state ensemble and weights
             if hasattr(self, 'step'):
-                aug_state_upd = aug_state + self.step
+                self.enX_temp = self.enX + self.step
             if hasattr(self, 'w_step'):
                 self.W = self.current_W + self.w_step
-                aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-                aug_state_upd = np.dot(aug_prior_state, (np.eye(
-                    self.ne) + self.W / np.sqrt(self.ne - 1)))
+                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W/np.sqrt(self.ne - 1)))
+
 
             # Extract updated state variables from aug_update
-            self.state = at.update_state(aug_state_upd, self.state, self.list_states)
-            self.state = at.limits(self.state, self.prior_info)
+            #self.state = at.update_state(aug_state_upd, self.state, self.list_states)
+            #self.state = at.limits(self.state, self.prior_info)
 
     def check_convergence(self):
         """
@@ -214,13 +214,25 @@ class lmenrmlMixIn(Ensemble):
                 if self.lam > self.lam_min:
                     self.lam = self.lam / self.gamma
                 success = True
-                self.current_state = cp.deepcopy(self.state)
+
+                # Update state ensemble
+                self.enX = cp.deepcopy(self.enX_temp)
+                self.enX_temp = None
+
+                # Update ensemble weights
                 if hasattr(self, 'W'):
                     self.current_W = cp.deepcopy(self.W)
+
+
             elif self.data_misfit < self.prev_data_misfit and self.data_misfit_std >= self.prev_data_misfit_std:
                 # accept itaration, but keep lam the same
                 success = True
-                self.current_state = cp.deepcopy(self.state)
+                
+                # Update state ensemble
+                self.enX = cp.deepcopy(self.enX_temp)
+                self.enX_temp = None
+
+                # Update ensemble weights
                 if hasattr(self, 'W'):
                     self.current_W = cp.deepcopy(self.W)
 
@@ -298,7 +310,8 @@ class gnenrmlMixIn(Ensemble):
 
         if self.restart is False:
             # Save prior state in separate variable
-            self.prior_state = cp.deepcopy(self.state)
+            #self.prior_state = cp.deepcopy(self.state)
+            self.prior_enX = cp.deepcopy(self.enX) # not sure if this is wise!
 
             # extract and save state scaling
 
@@ -319,8 +332,7 @@ class gnenrmlMixIn(Ensemble):
             self.check_assimindex_simultaneous()
             # define the assimilation index
             self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
-            # define the list of states
-            self.list_states = list(self.state.keys())
+            
             # define the list of datatypes
             self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
                 self.obs_data, self.assim_index)
@@ -328,7 +340,7 @@ class gnenrmlMixIn(Ensemble):
             self._ext_obs()
             # Get state scaling and svd of scaled prior
             self._ext_scaling()
-            self.current_state = cp.deepcopy(self.state)
+           
             # ensure that the updates does not invoke the LM inflation of the Hessian.
             self.lam = 0
 

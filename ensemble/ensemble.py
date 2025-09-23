@@ -51,7 +51,12 @@ class Ensemble:
         self.keys_en = keys_en
         self.sim = sim
         self.sim.redund_sim = redund_sim
+
+        # Initialize some attributes
         self.pred_data = None
+        self.enX_temp = None
+        self.enX = None
+        self.idX = {}
 
         # Auxilliary input to the simulator - can be used e.g.,
         # to allow for different models when optimizing.
@@ -137,17 +142,19 @@ class Ensemble:
 
                 # We assume that the user has saved the state dict. as **state (effectively saved all keys in state
                 # individually).
-                self.state = {key: val for key, val in tmp_load.items()}
+                for key in self.keys_en['staticvar']:
+                    if self.enX is None:
+                        self.enX = tmp_load[key]
+                        self.ne = self.enX.shape[1]
+                    else:
+                        assert self.ne == tmp_load[key].shape[1], 'Ensemble size of imported state variables do not match!'
+                        self.enX = np.vstack((self.enX, tmp_load[key]))
 
-                # Find the number of ensemble members from state variable
-                tmp_ne = []
-                for tmp_state in self.state.keys():
-                    tmp_ne.extend([self.state[tmp_state].shape[1]])
-                if max(tmp_ne) != min(tmp_ne):
-                    print('\033[1;33mInput states have different ensemble size\033[1;m')
-                    sys.exit(1)
-                self.ne = min(tmp_ne)
+                    # fill in indices
+                    self.idX[key] = (self.enX.shape[0] - tmp_load[key].shape[0], self.enX.shape[0])
                 
+                self.list_states = list(self.keys_en['staticvar'])
+
         if 'multilevel' in self.keys_en:
             ml_info = extract.extract_multilevel_info(self.keys_en)
             self.multilevel, self.tot_level, self.ml_ne, self.ML_error_corr, self.error_comp_scheme, self.ML_corr_done = ml_info
@@ -277,7 +284,7 @@ class Ensemble:
         # Return tot. assim. steps
         return list_assim
 
-    def calc_prediction(self, input_state=None, save_prediction=None):
+    def calc_prediction(self, enX=None, save_prediction=None):
         """
         Method for making predictions using the state variable. Will output the simulator response for all report steps
         and all data values provided to the simulator.
@@ -297,106 +304,73 @@ class Ensemble:
 
         """
 
-        if isinstance(self.state,list) and hasattr(self, 'multilevel'): # assume multilevel is used if state is a list 
-            success = self.calc_ml_prediction(input_state)
+        if isinstance(self.enX,list) and hasattr(self, 'multilevel'): # assume multilevel is used if state is a list 
+            success = self.calc_ml_prediction(enX)
         else:
-            # Number of parallel runs
-            if 'parallel' in self.sim.input_dict:
-                no_tot_run = int(self.sim.input_dict['parallel'])
+
+            # Use input state if given
+            if enX is None: 
+                use_input_ensemble = False
+                enX = self.enX
+                self.enX = None # free memory
             else:
-                no_tot_run = 1
+                use_input_ensemble = True
+
+            # Number of parallel runs
+            nparallel = int(self.sim.input_dict.get('parallel', 1))
             self.pred_data = []
 
-            # for level in self.multilevel['level']: #
-            # Setup forward simulator and redundant simulator at the correct fidelity
+            # Run setup function for redund simulator
             if self.sim.redund_sim is not None:
-                self.sim.redund_sim.setup_fwd_run()
-            self.sim.setup_fwd_run(redund_sim=self.sim.redund_sim)
+                if hasattr(self.sim.redund_sim, 'setup_fwd_run'):
+                    self.sim.redund_sim.setup_fwd_run()
+            
+            # Run setup function for simulator
+            if hasattr(self.sim, 'setup_fwd_run'):
+                self.sim.setup_fwd_run(redund_sim=self.sim.redund_sim)
+        
+            # Convert ensemble matrix to list of dictionaries
+            enX = at.ensmeble_matrix_to_list(enX, self.idX)
 
-            # Ensure that we put all the states in a list
-            list_state = [deepcopy({}) for _ in range(self.ne)]
-            for i in range(self.ne):
-                if input_state is None:
-                    for key in self.state.keys():
-                        if self.state[key].ndim == 1:
-                            list_state[i][key] = deepcopy(self.state[key])
-                        elif self.state[key].ndim == 2:
-                            list_state[i][key] = deepcopy(self.state[key][:, i])
-                        # elif self.state[key].ndim == 3:
-                        #     list_state[i][key] = deepcopy(self.state[key][level,:, i])
-                else:
-                    for key in self.state.keys():
-                        if input_state[key].ndim == 1:
-                            list_state[i][key] = deepcopy(input_state[key])
-                        elif input_state[key].ndim == 2:
-                            list_state[i][key] = deepcopy(input_state[key][:, i])
-                        # elif input_state[key].ndim == 3:
-                        #     list_state[i][key] = deepcopy(input_state[key][:,:, i])
-                if self.aux_input is not None:  # several models are used
-                    list_state[i]['aux_input'] = self.aux_input[i]
+            if not (self.aux_input is None): 
+                for n in range(self.ne):
+                    enX[n]['aux_input'] = self.aux_input[n]
 
-            # Index list of ensemble members
-            list_member_index = list(range(self.ne))
-
-            if no_tot_run==1: # if not in parallel we use regular loop
-                en_pred = [self.sim.run_fwd_sim(state, member_index) for state, member_index in
-                           tqdm(zip(list_state, list_member_index), total=len(list_state))]
-            elif self.sim.input_dict.get('hpc', False): # Run prediction in parallel on hpc
-                batch_size = no_tot_run # If more than 500 ensemble members, we limit the runs to batches of 500
-                # Split the ensemble into batches of 500
-                if batch_size >= 1000:
-                    self.logger.info(f'Cannot run batch size of {no_tot_run}. Set to 1000')
-                    batch_size = 1000
+            ######################################################################################################################
+            # No parralelization
+            if nparallel==1:
                 en_pred = []
-                batch_en = [np.arange(start, start + batch_size) for start in
-                            np.arange(0, self.ne - batch_size, batch_size)]
-                if len(batch_en): # if self.ne is less than batch_size
-                    batch_en.append(np.arange(batch_en[-1][-1]+1, self.ne))
-                else:
-                    batch_en.append(np.arange(0, self.ne))
-                for n_e in batch_en:
-                    _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
-                            zip([list_state[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
-                    # Run call_sim on the hpc
-                    if self.sim.options['mpiarray']:
-                        job_id = self.sim.SLURM_ARRAY_HPC_run(
-                                                            n_e,
-                                                            venv=os.path.join(os.path.dirname(sys.executable), 'activate'),
-                                                            filename=self.sim.file,
-                                                            **self.sim.options
-                                                        )
-                    else:
-                        job_id=self.sim.SLURM_HPC_run(
-                                                    n_e, 
-                                                    venv=os.path.join(os.path.dirname(sys.executable),'activate'),
-                                                    filename=self.sim.file,
-                                                    **self.sim.options
-                                                    )
-                    
-                    # Wait for the simulations to finish
-                    if job_id:
-                        sim_status = self.sim.wait_for_jobs(job_id)
-                    else:
-                        print("Job submission failed. Exiting.")
-                        sim_status = [False]*len(n_e)
-                    # Extract the results. Need a local counter to check the results in the correct order
-                    for c_member, member_i in enumerate([list_member_index[curr_n] for curr_n in n_e]):
-                        if sim_status[c_member]:
-                            self.sim.extract_data(member_i)
-                            en_pred.append(deepcopy(self.sim.pred_data))
-                            if self.sim.saveinfo is not None:  # Try to save information
-                                at.store_ensemble_sim_information(self.sim.saveinfo, member_i)
-                        else:
-                            en_pred.append(False)
-                        self.sim.remove_folder(member_i)
-            else: # Run prediction in parallel using p_map
-                en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                                list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
-            # List successful runs and crashes
-            list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
-            list_success = [indx for indx, el in enumerate(en_pred) if el is not False]
-            success = True
+                for member_index, state in tqdm(enumerate(enX), total=self.ne, desc="Running simulations"):
+                    en_pred.append(self.sim.run_fwd_sim(state, member_index))
+            
+            # Parallelization on HPC using SLURM
+            elif self.sim.input_dict.get('hpc', False): # Run prediction in parallel on hpc
+                en_pred = self.run_on_HPC(enX, batch_size=nparallel)
 
+            # Parallelization on local machine using p_map      
+            else:
+                en_pred = p_map(
+                    self.sim.run_fwd_sim, 
+                    enX,
+                    list(range(self.ne)), 
+                    num_cpus=nparallel, 
+                    disable=self.disable_tqdm
+                )
+            ######################################################################################################################
+                
+            # Convert state enemble back to matrix form
+            enX = at.ensemble_list_to_matrix(enX, self.idX)
+
+            # restore state ensemble if it was not inputted
+            if not use_input_ensemble:
+                self.enX = enX
+                enX = None # free memory
+            
+            # List successful runs and crashes
+            success = True
+            list_success = [indx for indx, el in enumerate(en_pred) if el is not False]
+            list_crash   = [indx for indx, el in enumerate(en_pred) if el is False]
+        
             # Dump all information and print error if all runs have crashed
             if not list_success:
                 self.save()
@@ -414,22 +388,21 @@ class Ensemble:
                 # Replace crashed runs with (random) successful runs. If there are more crashed runs than successful once,
                 # we draw with replacement.
                 if len(list_crash) < len(list_success):
-                    copy_member = np.random.choice(
-                        list_success, size=len(list_crash), replace=False)
+                    copy_member = np.random.choice(list_success, size=len(list_crash), replace=False)
                 else:
-                    copy_member = np.random.choice(
-                        list_success, size=len(list_crash), replace=True)
+                    copy_member = np.random.choice(list_success, size=len(list_crash), replace=True)
 
                 # Insert the replaced runs in prediction list
                 for indx, el in enumerate(copy_member):
-                    print(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member '
-                          f'{el}! ---\033[92m')
-                    self.logger.info(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by '
-                                     f'ensemble member {el}! ---\033[92m')
+                    msg = (
+                        f"\033[92m--- Ensemble member {list_crash[indx]} failed, "
+                        f"has been replaced by ensemble member {el}! ---\033[92m"
+                    )
+                    print(msg)
+                    self.logger.info(msg)
                     for key in self.state.keys():
                         if self.state[key].ndim > 1:
-                            self.state[key][:, list_crash[indx]] = deepcopy(
-                                self.state[key][:, el])
+                            self.state[key][:, list_crash[indx]] = deepcopy(self.state[key][:, el])
                     en_pred[list_crash[indx]] = deepcopy(en_pred[el])
  
             # Convert ensemble specific result into pred_data, and filter for NONE data
@@ -445,6 +418,58 @@ class Ensemble:
             np.savez(f'{save_prediction}.npz', **{'pred_data': self.pred_data})
 
         return success
+    
+    def run_on_HPC(self, enX, batch_size=None, **kwargs):
+        list_member_index = list(range(self.ne))
+
+        # Split the ensemble into batches of 500
+        if batch_size >= 1000:
+            self.logger.info(f'Cannot run batch size of {batch_size}. Set to 1000')
+            batch_size = 1000
+        en_pred = []
+        batch_en = [np.arange(start, start + batch_size) for start in
+                    np.arange(0, self.ne - batch_size, batch_size)]
+        if len(batch_en): # if self.ne is less than batch_size
+            batch_en.append(np.arange(batch_en[-1][-1]+1, self.ne))
+        else:
+            batch_en.append(np.arange(0, self.ne))
+        for n_e in batch_en:
+            _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
+                    zip([enX[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
+            # Run call_sim on the hpc
+            if self.sim.options['mpiarray']:
+                job_id = self.sim.SLURM_ARRAY_HPC_run(
+                                                    n_e,
+                                                    venv=os.path.join(os.path.dirname(sys.executable), 'activate'),
+                                                    filename=self.sim.file,
+                                                    **self.sim.options
+                                                )
+            else:
+                job_id=self.sim.SLURM_HPC_run(
+                                            n_e, 
+                                            venv=os.path.join(os.path.dirname(sys.executable),'activate'),
+                                            filename=self.sim.file,
+                                            **self.sim.options
+                                            )
+            
+            # Wait for the simulations to finish
+            if job_id:
+                sim_status = self.sim.wait_for_jobs(job_id)
+            else:
+                print("Job submission failed. Exiting.")
+                sim_status = [False]*len(n_e)
+            # Extract the results. Need a local counter to check the results in the correct order
+            for c_member, member_i in enumerate([list_member_index[curr_n] for curr_n in n_e]):
+                if sim_status[c_member]:
+                    self.sim.extract_data(member_i)
+                    en_pred.append(deepcopy(self.sim.pred_data))
+                    if self.sim.saveinfo is not None:  # Try to save information
+                        at.store_ensemble_sim_information(self.sim.saveinfo, member_i)
+                else:
+                    en_pred.append(False)
+                self.sim.remove_folder(member_i)
+        
+        return en_pred
 
     def save(self):
         """

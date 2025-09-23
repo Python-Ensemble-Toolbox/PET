@@ -200,11 +200,11 @@ class Assimilate:
         # always store posterior forcast and state, unless specifically told not to
         if 'nosave' not in self.ensemble.keys_da:
             try: # first try to save as npz file
-                np.savez('posterior_state_estimate.npz', **self.ensemble.state)
+                np.savez('posterior_state_estimate.npz', **self.ensemble.enX)
                 np.savez('posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
             except: # If this fails, store as pickle
                 with open('posterior_state_estimate.p', 'wb') as file:
-                    pickle.dump(self.ensemble.state, file)
+                    pickle.dump(self.ensemble.enX, file)
                 with open('posterior_forecast.p', 'wb') as file:
                     pickle.dump(self.ensemble.pred_data, file)
 
@@ -351,6 +351,10 @@ class Assimilate:
         else:
             analysisdebug = [self.ensemble.keys_da['analysisdebug']]
 
+        if 'state' in analysisdebug:
+            analysisdebug.remove('state')
+            analysisdebug.append('enX')
+
         # Loop over variables to store in save list
         for save_typ in analysisdebug:
             if hasattr(self, save_typ):
@@ -440,7 +444,10 @@ class Assimilate:
             l_prim = [int(assim_ind[1])]
 
         # Run forecast. Predicted data solved in self.ensemble.pred_data
-        self.ensemble.calc_prediction()
+        if self.ensemble.enX_temp is None:
+            self.ensemble.calc_prediction()
+        else:
+            self.ensemble.calc_prediction(enX=self.ensemble.enX_temp)
 
         # Filter pred. data needed at current assimilation step. This essentially means deleting pred. data not
         # contained in the assim. indices for current assim. step or does not have obs. data at this index

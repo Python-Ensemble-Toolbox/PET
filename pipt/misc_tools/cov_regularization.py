@@ -79,7 +79,7 @@ class localization():
         # Check localization method/type
         try:
             if 'autoadaloc' in parsed_info:
-                init_local = {'autoadaloc': True, 'nstd': parsed_info['autoadaloc']}
+                init_local.update({'autoadaloc': True, 'nstd': parsed_info['autoadaloc']})
                 if 'type' in parsed_info:
                     init_local['type'] = parsed_info['type']
             elif 'localanalysis' in parsed_info:
@@ -312,6 +312,7 @@ class localization():
                                                                          field_size=init_local['field'],
                                                                          ne=ne
                                                                          )
+                        
         self.loc_info = init_local
 
     def localize(self, curr_data, curr_time, curr_param, ne, prior_info, data_size):
