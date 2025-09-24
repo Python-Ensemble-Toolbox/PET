@@ -550,7 +550,7 @@ class Ensemble(PETEnsemble):
             self.temp_state = [None]*(len(self.get_list_assim_steps()) + 1)
 
         # Save the state
-        self.temp_state[ind_save] = entools.matrix_to_dict(self.enX)
+        self.temp_state[ind_save] = deepcopy(entools.matrix_to_dict(self.enX))
         np.savez('temp_state_assim', self.temp_state)
 
     def save_temp_state_iter(self, ind_save, max_iter):
@@ -571,7 +571,7 @@ class Ensemble(PETEnsemble):
             self.temp_state = [None] * (int(max_iter) + 1)  # +1 due to init. ensemble
 
         # Save state
-        self.temp_state[ind_save] = entools.matrix_to_dict(self.enX)
+        self.temp_state[ind_save] = deepcopy(entools.matrix_to_dict(self.enX))
         np.savez('temp_state_iter', self.temp_state)
 
     def save_temp_state_mda(self, ind_save):
@@ -594,7 +594,7 @@ class Ensemble(PETEnsemble):
             self.temp_state = [None] * (int(self.tot_assim) + 1)
 
         # Save state
-        self.temp_state[ind_save] = entools.matrix_to_dict(self.enX)
+        self.temp_state[ind_save] = deepcopy(entools.matrix_to_dict(self.enX))
         np.savez('temp_state_mda', self.temp_state)
 
     def save_temp_state_ml(self, ind_save):
@@ -617,7 +617,7 @@ class Ensemble(PETEnsemble):
             self.temp_state = [None] * (int(self.tot_assim) + 1)
 
         # Save state
-        self.temp_state[ind_save] = deepcopy(self.state)
+        self.temp_state[ind_save] = deepcopy(entools.matrix_to_dict(self.enX))
         np.savez('temp_state_ml', self.temp_state)
 
     def compress(self, data=None, vintage=0, aug_coeff=None):

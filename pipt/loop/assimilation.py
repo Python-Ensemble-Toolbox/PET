@@ -166,9 +166,6 @@ class Assimilate:
                     #
                     self._save_iteration_information()
                 if self.ensemble.iteration > 0:
-                    # Temporary save state if options in TEMPSAVE have been given and the option is not 'no'
-                    if 'tempsave' in self.ensemble.keys_da and self.ensemble.keys_da['tempsave'] != 'no':
-                        self._save_during_iteration(self.ensemble.keys_da['tempsave'])
                     if 'analysisdebug' in self.ensemble.keys_da:
                         self._save_analysis_debug()
                     if 'qc' in self.ensemble.keys_da:  # Check if we want to perform a Quality Control of the updated state
