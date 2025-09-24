@@ -20,7 +20,9 @@ from pipt.misc_tools.qaqc_tools import QAQC
 from pipt.loop.ensemble import Ensemble
 from misc.system_tools.environ_var import OpenBlasSingleThread
 from pipt.misc_tools import analysis_tools as at
+
 import pipt.misc_tools.extract_tools as extract
+import pipt.misc_tools.ensemble_tools as entools
 
 
 class Assimilate:
@@ -96,7 +98,7 @@ class Assimilate:
                 self.ensemble.logger,
                 self.ensemble.prior_info, 
                 self.ensemble.sim, 
-                self.ensemble.prior_state
+                entools.matrix_to_dict(self.ensemble.prior_enX, self.ensemble.idX)
             )
 
         # Run a while loop until max. iterations or convergence is reached
@@ -113,7 +115,12 @@ class Assimilate:
 
                 if 'qa' in self.ensemble.keys_da:  # Check if we want to perform a Quality Assurance of the forecast
                     # set updated prediction, state and lam
-                    qaqc.set(self.ensemble.pred_data, self.ensemble.state, self.ensemble.lam)
+                    qaqc.set(
+                        self.ensemble.pred_data, 
+                        entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX), 
+                        self.ensemble.lam
+                    )
+
                     # Level 1,2 all data, and subspace
                     qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))
                     qaqc.calc_coverage()  # Compute data coverage
@@ -166,13 +173,19 @@ class Assimilate:
                         self._save_analysis_debug()
                     if 'qc' in self.ensemble.keys_da:  # Check if we want to perform a Quality Control of the updated state
                         # set updated prediction, state and lam
-                        qaqc.set(self.ensemble.pred_data,
-                                 self.ensemble.state, self.ensemble.lam)
+                        qaqc.set(
+                            self.ensemble.pred_data,
+                            entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX), 
+                            self.ensemble.lam
+                        )
                         qaqc.calc_da_stat()  # Compute statistics for updated parameters
                     if 'qa' in self.ensemble.keys_da:  # Check if we want to perform a Quality Assurance of the forecast
                         # set updated prediction, state and lam
-                        qaqc.set(self.ensemble.pred_data,
-                                 self.ensemble.state, self.ensemble.lam)
+                        qaqc.set(
+                            self.ensemble.pred_data,
+                            entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX), 
+                            self.ensemble.lam
+                        )
                         qaqc.calc_mahalanobis(
                             (1, 'time', 2, 'time', 1, None, 2, None))  # Level 1,2 all data, and subspace
                         #  qaqc.calc_coverage()  # Compute data coverage
@@ -266,9 +279,11 @@ class Assimilate:
             new_index = np.random.choice(members)
 
             # replace state
-            for el in self.ensemble.state.keys():
-                self.ensemble.state[el][:, index] = deepcopy(
-                    self.ensemble.state[el][:, new_index])
+            if self.ensemble.enX_temp is not None:
+                self.ensemble.enX[:, index] = deepcopy(self.ensemble.enX[:, new_index])
+            else:
+                self.ensemble.enX_temp[:, index] = deepcopy(self.ensemble.enX_temp[:, new_index])
+                
 
             # replace the failed forecast
             for i, data_ind in enumerate(self.ensemble.pred_data):
@@ -464,13 +479,6 @@ class Assimilate:
         # Post process predicted data if wanted
         if 'post_process_forecast' in self.ensemble.keys_da and self.ensemble.keys_da['post_process_forecast'] == 'yes':
             self.post_process_forecast()
-
-        # If we have dynamic variables, and we are in the first assimilation step, we must convert lists to (2D)
-        # numpy arrays
-        if 'dynamicvar' in self.ensemble.keys_da and assim_step == 0:
-            for dyn_state in self.ensemble.keys_da['dynamicvar']:
-                self.ensemble.state[dyn_state] = np.array(
-                    self.ensemble.state[dyn_state]).T
 
         # Extra option debug
         if 'saveforecast' in self.ensemble.sim.input_dict:

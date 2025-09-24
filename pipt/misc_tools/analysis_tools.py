@@ -6,6 +6,13 @@ be used by several update/analysis schemes. If some method is only applicable to
 implementing, leave it in that class.
 """
 
+__all__ = [
+    'parallel_upd',
+    'calc_autocov',
+    'calc_crosscov',
+    'calc_objectivefun'
+]
+
 # External imports
 import numpy as np          # Numerical tools
 from scipy import linalg    # Linear algebra tools
@@ -1179,67 +1186,6 @@ def compute_x(pert_preddata, cov_data, keys_da, alfa=None):
         X = X.T
 
     return X
-
-
-def ensmeble_matrix_to_list(matrix: np.ndarray, indecies: dict) -> list[dict]:
-    '''
-    Convert an ensemble matrix to a list of dictionaries.
-
-    Parameters
-    ----------
-    matrix : np.ndarray
-        Ensemble matrix where each column represents an ensemble member.
-    indecies : dict
-        Dictionary with keys as variable names and values as tuples indicating the start and end row indices
-        for each variable in the ensemble matrix.
-    
-    Returns
-    -------
-    ensemble_list : list of dict
-    '''
-    ne = matrix.shape[1]
-    ensemble_list = []
-
-    for n in range(ne):
-        member = {}
-        for key, (start, end) in indecies.items():
-            if matrix[start:end].ndim == 2:
-                member[key] = matrix[start:end, n]
-            else:
-                member[key] = matrix[start:end]
-        ensemble_list.append(member)
-    
-    return ensemble_list
-
-def ensemble_list_to_matrix(ensemble_list: list[dict], indecies: dict) -> np.ndarray:
-    '''
-    Convert a list of dictionaries to an ensemble matrix.
-
-    Parameters
-    ----------
-    ensemble_list : list of dict
-        List where each dictionary represents an ensemble member with variable names as keys.
-    indecies : dict
-        Dictionary with keys as variable names and values as tuples indicating the start and end row indices
-        for each variable in the ensemble matrix.
-    
-    Returns
-    -------
-    matrix : np.ndarray
-        Ensemble matrix where each column represents an ensemble member.
-    '''
-    ne = len(ensemble_list)
-    nx = sum(end - start for start, end in indecies.values())
-    matrix = np.zeros((nx, ne))
-
-    for n, member in enumerate(ensemble_list):
-        for key, (start, end) in indecies.items():
-            if member[key].ndim == 2:
-                matrix[start:end, n] = member[key][:,n]
-            else:
-                matrix[start:end, n] = member[key]
-    
-    return matrix
 
 
 def aug_state(state, list_state, cell_index=None):

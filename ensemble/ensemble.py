@@ -19,7 +19,7 @@ import logging
 # Internal imports
 import pipt.misc_tools.analysis_tools as at
 import pipt.misc_tools.extract_tools as extract
-from geostat.decomp import Cholesky  # Making realizations
+import pipt.misc_tools.ensemble_tools as entools
 from pipt.misc_tools import cov_regularization
 from pipt.misc_tools import wavelet_tools as wt
 from misc import read_input_csv as rcsv
@@ -34,7 +34,7 @@ class Ensemble:
     implemented here.
     """
 
-    def __init__(self, keys_en, sim, redund_sim=None):
+    def __init__(self, keys_en: dict, sim, redund_sim=None):
         """
         Class extends the ReadInitFile class. First the PIPT init. file is passed to the parent class for reading and
         parsing. Rest of the initialization uses the keywords parsed in ReadInitFile (parent) class to set up observed,
@@ -133,8 +133,12 @@ class Ensemble:
             if 'importstaticvar' not in self.keys_en:
                 self.ne = int(self.keys_en['ne'])
 
-                # Output = self.state, self.cov_prior
-                self.gen_init_ensemble()
+                # Generate prior ensemble
+                self.enX, self.idX, self.cov_prior = entools.generate_prior_ensemble(
+                    prior_info = self.prior_info, 
+                    size = self.ne,
+                    save = self.keys_en.get('save_prior', True)
+                )
 
             else:
                 # State variable imported as a Numpy save file
@@ -158,107 +162,8 @@ class Ensemble:
         if 'multilevel' in self.keys_en:
             ml_info = extract.extract_multilevel_info(self.keys_en)
             self.multilevel, self.tot_level, self.ml_ne, self.ML_error_corr, self.error_comp_scheme, self.ML_corr_done = ml_info
-        #self._ext_ml_info()
 
-    def _ext_ml_info(self):
-        '''
-        Extract the info needed for ML simulations. Note if the ML keyword is not in keys_en we initialize
-        such that we only have one level -- the high fidelity one
-        '''
-
-        if 'multilevel' in self.keys_en:
-            # parse
-            self.multilevel = {}
-            self.ML_error_corr = 'none'
-            for i, opt in enumerate(list(zip(*self.keys_en['multilevel']))[0]):
-                if opt == 'levels':
-                    self.multilevel['levels'] = [elem for elem in range(
-                        int(self.keys_en['multilevel'][i][1]))]
-                    self.tot_level = int(self.keys_en['multilevel'][i][1])
-                if opt == 'en_size':
-                    self.multilevel['ne'] = [range(int(el))
-                                             for el in self.keys_en['multilevel'][i][1]]
-                    self.ml_ne = [int(el) for el in self.keys_en['multilevel'][i][1]]
-                if opt == 'ml_error_corr':
-                    # options for ML_error_corr are: bias_corr, deterministic, stochastic, telescopic
-                    self.ML_error_corr = self.keys_en['multilevel'][i][1]
-                    if not self.ML_error_corr == 'none':
-                        # options for error_comp_scheme are: once, ens, sep
-                        self.error_comp_scheme = self.keys_en['multilevel'][i][2]
-                    self.ML_corr_done = False
-
-    
-    def gen_init_ensemble(self):
-        """
-        Generate the initial ensemble of (joint) state vectors using the GeoStat class in the "geostat" package.
-        TODO: Merge this function with the perturbation function _gen_state_ensemble in popt.
-        """
-        # Initialize GeoStat class
-        init_en = Cholesky()
-
-        # (Re)initialize state variable as dictionary
-        self.state = {}
-        self.cov_prior = {}
-
-        for name in self.prior_info:
-            # Init. indices to pick out correct mean vector for each layer
-            ind_end = 0
-
-            # Extract info.
-            nx = self.prior_info[name].get('nx', 0)
-            ny = self.prior_info[name].get('ny', 0)
-            nz = self.prior_info[name].get('nz', 0)
-            mean = self.prior_info[name].get('mean', None)
-
-            if nx == ny == 0:  # assume ensemble will be generated elsewhere if dimensions are zero
-                break
-
-            variance = self.prior_info[name].get('variance', None)
-            corr_length = self.prior_info[name].get('corr_length', None)
-            aniso = self.prior_info[name].get('aniso', None)
-            vario = self.prior_info[name].get('vario', None)
-            angle = self.prior_info[name].get('angle', None)
-            limits= self.prior_info[name].get('limits',None)
-            
-
-            # Loop over nz to make layers of 2D priors
-            for i in range(self.prior_info[name]['nz']):
-                # If mean is scalar, no covariance matrix is needed
-                if type(self.prior_info[name]['mean']).__module__ == 'numpy':
-                    # Generate covariance matrix
-                    cov = init_en.gen_cov2d(
-                        nx, ny, variance[i], corr_length[i], aniso[i], angle[i], vario[i])
-                else:
-                    cov = np.array(variance[i])
-
-                # Pick out the mean vector for the current layer
-                ind_start = ind_end
-                ind_end = int((i + 1) * (len(mean) / nz))
-                mean_layer = mean[ind_start:ind_end]
-
-                # Generate realizations. If LIMITS have been entered, they must be taken account for here
-                if limits is None:
-                    real = init_en.gen_real(mean_layer, cov, self.ne)
-                else:
-                    real = init_en.gen_real(mean_layer, cov, self.ne, {
-                                            'upper': limits[i][1], 'lower': limits[i][0]})
-
-                # Stack realizations for each layer
-                if i == 0:
-                    real_out = real
-                else:
-                    real_out = np.vstack((real_out, real))
-
-            # Store realizations in dictionary with name given in STATICVAR
-            self.state[name] = real_out
-
-            # Store the covariance matrix
-            self.cov_prior[name] = cov
         
-        # Save the ensemble for later inspection
-        np.savez('prior.npz', **self.state)
-
-
     def get_list_assim_steps(self):
         """
         Returns list of assimilation steps. Useful in a 'loop'-script.
@@ -330,7 +235,7 @@ class Ensemble:
                 self.sim.setup_fwd_run(redund_sim=self.sim.redund_sim)
         
             # Convert ensemble matrix to list of dictionaries
-            enX = at.ensmeble_matrix_to_list(enX, self.idX)
+            enX = entools.matrix_to_list(enX, self.idX)
 
             if not (self.aux_input is None): 
                 for n in range(self.ne):
@@ -359,7 +264,7 @@ class Ensemble:
             ######################################################################################################################
                 
             # Convert state enemble back to matrix form
-            enX = at.ensemble_list_to_matrix(enX, self.idX)
+            enX = entools.list_to_matrix(enX, self.idX)
 
             # restore state ensemble if it was not inputted
             if not use_input_ensemble:
@@ -393,17 +298,16 @@ class Ensemble:
                     copy_member = np.random.choice(list_success, size=len(list_crash), replace=True)
 
                 # Insert the replaced runs in prediction list
-                for indx, el in enumerate(copy_member):
+                for index, element in enumerate(copy_member):
                     msg = (
-                        f"\033[92m--- Ensemble member {list_crash[indx]} failed, "
-                        f"has been replaced by ensemble member {el}! ---\033[92m"
+                        f"\033[92m--- Ensemble member {list_crash[index]} failed, "
+                        f"has been replaced by ensemble member {element}! ---\033[92m"
                     )
                     print(msg)
                     self.logger.info(msg)
-                    for key in self.state.keys():
-                        if self.state[key].ndim > 1:
-                            self.state[key][:, list_crash[indx]] = deepcopy(self.state[key][:, el])
-                    en_pred[list_crash[indx]] = deepcopy(en_pred[el])
+                    if enX.shape[1] > 1:
+                        enX[:, list_crash[index]] = deepcopy(self.enX[:, element])
+                    en_pred[list_crash[index]] = deepcopy(en_pred[element])
  
             # Convert ensemble specific result into pred_data, and filter for NONE data
             self.pred_data.extend([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)

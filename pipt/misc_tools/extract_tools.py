@@ -1,4 +1,5 @@
-# This module inlcudes fucntions for extracting information from input dicts
+# This module inlcudes functions for extracting information from input dicts
+
 __all__ = [
     'extract_prior_info',
     'extract_multilevel_info',

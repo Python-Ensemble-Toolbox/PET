@@ -11,6 +11,7 @@ from geostat.decomp import Cholesky
 # Internal imports
 from pipt.loop.ensemble import Ensemble
 import pipt.misc_tools.analysis_tools as at
+import pipt.misc_tools.ensemble_tools as entools
 
 # import update schemes
 from pipt.update_schemes.update_methods_ns.approx_update import approx_update
@@ -45,8 +46,8 @@ class esmdaMixIn(Ensemble):
         self.prev_data_misfit = None
 
         if self.restart is False:
-            self.prior_state = deepcopy(self.state)
-            self.list_states = list(self.state.keys())
+            self.prior_enX = deepcopy(self.enX)
+            self.list_states = list(self.idX.keys())
             # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
             # are given as in the Simultaneous loop.
             self.check_assimindex_simultaneous()
@@ -71,7 +72,7 @@ class esmdaMixIn(Ensemble):
             self.real_obs_data_conv = deepcopy(self.real_obs_data)
             # Get state scaling and svd of scaled prior
             self._ext_scaling()
-            self.current_state = deepcopy(self.state)
+
         # Extract the inflation parameter from MDA keyword
         self.alpha = self._ext_inflation_param()
 
@@ -147,20 +148,19 @@ class esmdaMixIn(Ensemble):
                 self.pert_preddata = scilinalg.solve(
                     self.scale_data, np.dot(self.aug_pred_data, self.proj))
 
-            aug_state = at.aug_state(self.current_state, self.list_states)
-
             self.update()
+
+            # Update the state ensemble and weights
             if hasattr(self, 'step'):
-                aug_state_upd = aug_state + self.step
+                self.enX_temp = self.enX + self.step
             if hasattr(self, 'w_step'):
                 self.W = self.current_W + self.w_step
-                aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-                aug_state_upd = np.dot(aug_prior_state, (np.eye(
-                    self.ne) + self.W / np.sqrt(self.ne - 1)))
+                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W/np.sqrt(self.ne - 1)))
 
-            # Extract updated state variables from aug_update
-            self.state = at.update_state(aug_state_upd, self.state, self.list_states)
-            self.state = at.limits(self.state, self.prior_info)
+
+            # Ensure limits are respected
+            limits = {key: self.prior_info[key].get('limits', (None, None)) for key in self.idX.keys()}
+            self.enX_temp = entools.clip_matrix(self.enX_temp, limits, self.idX)
 
     def check_convergence(self):
         """
@@ -200,7 +200,9 @@ class esmdaMixIn(Ensemble):
             self.logger.info(
                 f'MDA iteration number {self.iteration}! Objective function increased from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
         # Return conv = False, why_stop var.
-        self.current_state = deepcopy(self.state)
+        # Update state ensemble
+        self.enX = deepcopy(self.enX_temp)
+        self.enX_temp = None
         if hasattr(self, 'W'):
             self.current_W = deepcopy(self.W)
 

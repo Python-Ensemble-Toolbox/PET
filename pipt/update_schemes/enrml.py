@@ -4,6 +4,8 @@ EnRML type schemes
 # External imports
 import pipt.misc_tools.analysis_tools as at
 import pipt.misc_tools.extract_tools as extract
+import pipt.misc_tools.ensemble_tools as entools
+
 from geostat.decomp import Cholesky
 from pipt.loop.ensemble import Ensemble
 from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
@@ -135,9 +137,9 @@ class lmenrmlMixIn(Ensemble):
                 self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W/np.sqrt(self.ne - 1)))
 
 
-            # Extract updated state variables from aug_update
-            #self.state = at.update_state(aug_state_upd, self.state, self.list_states)
-            #self.state = at.limits(self.state, self.prior_info)
+            # Ensure limits are respected
+            limits = {key: self.prior_info[key].get('limits', (None, None)) for key in self.idX.keys()}
+            self.enX_temp = entools.clip_matrix(self.enX_temp, limits, self.idX)
 
     def check_convergence(self):
         """

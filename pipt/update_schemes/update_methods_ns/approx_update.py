@@ -31,10 +31,10 @@ class approx_update():
         if 'localization' in self.keys_da:
 
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
-
+                        
                 # Scale data matrix
-                if self.scale_data.ndim == 1:
-                    E_hat = (self.scale_data ** -1)[:, None] * self.E
+                if len(self.scale_data.shape) == 1:
+                    E_hat = (1/self.scale_data)[:, None] * self.E
                 else:
                     E_hat = solve(self.scale_data, self.E)
 
@@ -98,42 +98,40 @@ class approx_update():
                 self.step = at.aug_state(self.step, self.list_states)
 
         else:
-            # Mean state and perturbation matrix
-            mean_state = np.mean(self.enX, 1)
+            # Centered ensemble matrix
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
-                pert_state = (self.state_scaling**(-1))[:, None] * (self.enX - np.dot(np.resize(mean_state, (len(mean_state), 1)),
-                                                                                       np.ones((1, self.ne))))
+                pert_state = (self.state_scaling**(-1))[:, None] * (self.enX - np.mean(self.enX, axis=1, keepdims=True))
             else:
-                pert_state = (self.state_scaling**(-1)
-                              )[:, None] * np.dot(self.enX, self.proj)
+                pert_state = (self.state_scaling**(-1))[:, None] * np.dot(self.enX, self.proj)
+
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+                
+                # Scale data matrix
                 if len(self.scale_data.shape) == 1:
-                    E_hat = np.dot(np.expand_dims(self.scale_data ** (-1),
-                                   axis=1), np.ones((1, self.ne))) * self.E
-                    x_0 = np.dot(np.diag(s_d[:] ** (-1)), np.dot(u_d[:, :].T, E_hat))
-                    Lam, z = np.linalg.eig(np.dot(x_0, x_0.T))
-                    x_1 = np.dot(np.dot(u_d[:, :], np.dot(np.diag(s_d[:] ** (-1)).T, z)).T,
-                                 np.dot(np.expand_dims(self.scale_data ** (-1), axis=1), np.ones((1, self.ne))) *
-                                 (self.real_obs_data - self.aug_pred_data))
+                    E_hat = (1/self.scale_data)[:, None] * self.E
                 else:
                     E_hat = solve(self.scale_data, self.E)
-                    x_0 = np.dot(np.diag(s_d[:] ** (-1)), np.dot(u_d[:, :].T, E_hat))
-                    Lam, z = np.linalg.eig(np.dot(x_0, x_0.T))
-                    x_1 = np.dot(np.dot(u_d[:, :], np.dot(np.diag(s_d[:] ** (-1)).T, z)).T,
-                                 solve(self.scale_data, (self.real_obs_data - self.aug_pred_data)))
 
+                x_0 = np.diag(s_d ** -1) @ u_d.T @ E_hat
+                Lam, z = np.linalg.eig(x_0 @ x_0.T)
+
+                if len(self.scale_data.shape) == 1:
+                    delta_data = (1/self.scale_data)[:, None] * (self.real_obs_data - self.aug_pred_data)
+                else:
+                    delta_data = solve(self.scale_data, self.real_obs_data - self.aug_pred_data)
+
+                x_1 = (u_d @ (np.diag(s_d ** -1).T @ z)).T @ delta_data
                 x_2 = solve((self.lam + 1) * np.diag(Lam) + np.eye(len(Lam)), x_1)
                 x_3 = np.dot(np.dot(v_d.T, z), x_2)
-                delta_1 = np.dot(self.state_scaling[:, None] * pert_state, x_3)
-                self.step = delta_1
+                self.step = np.dot(self.state_scaling[:, None] * pert_state, x_3)
+ 
             else:
                 # Compute the approximate update (follow notation in paper)
                 if len(self.scale_data.shape) == 1:
-                    x_1 = np.dot(u_d.T, np.dot(np.expand_dims(self.scale_data ** (-1), axis=1), np.ones((1, self.ne))) *
-                                 (self.real_obs_data - self.aug_pred_data))
+                    x_1 = np.dot(u_d.T, (1/self.scale_data)[:, None] * (self.real_obs_data - self.aug_pred_data))
                 else:
-                    x_1 = np.dot(u_d.T, solve(self.scale_data,
-                                 (self.real_obs_data - self.aug_pred_data)))
+                    x_1 = np.dot(u_d.T, solve(self.scale_data, self.real_obs_data - self.aug_pred_data))
+
                 x_2 = solve(((self.lam + 1) * np.eye(len(s_d)) + np.diag(s_d ** 2)), x_1)
                 x_3 = np.dot(np.dot(v_d.T, np.diag(s_d)), x_2)
                 self.step = np.dot(self.state_scaling[:, None] * pert_state, x_3)
@@ -241,5 +239,3 @@ class approx_update():
     def _update_with_loclization(self):
         pass
 
-    def _update_without_localization(self):
-        pass

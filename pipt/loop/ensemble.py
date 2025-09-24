@@ -18,8 +18,11 @@ from ensemble.ensemble import Ensemble as PETEnsemble
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
 from pipt.misc_tools.cov_regularization import localization, _calc_distance
+
+# Import internal tools
 import pipt.misc_tools.analysis_tools as at
 import pipt.misc_tools.extract_tools as extract
+import pipt.misc_tools.ensemble_tools as entools
 
 
 class Ensemble(PETEnsemble):
@@ -99,19 +102,8 @@ class Ensemble(PETEnsemble):
             self._org_obs_data()
             self._org_data_var()
 
-            # define projection for centring and scaling
-            self.proj = (np.eye(self.ne) - (1 / self.ne) *
-                         np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
-
-            # If we have dynamic state variables, we allocate keys for them in 'state'. Since we do not know the size
-            # of the arrays of the dynamic variables, we only allocate an NE list to be filled in later (in
-            # calc_forecast)
-            if 'dynamicvar' in self.keys_da:
-                dyn_vars = self.keys_da['dynamicvar']
-                if not isinstance(dyn_vars, list):
-                    dyn_vars = [dyn_vars]
-                for name in dyn_vars:
-                    self.state[name] = [None] * self.ne
+            # Define projection operator for centring and scaling ensemble matrix
+            self.proj = (np.eye(self.ne) - np.ones((self.ne, self.ne))/self.ne) / np.sqrt(self.ne - 1)
 
             # Option to store the dictionaries containing observed data and data variance
             if 'obsvarsave' in self.keys_da and self.keys_da['obsvarsave'] == 'yes':
@@ -129,7 +121,7 @@ class Ensemble(PETEnsemble):
 
             # Initialize local analysis
             if 'localanalysis' in self.keys_da:
-                self.local_analysis = extract.extract_local_analysis_info(self.keys_da['localanalysis'], self.state.keys())
+                self.local_analysis = extract.extract_local_analysis_info(self.keys_da['localanalysis'], self.idX.keys())
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_da['datatype']}
                               for _ in self.obs_data]
@@ -558,7 +550,7 @@ class Ensemble(PETEnsemble):
             self.temp_state = [None]*(len(self.get_list_assim_steps()) + 1)
 
         # Save the state
-        self.temp_state[ind_save] = deepcopy(self.state)
+        self.temp_state[ind_save] = entools.matrix_to_dict(self.enX)
         np.savez('temp_state_assim', self.temp_state)
 
     def save_temp_state_iter(self, ind_save, max_iter):
@@ -579,7 +571,7 @@ class Ensemble(PETEnsemble):
             self.temp_state = [None] * (int(max_iter) + 1)  # +1 due to init. ensemble
 
         # Save state
-        self.temp_state[ind_save] = deepcopy(self.state)
+        self.temp_state[ind_save] = entools.matrix_to_dict(self.enX)
         np.savez('temp_state_iter', self.temp_state)
 
     def save_temp_state_mda(self, ind_save):
@@ -602,7 +594,7 @@ class Ensemble(PETEnsemble):
             self.temp_state = [None] * (int(self.tot_assim) + 1)
 
         # Save state
-        self.temp_state[ind_save] = deepcopy(self.state)
+        self.temp_state[ind_save] = entools.matrix_to_dict(self.enX)
         np.savez('temp_state_mda', self.temp_state)
 
     def save_temp_state_ml(self, ind_save):
