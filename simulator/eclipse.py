@@ -114,12 +114,11 @@ class eclipse:
         self.file = self.input_dict['runfile'].upper()
 
         # Extract sim options
-        if isinstance(self.input_dict['simoptions'], list):
-            self.input_dict['simoptions'] = list_to_dict(self.input_dict['simoptions'])
-        
-        simoptions = self.input_dict['simoptions']
-        self.options = {}
+        simoptions = self.input_dict.get('simoptions', {})
+        if isinstance(simoptions, list):
+            simoptions = list_to_dict(simoptions)
 
+        self.options = {}
         self.options['sim_path'] = simoptions.get('sim_path', '')
         self.options['sim_flag'] = simoptions.get('sim_flag', '')
         self.options['mpi'] = simoptions.get('mpi', '')

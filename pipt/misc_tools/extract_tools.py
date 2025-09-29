@@ -127,8 +127,9 @@ def extract_multilevel_info(keys: Union[dict, list]) -> dict:
     Extract the info needed for ML simulations. Note if the ML keyword is not in keys_en we initialize
     such that we only have one level -- the high fidelity one
     '''
-    if isinstance(keys, list):
-        ml_info = list_to_dict(keys)
+    ml_info = keys['multilevel']
+    if isinstance(ml_info, list):
+        ml_info = list_to_dict(ml_info)
     assert isinstance(ml_info, dict)
     
     # Set levels
