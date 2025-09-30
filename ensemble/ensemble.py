@@ -433,7 +433,7 @@ class Ensemble:
                     en_pred[list_crash[indx]] = deepcopy(en_pred[el])
  
             # Convert ensemble specific result into pred_data, and filter for NONE data
-            self.pred_data.extend([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
+            self.pred_data.extend([{typ: np.concatenate(tuple((np.atleast_2d(el[ind][typ]).T) for el in en_pred), axis=1)
                                     if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
                                     else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
 
