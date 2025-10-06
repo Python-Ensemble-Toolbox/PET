@@ -60,7 +60,7 @@ def extract_prior_info(keys: dict) -> dict:
         # loop over keys in prior
         for key in prior.keys():
             # ensure that entry is a list
-            if (not isinstance(prior[key], list)) and (key != 'mean'):
+            if (not isinstance(prior[key], list)) and (key != 'mean') and (key != 'active'):
                 prior[key] = [prior[key]]
 
         # change the name of some keys
