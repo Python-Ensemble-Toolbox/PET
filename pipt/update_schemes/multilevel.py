@@ -1101,3 +1101,94 @@ class esmda_h(multilevel,hybrid_update,esmdaMixIn):
             self.current_W = deepcopy(self.W)
 
         return False, True, why_stop
+
+class esmda_seq_h(multilevel,esmda_approx):
+    '''
+     A multilevel implementation of the Sequeontial ES-MDA algorithm with the hybrid gain
+    '''
+
+    def __init__(self,keys_da, keys_fwd, sim):
+        super().__init__(keys_da, keys_fwd, sim)
+
+        self.proj = (np.eye(self.ml_ne[0]) - (1 / self.ml_ne[0]) *
+                     np.ones((self.ml_ne[0], self.ml_ne[0]))) / np.sqrt(self.ml_ne[0] - 1)
+
+        self.multilevel['levels'] = [self.iteration]
+
+        self.ne = self.ml_ne[0]
+        # adjust the real_obs_data to only containt the first ne samples
+        self.real_obs_data_conv = self.real_obs_data_conv[:,:self.ne]
+
+    def calc_analysis(self):
+
+        # collapse the level element of the predicted data
+        self.ml_pred = deepcopy(self.pred_data)
+        # concantenate the ml_pred data and state
+        self.pred_data = []
+        curr_level = self.multilevel['levels'][0]
+        for level_pred_date in self.ml_pred:
+            keys = level_pred_date[curr_level].keys()
+            result ={}
+            for key in keys:
+                arrays = np.array([level_pred_date[curr_level][key]])
+                result[key] = np.hstack(arrays)
+            self.pred_data.append(result)
+
+        self.ml_state = deepcopy(self.state)
+        self.state = self.state[self.multilevel['levels'][0]]
+        self.current_state = self.current_state[self.multilevel['levels'][0]]
+
+        super().calc_analysis()
+
+        # Set the multilevel index and set the dimentions for all the states
+        self.multilevel['levels'][0] += 1
+        self.ne = self.ml_ne[self.multilevel['levels'][0]]
+        self.proj =(np.eye(self.ne) - (1 / self.ne) *
+                     np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
+        best_members = np.argsort(self.ensemble_misfit)[:self.ne]
+        self.ml_state[self.multilevel['levels'][0]] = {k: v[:, best_members] for k, v in self.state.items()}
+        self.state = deepcopy(self.ml_state)
+
+        self.real_obs_data_conv = self.real_obs_data_conv[:,:self.ne]
+
+
+
+    def check_convergence(self):
+        """
+        Check ESMDA objective function for logging purposes.
+        """
+
+        self.prev_data_misfit = self.data_misfit
+        #self.prev_data_misfit_std = self.data_misfit_std
+
+        # Prelude to calc. conv. check (everything done below is from calc_analysis)
+        pred_data = []
+        for l in range(len(self.pred_data[0])):
+            level_pred = at.aug_obs_pred_data(self.obs_data, [el[l] for el in self.pred_data], self.assim_index,
+                                                          self.list_datatypes)[1]
+            if level_pred is not None: # Can be None if level is not predicted
+                pred_data.append(level_pred)
+
+        data_misfit = at.calc_objectivefun(
+            self.real_obs_data_conv, np.concatenate(pred_data,axis=1), self.cov_data)
+        self.ensemble_misfit = data_misfit
+        self.data_misfit = np.mean(data_misfit)
+        self.data_misfit_std = np.std(data_misfit)
+
+        # Logical variables for conv. criteria
+        why_stop = {'rel_data_misfit': 1 - (self.data_misfit / self.prev_data_misfit),
+                    'data_misfit': self.data_misfit,
+                    'prev_data_misfit': self.prev_data_misfit}
+
+        if self.data_misfit < self.prev_data_misfit:
+            self.logger.info(
+                f'MDA iteration number {self.iteration}! Objective function reduced from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
+        else:
+            self.logger.info(
+                f'MDA iteration number {self.iteration}! Objective function increased from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
+        # Return conv = False, why_stop var.
+        self.current_state = deepcopy(self.state)
+        if hasattr(self, 'W'):
+            self.current_W = deepcopy(self.W)
+
+        return False, True, why_stop
