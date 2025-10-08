@@ -516,9 +516,60 @@ class Ensemble:
                 # Index list of ensemble members
                 list_member_index = list(ml_ne)
 
-                # Run prediction in parallel using p_map
-                en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                                list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
+                if no_tot_run==1: # if not in parallel we use regular loop
+                    en_pred = [self.sim.run_fwd_sim(state, member_index) for state, member_index in
+                                tqdm(zip(list_state, list_member_index), total=len(list_state))]
+                elif self.sim.input_dict.get('hpc', False): # Run prediction in parallel on hpc
+                    batch_size = no_tot_run # If more than 500 ensemble members, we limit the runs to batches of 500
+                    # Split the ensemble into batches of 500
+                    if batch_size >= 1000:
+                        self.logger.info(f'Cannot run batch size of {no_tot_run}. Set to 1000')
+                        batch_size = 1000
+                    en_pred = []
+                    batch_en = [np.arange(start, start + batch_size) for start in
+                                np.arange(0, self.ne - batch_size, batch_size)]
+                    if len(batch_en): # if self.ne is less than batch_size
+                        batch_en.append(np.arange(batch_en[-1][-1]+1, self.ne))
+                    else:
+                        batch_en.append(np.arange(0, self.ne))
+                    for n_e in batch_en:
+                        _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
+                                zip([list_state[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
+                        # Run call_sim on the hpc
+                        if self.sim.options['mpiarray']:
+                            job_id = self.sim.SLURM_ARRAY_HPC_run(
+                                                                n_e,
+                                                                venv=os.path.join(os.path.dirname(sys.executable), 'activate'),
+                                                                filename=self.sim.file,
+                                                                **self.sim.options
+                                                            )
+                        else:
+                            job_id=self.sim.SLURM_HPC_run(
+                                                        n_e, 
+                                                        venv=os.path.join(os.path.dirname(sys.executable),'activate'),
+                                                        filename=self.sim.file,
+                                                        **self.sim.options
+                                                        )
+                        
+                        # Wait for the simulations to finish
+                        if job_id:
+                            sim_status = self.sim.wait_for_jobs(job_id)
+                        else:
+                            print("Job submission failed. Exiting.")
+                            sim_status = [False]*len(n_e)
+                        # Extract the results. Need a local counter to check the results in the correct order
+                        for c_member, member_i in enumerate([list_member_index[curr_n] for curr_n in n_e]):
+                            if sim_status[c_member]:
+                                self.sim.extract_data(member_i)
+                                en_pred.append(deepcopy(self.sim.pred_data))
+                                if self.sim.saveinfo is not None:  # Try to save information
+                                    store_ensemble_sim_information(self.sim.saveinfo, member_i)
+                            else:
+                                en_pred.append(False)
+                            self.sim.remove_folder(member_i)
+                else: # Run prediction in parallel using p_map
+                    en_pred = p_map(self.sim.run_fwd_sim, list_state,
+                                    list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
 
                 # List successful runs and crashes
                 list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
