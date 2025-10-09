@@ -1149,7 +1149,7 @@ class esmda_seq_h(multilevel,esmda_approx):
         self.ml_state[self.multilevel['levels'][0]] = {k: v[:, best_members] for k, v in self.state.items()}
         self.state = deepcopy(self.ml_state)
 
-        self.real_obs_data_conv = self.real_obs_data_conv[:,:self.ne]
+        self.real_obs_data_conv = self.real_obs_data_conv[:,best_members]
 
 
 
