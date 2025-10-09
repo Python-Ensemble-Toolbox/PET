@@ -486,7 +486,7 @@ class Ensemble:
         """
 
         no_tot_run = int(self.sim.input_dict['parallel'])
-        ml_pred_data = []
+        ml_pred_data = ml_pred_data = [[] for _ in range(max(self.multilevel['levels'])+1)] # Ensure that the list is long enough
 
         for level in tqdm(self.multilevel['levels'], desc='Fidelity level', position=1):
             # Setup forward simulator and redundant simulator at the correct fidelity
@@ -611,13 +611,34 @@ class Ensemble:
                         en_pred[list_crash[indx]] = deepcopy(en_pred[el])
 
                 # Convert ensemble specific result into pred_data, and filter for NONE data
-                ml_pred_data.append([{typ: np.concatenate(tuple((np.atleast_2d(el[ind][typ]).T) for el in en_pred), axis=1)
-                                      if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
-                                      else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
+            ml_pred_data[level].extend([{typ: np.concatenate(tuple((np.atleast_2d(el[ind][typ]).T) for el in en_pred), axis=1)
+                                  if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
+                                  else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
 
+        empty_indices = [i for i, entry in enumerate(ml_pred_data) if not isinstance(entry, list) or not entry]
+        filled_idx = next(
+                        (i for i, entry in enumerate(ml_pred_data) if isinstance(entry, list) and entry),
+                        None
+                        )
+
+        if len(empty_indices):
+            # fill the emply list with correct structure
+            template = deepcopy(ml_pred_data[filled_idx])
+            empty_struct = [#{
+                            #key: None
+                            #for key, val in template_elem.items()
+                            #}
+                            None for template_elem in template]
+            for idx in empty_indices:
+                ml_pred_data[idx] = empty_struct
         # loop over time instance first, and the level instance.
         self.pred_data = np.array(ml_pred_data).T.tolist()
 
+        # Treat scaling
+        if 'scaling' in self.multilevel:
+            self.pred_data = self.treat_scaling(self.multilevel['scaling'],self.pred_data,self.multilevel['scaling_map'])
+            # this is for fidelity specific scaling of output
+            
         if hasattr(self,'treat_modeling_error'):
             self.treat_modeling_error()
 
