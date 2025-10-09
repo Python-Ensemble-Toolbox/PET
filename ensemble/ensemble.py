@@ -527,11 +527,11 @@ class Ensemble:
                         batch_size = 1000
                     en_pred = []
                     batch_en = [np.arange(start, start + batch_size) for start in
-                                np.arange(0, ml_ne - batch_size, batch_size)]
-                    if len(batch_en): # if self.ne is less than batch_size
-                        batch_en.append(np.arange(batch_en[-1][-1]+1, ml_ne))
+                                np.arange(0, len(ml_ne) - batch_size, batch_size)]
+                    if len(batch_en): # if len(ml_ne) is less than batch_size
+                        batch_en.append(np.arange(batch_en[-1][-1]+1, len(ml_ne)))
                     else:
-                        batch_en.append(np.arange(0, ml_ne))
+                        batch_en.append(np.arange(0, len(ml_ne)))
                     for n_e in batch_en:
                         _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
                                 zip([list_state[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
