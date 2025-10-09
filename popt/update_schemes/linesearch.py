@@ -283,9 +283,9 @@ class LineSearchClass(Optimize):
         self.nfev += 1
         x = ot.clip_state(x, self.bounds) # ensure bounds are respected
         if self.args is None:
-            f = np.mean(self.function(x))
+            f = np.mean(self.function(x, **self.epf))
         else:
-            f = np.mean(self.function(x, *self.args))
+            f = np.mean(self.function(x, *self.args, **self.epf))
         return f
 
     def _jac(self, x):

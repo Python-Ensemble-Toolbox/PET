@@ -102,6 +102,7 @@ class Optimize:
         self.epf_iteration = 0
 
         # Initialize variables (set in subclasses)
+        # TODO: these variables should be abstract properties that subclasses are forced to define 
         self.options = None
         self.mean_state = None
         self.obj_func_values = None
@@ -195,7 +196,7 @@ class Optimize:
                     logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
                 else:
                     logger.info(f'       -----> EPF-EnOpt: converged, no variables changed more than {conv_crit*100} %')  # print epf info
-                    final_obj_no_penalty = str(round(float(self.fun(self.mean_state)),4))
+                    final_obj_no_penalty = str(round(float(np.mean(self.fun(self.mean_state))),4))
                     logger.info(f'       -----> EPF-EnOpt: objective value without penalty = {final_obj_no_penalty}') # print epf info
 
     def save(self):
