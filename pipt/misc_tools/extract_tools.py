@@ -144,6 +144,8 @@ def extract_multilevel_info(keys: Union[dict, list]) -> dict:
     # Set multi-level error
     if not 'ml_error_corr' in ml_info:
         ml_error_corr = 'none'
+        error_comp_scheme = 'none'
+        ml_corr_done = True
     else:
         ml_error_corr = ml_info['ml_error_corr'][0]
         ml_corr_done = False
