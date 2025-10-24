@@ -287,7 +287,7 @@ class Ensemble(PETEnsemble):
                     if self.sparse_info is not None and \
                             vintage < len(self.sparse_info['mask']) and \
                             len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
-                        data_array = self.compress(data_array, vintage, False)
+                        data_array = self.compress_manager(data_array, vintage, False)
                         vintage = vintage + 1
 
                     # Save array in obs_data. If it is an array with single value (not list), then we convert it to a
@@ -321,7 +321,7 @@ class Ensemble(PETEnsemble):
                         if self.sparse_info is not None and \
                                 vintage < len(self.sparse_info['mask']) and \
                                 len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
-                            data_array = self.compress(data_array, vintage, False)
+                            data_array = self.compress_manager(data_array, vintage, False)
                             vintage = vintage + 1
 
                         # Save array in obs_data. If it is an array with single value (not list), then we convert it to a
@@ -645,7 +645,7 @@ class Ensemble(PETEnsemble):
         self.temp_state[ind_save] = deepcopy(self.state)
         np.savez('temp_state_ml', self.temp_state)
 
-    def compress(self, data=None, vintage=0, aug_coeff=None):
+    def compress_manager(self, data=None, vintage=0, aug_coeff=None):
         """
         Compress the input data using wavelets.
 
