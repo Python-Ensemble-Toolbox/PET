@@ -29,6 +29,8 @@ class EnOpt(Optimize):
     References
     ----------
     Chen et al., 2009, 'Efficient Ensemble-Based Closed-Loop Production Optimization', SPE Journal, 14 (4): 634-645.
+
+    TODO: Implement getter for optimize_result
     """
 
     def __init__(self, fun, x, args, jac, hess, bounds=None, **options):
