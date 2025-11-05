@@ -87,7 +87,7 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
 
         # Scale state if applicable
         self._scale_state() # Scale self.state to [0, 1] if transform is True
-        
+
     
     def get_state(self):
         """
@@ -190,21 +190,42 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
                 sys.exit(0)
         return nr
 
-    def _scale_state(self):
+    def scale_state(self, x):
         """
         Transform the internal state from [lb, ub] to [0, 1]
-        """
-        if self.transform and (self.lb and self.ub):
-            for i, key in enumerate(self.state):
-                self.state[key] = (self.state[key] - self.lb[i])/(self.ub[i] - self.lb[i])
-                np.clip(self.state[key], 0, 1, out=self.state[key])
 
-    def _invert_scale_state(self):
+        Parameters
+        ----------
+        x : array_like
+            The input state
+
+        Returns
+        -------
+        x : array_like
+            The scaled state
+        """
+        if self.bounds:
+            lb = np.array(self.bounds)[:, 0]
+            ub = np.array(self.bounds)[:, 1]
+            x = (x - lb) / (ub - lb)
+        return x
+    
+    def invert_scale_state(self, u):
         """
         Transform the internal state from [0, 1] to [lb, ub]
+
+        Parameters
+        ----------
+        u : array_like
+            The scaled state
+
+        Returns
+        -------
+        x : array_like
+            The unscaled state
         """
-        if self.transform and (self.lb and self.ub):
-            for i, key in enumerate(self.state):
-                if self.transform:
-                    self.state[key] = self.lb[i] + self.state[key]*(self.ub[i] - self.lb[i])
-                np.clip(self.state[key], self.lb[i], self.ub[i], out=self.state[key])
+        if self.bounds:
+            lb = np.array(self.bounds)[:, 0]
+            ub = np.array(self.bounds)[:, 1]
+            u = lb + u * (ub - lb)
+        return u
