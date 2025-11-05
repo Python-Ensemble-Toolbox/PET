@@ -18,14 +18,62 @@ class full_update():
         no localization is implemented for this method yet.
     """
 
+    def update(self, enX, enY, enE, **kwargs):
+
+        # Get prior ensemble if provided
+        priorX = kwargs.get('prior', self.prior_enX)
+
+        if self.Am is None:
+            self.ext_Am() # do this only once 
+
+        # Scale and center the ensemble matrecies
+        enYcentered = self.scale(np.dot(enY, self.proj), self.scale_data) 
+        enXcentered = self.scale(np.dot(enX, self.proj), self.state_scaling)
+
+        # Perform tuncated SVD
+        u_d, s_d, v_d = np.linalg.svd(enYcentered, full_matrices=False)
+        if self.trunc_energy < 1:
+            ti = (np.cumsum(s_d) / sum(s_d)) <= self.trunc_energy
+            u_d, s_d, v_d = u_d[:, ti].copy(), s_d[ti].copy(), v_d[ti, :].copy()
+
+        # Compute the update step
+        x_1 = np.dot(u_d.T, self.scale(enE - enY, self.scale_data))
+        x_2 = solve(((self.lam + 1) * np.eye(len(s_d)) + np.diag(s_d ** 2)), x_1)
+        x_3 = np.dot(np.dot(v_d.T, np.diag(s_d)), x_2)
+        delta_m1 = np.dot((self.state_scaling[:, None]*enXcentered), x_3)
+
+        x_4 = np.dot(self.Am.T, (self.state_scaling**(-1))[:, None]*(enX - priorX))
+        x_5 = np.dot(self.Am, x_4)
+        x_6 = np.dot(enXcentered.T, x_5)
+        x_7 = np.dot(v_d.T, solve(((self.lam + 1) * np.eye(len(s_d)) + np.diag(s_d ** 2)), np.dot(v_d, x_6)))
+        delta_m2 = -np.dot((self.state_scaling[:, None]*enXcentered), x_7)
+
+        self.step = delta_m1 + delta_m2
+    
+
+    def scale(self, data, scaling):
+        """
+        Scale the data perturbations by the data error standard deviation.
+
+        Args:
+            data (np.ndarray): data perturbations
+            scaling (np.ndarray): data error standard deviation
+
+        Returns:
+            np.ndarray: scaled data perturbations
+        """
+
+        if len(scaling.shape) == 1:
+            return (scaling ** (-1))[:, None] * data
+        else:
+            return solve(scaling, data)
+    
     def ext_Am(self, *args, **kwargs):
         """
         The class is initialized by calculating the required Am matrix.
         """
 
-        delta_scaled_prior = self.state_scaling[:, None] * \
-                             np.dot(at.aug_state(self.prior_state, self.list_states), self.proj)
-
+        delta_scaled_prior = self.state_scaling[:, None] * np.dot(self.prior_enX, self.proj)
         u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
 
         # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
@@ -41,39 +89,3 @@ class full_update():
                                 1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
         self.Am = np.dot(u_d, np.eye(trunc_index + 1) *
                          ((s_d ** (-1))[:, None]))  # notation from paper
-
-
-    def update(self):
-
-        if self.Am is None:
-            self.ext_Am() # do this only once 
-
-        aug_state = at.aug_state(self.current_state, self.list_states)
-        aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-
-        delta_state = (self.state_scaling**(-1))[:, None]*np.dot(aug_state, self.proj)
-
-        u_d, s_d, v_d = np.linalg.svd(self.pert_preddata, full_matrices=False)
-        if self.trunc_energy < 1:
-            ti = (np.cumsum(s_d) / sum(s_d)) <= self.trunc_energy
-            u_d, s_d, v_d = u_d[:, ti].copy(), s_d[ti].copy(), v_d[ti, :].copy()
-
-        if len(self.scale_data.shape) == 1:
-            x_1 = np.dot(u_d.T, np.dot(np.expand_dims(self.scale_data ** (-1), axis=1), np.ones((1, self.ne))) *
-                         (self.real_obs_data - self.aug_pred_data))
-        else:
-            x_1 = np.dot(u_d.T, solve(self.scale_data,
-                         (self.real_obs_data - self.aug_pred_data)))
-        x_2 = solve(((self.lam + 1) * np.eye(len(s_d)) + np.diag(s_d ** 2)), x_1)
-        x_3 = np.dot(np.dot(v_d.T, np.diag(s_d)), x_2)
-        delta_m1 = np.dot((self.state_scaling[:, None]*delta_state), x_3)
-
-        x_4 = np.dot(self.Am.T, (self.state_scaling**(-1))
-                     [:, None]*(aug_state - aug_prior_state))
-        x_5 = np.dot(self.Am, x_4)
-        x_6 = np.dot(delta_state.T, x_5)
-        x_7 = np.dot(v_d.T, solve(
-            ((self.lam + 1) * np.eye(len(s_d)) + np.diag(s_d ** 2)), np.dot(v_d, x_6)))
-        delta_m2 = -np.dot((self.state_scaling[:, None]*delta_state), x_7)
-
-        self.step = delta_m1 + delta_m2

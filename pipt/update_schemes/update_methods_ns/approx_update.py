@@ -16,13 +16,28 @@ class approx_update():
     https://doi.org/10.1007/s10596-013-9351-5". Note that for a EnKF or ES update, or for update within GN scheme, lambda = 0.
     """
 
-    def update(self):
-        # calc the svd of the scaled data pertubation matrix
-        u_d, s_d, v_d = np.linalg.svd(self.pert_preddata, full_matrices=False)
-        #aug_state = at.aug_state(self.current_state, self.list_states, self.cell_index)
+    def update(self, enX, enY, enE, **kwargs):
+        ''' 
+        Perform the approximate LM update.
 
-        # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
-        # zero. This part is a good place to include eventual additional truncation.
+        Parameters:
+        ----------
+            enX : np.ndarray 
+                State ensemble matrix (nx, ne)
+            
+            enY : np.ndarray
+                Predicted data ensemble matrix (nd, ne)
+            
+            enE : np.ndarray
+                Ensemble of perturbed observations (nd, ne)
+        '''
+
+        # Scale and center the ensemble matrecies
+        enYcentered = self.scale(np.dot(enY, self.proj), self.scale_data)
+
+        # Perform truncated SVD
+        u_d, s_d, v_d = np.linalg.svd(enYcentered, full_matrices=False)
+
         if self.trunc_energy < 1:
             ti = (np.cumsum(s_d) / sum(s_d)) <= self.trunc_energy
             u_d, s_d, v_d = u_d[:, ti].copy(), s_d[ti].copy(), v_d[ti, :].copy()
@@ -30,33 +45,94 @@ class approx_update():
         # Check for localization methods
         if 'localization' in self.keys_da:
 
+            # Calculate the localization projection matrix
             if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
-                        
-                # Scale data matrix
-                if len(self.scale_data.shape) == 1:
-                    E_hat = (1/self.scale_data)[:, None] * self.E
-                else:
-                    E_hat = solve(self.scale_data, self.E)
-
-                x_0 = np.diag(1/s_d) @ u_d.T @ E_hat
+                enEcentered = self.scale(np.dot(enE, self.proj), self.scale_data)
+                x_0 = np.diag(1/s_d) @ u_d.T @ enEcentered
                 Lam, z = np.linalg.eig(x_0 @ x_0.T)
                 X = (v_d.T @ z) @ solve( (self.lam + 1)*np.diag(Lam) + np.eye(len(Lam)), (u_d.T @ (np.diag(1/s_d) @ z)).T )
-
             else:
                 X = v_d.T @ np.diag(s_d) @ solve( (self.lam + 1)*np.eye(len(s_d)) + np.diag(s_d**2), u_d.T)
 
             
             # Check for adaptive localization
             if 'autoadaloc' in self.localization.loc_info:
-                self.step = self._update_with_auto_adaptive_localization(X)
+
+                # Scale and center the state ensemble matrix
+                if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
+                    enXcentered = self.scale(self.enX - np.mean(self.enX, 1)[:,None], self.state_scaling)
+                else:
+                    enXcentered = self.scale(np.dot(enX, self.proj), self.state_scaling)
+
+                # Calculate and scale difference between observations and predictions
+                scaled_delta_data = self.scale(enE - enY, self.scale_data)
+
+                # Compute the update step with auto-adaptive localization
+                self.step = self.localization.auto_ada_loc(
+                    pert_state     = self.state_scaling[:, None]*enXcentered, 
+                    proj_pred_data = np.dot(X, scaled_delta_data),
+                    curr_param     = self.list_states,
+                    prior_info     = self.prior_info
+                )
+
 
             # Check for local analysis 
             elif ('localanalysis' in self.localization.loc_info) and (self.localization.loc_info['localanalysis']):
-                self.step = self._update_with_local_analysis(X)
+                
+                # Calculate weights
+                if 'distance' in self.localization.loc_info:
+                    weight = _calc_loc(
+                        max_dist   = self.localization.loc_info['range'], 
+                        distance   = self.localization.loc_info['distance'],
+                        prior_info = self.prior_info[self.list_states[0]], 
+                        loc_type   = self.localization.loc_info['type'], 
+                        ne = self.ne
+                    )
+                else: # if no distance, do full update
+                    weight = np.ones((enX.shape[0], X.shape[1]))
+
+                # Center ensemble matrix
+                enXcentered = enX - np.mean(self.enX, axis=1, keepdims=True)
+
+                if (not ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes')):
+                    enXcentered /= np.sqrt(self.ne - 1)
+
+                # Calculate and scale difference between observations and predictions
+                scaled_delta_data = self.scale(enE - enY, self.scale_data)
+
+                # Compute the update step with local analysis
+                try:
+                    self.step = weight.multiply(np.dot(enXcentered, X)).dot(scaled_delta_data)
+                except:
+                    self.step = (weight*(np.dot(enXcentered, X))).dot(scaled_delta_data)
+
 
             # Check for distance based localization
             elif ('dist_loc' in self.keys_da['localization'].keys()) or ('dist_loc' in self.keys_da['localization'].values()):
-                self.step = self._update_with_distance_based_localization(X)
+
+                # Setup localization mask
+                mask = self.localization.localize(
+                    self.list_datatypes, 
+                    [self.keys_da['truedataindex'][int(elem)] for elem in self.assim_index[1]],
+                    self.list_states, 
+                    self.ne, 
+                    self.prior_info, 
+                    at.get_obs_size(self.obs_data, self.assim_index[1], self.list_datatypes)
+                )
+
+                # Center ensemble matrix
+                enXcentered = enX - np.mean(self.enX, axis=1, keepdims=True)
+
+                if not ('emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes'):
+                    enXcentered /= np.sqrt(self.ne - 1)
+
+                # Calculate and scale difference between observations and predictions
+                scaled_delta_data = self.scale(enE - enY, self.scale_data)
+
+                # Compute the update step with distance-based localization
+                self.step = mask.multiply(np.dot(enXcentered, X)).dot(scaled_delta_data)
+
+
 
             # Else do parallel update
             else:
@@ -138,68 +214,6 @@ class approx_update():
 
 
 
-    def _update_with_auto_adaptive_localization(self, X):
-
-        # Center ensemble matrix
-        if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
-            pert_state = self.enX - np.mean(self.enX, 1)[:,None]
-        else:
-            pert_state = np.dot(self.enX, self.proj)
-
-        # Scale centered ensemble matrix
-        pert_state = pert_state * (self.state_scaling**(-1))[:, None]
-
-        # Calculate difference between observations and predictions
-        if len(self.scale_data.shape) == 1:
-            scaled_delta_data = (self.scale_data ** (-1))[:, None] * (self.real_obs_data - self.aug_pred_data)
-        else:
-            scaled_delta_data = solve(self.scale_data, (self.real_obs_data - self.aug_pred_data))
-
-        # Compute the update step with auto-adaptive localization
-        step = self.localization.auto_ada_loc(
-            pert_state     = self.state_scaling[:, None]*pert_state, 
-            proj_pred_data = np.dot(X, scaled_delta_data),
-            curr_param     = self.list_states,
-            prior_info     = self.prior_info
-        )
-
-        return step
-
-
-    def _update_with_local_analysis(self, X):
-
-        # Calculate weights
-        if 'distance' in self.localization.loc_info:
-            weight = _calc_loc(
-                max_dist   = self.localization.loc_info['range'], 
-                distance   = self.localization.loc_info['distance'],
-                prior_info = self.prior_info[self.list_states[0]], 
-                loc_type   = self.localization.loc_info['type'], 
-                ne = self.ne
-            )
-        else: # if no distance, do full update
-            weight = np.ones((self.enX.shape[0], X.shape[1]))
-
-        # Center ensemble matrix
-        mean_state = np.mean(self.enX, axis=1, keepdims=True)
-        pert_state = self.enX - mean_state
-
-        if not ('emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes'):
-            pert_state /= np.sqrt(self.ne - 1)
-
-        # Calculate difference between observations and predictions
-        if self.scale_data.ndim == 1:
-            scaled_delta_data = (self.scale_data ** -1)[:, None] * (self.real_obs_data - self.aug_pred_data)
-        else:
-            scaled_delta_data = solve(self.scale_data, self.real_obs_data - self.aug_pred_data)
-
-        # Compute the update step with local analysis
-        try:
-            step = weight.multiply(np.dot(pert_state, X)).dot(scaled_delta_data)
-        except:
-            step = (weight*(np.dot(pert_state, X))).dot(scaled_delta_data)
-        
-        return step
 
 
 
@@ -236,6 +250,19 @@ class approx_update():
 
         return step
 
-    def _update_with_loclization(self):
-        pass
+    def scale(self, data, scaling):
+        """
+        Scale the data perturbations by the data error standard deviation.
 
+        Args:
+            data (np.ndarray): data perturbations
+            scaling (np.ndarray): data error standard deviation
+
+        Returns:
+            np.ndarray: scaled data perturbations
+        """
+
+        if len(scaling.shape) == 1:
+            return (scaling ** (-1))[:, None] * data
+        else:
+            return solve(scaling, data)

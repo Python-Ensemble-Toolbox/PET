@@ -318,35 +318,6 @@ class Assimilate:
                 # Note: the function must be named main, and we pass the full current instance of the object.
                 iter_info_func.main(self)
 
-    def _save_during_iteration(self, tempsave):
-        """
-        Save during an iteration. How often is determined by the `TEMPSAVE` keyword; confer the manual for all the
-        different options.
-
-        Parameters
-        ----------
-        tempsave : list
-            Info. from the TEMPSAVE keyword
-        """
-        self.ensemble.logger.info(
-            'The TEMPSAVE feature is no longer supported. Please you debug_analyses, or iterinfo.')
-        # Save at specific points
-        # if isinstance(tempsave, list):
-        #     # Save at regular intervals
-        #     if tempsave[0] == 'each' or tempsave[0] == 'every' and self.ensemble.iteration % tempsave[1] == 0:
-        #         self.ensemble.save_temp_state_iter(self.ensemble.iteration + 1, self.max_iter)
-        #
-        #     # Save at points given by input
-        #     elif tempsave[0] == 'list' or tempsave[0] == 'at':
-        #         # Check if one or more save points have been given, and save if we are at that point
-        #         savepoint = tempsave[1] if isinstance(tempsave[1], list) else [tempsave[1]]
-        #         if self.ensemble.iteration in savepoint:
-        #             self.ensemble.save_temp_state_iter(self.ensemble.iteration + 1, self.max_iter)
-        #
-        # # Save at all assimilation steps
-        # elif tempsave == 'yes' or tempsave == 'all':
-        #     self.ensemble.save_temp_state_iter(self.ensemble.iteration + 1, self.max_iter)
-
     def _save_analysis_debug(self):
         """
         Moved Old analysis debug here to retain consistency.

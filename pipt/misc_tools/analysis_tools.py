@@ -1568,3 +1568,14 @@ def init_local_analysis(init, state):
                 [data_ind[count] for count, val in enumerate(in_region) if val])
 
         return local
+
+
+def get_obs_size(obs_data, time_index, datatypes):
+    """Return a 2D list of sizes for each observation array."""
+    return [
+        [
+            obs_data[int(time)][data].size if obs_data[int(time)][data] is not None else 0
+            for data in datatypes
+        ]
+        for time in time_index
+    ]

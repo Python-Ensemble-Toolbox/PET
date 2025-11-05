@@ -120,14 +120,13 @@ class lmenrmlMixIn(Ensemble):
         if 'localanalysis' in self.keys_da:
             self.local_analysis_update()
         else:
-            # Mean pred_data and perturbation matrix with scaling
-            if len(self.scale_data.shape) == 1:
-                self.pert_preddata = (self.scale_data ** -1)[:, None] * np.dot(self.aug_pred_data, self.proj)
-            else:
-                self.pert_preddata = solve(self.scale_data, np.dot(self.aug_pred_data, self.proj))
-
-            # Calculate update to get the step (found in update_methods_ns)
-            self.update()
+            # Perform the update
+            self.update(
+                enX = self.enX, 
+                enY = self.aug_pred_data, 
+                enE = self.real_obs_data, 
+                prior = self.prior_enX
+            )
 
             # Update the state ensemble and weights
             if hasattr(self, 'step'):

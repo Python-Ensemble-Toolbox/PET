@@ -141,14 +141,13 @@ class esmdaMixIn(Ensemble):
         if 'localanalysis' in self.keys_da:
             self.local_analysis_update()
         else:
-            if len(self.scale_data.shape) == 1:
-                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
-            else:
-                self.pert_preddata = scilinalg.solve(
-                    self.scale_data, np.dot(self.aug_pred_data, self.proj))
-
-            self.update()
+            # Perform the update
+            self.update(
+                enX = self.enX, 
+                enY = self.aug_pred_data, 
+                enE = self.real_obs_data, 
+                prior = self.prior_enX
+            )
 
             # Update the state ensemble and weights
             if hasattr(self, 'step'):
