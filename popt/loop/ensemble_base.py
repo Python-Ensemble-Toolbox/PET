@@ -58,6 +58,8 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         self.covX   = None         # Covariance matrix for state vector
         self.enX    = None         # Ensemble of state vectors (nx, ne)
         self.enF    = None         # Ensemble of function values (ne, )
+        self.lb     = np.array([]) # Lower bounds for state vector
+        self.ub     = np.array([]) # Upper bounds for state vector
         
         # Intialize state information
         for key in self.prior_info.keys():
@@ -79,14 +81,21 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
             else:
                 self.bounds.append((lb, ub))
 
+            # Fill in lb and ub vectors
+            self.lb = np.append(self.lb, lb*np.ones(mean.size))
+            self.ub = np.append(self.ub, ub*np.ones(mean.size))
+
             # Fill in variance vector
             self.varX = np.append(self.varX, var)
-
+            
         self.covX = np.diag(self.varX)  # Covariance matrix
         self.dimX = self.stateX.size    # Dimension of state vector
-
+        
         # Scale state if applicable
-        self._scale_state() # Scale self.state to [0, 1] if transform is True
+        self.stateX = self.scale_state(self.stateX)
+
+        print(self.stateX)
+        print(self.state)
 
     
     def get_state(self):
@@ -204,12 +213,20 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         x : array_like
             The scaled state
         """
-        if self.bounds:
-            lb = np.array(self.bounds)[:, 0]
-            ub = np.array(self.bounds)[:, 1]
-            x = (x - lb) / (ub - lb)
-        return x
-    
+        x = np.asarray(x)
+        scaled_x = np.zeros_like(x)
+        
+        if self.transform is False:
+            return x
+        
+        for i in range(len(x)):
+            if (self.lb[i] is not None) and (self.ub[i] is not None):
+                scaled_x[i] = (x[i] - self.lb[i]) / (self.ub[i] - self.lb[i])
+            else:
+                scaled_x[i] = x[i]  # No scaling if bounds are None
+                
+        return scaled_x
+
     def invert_scale_state(self, u):
         """
         Transform the internal state from [0, 1] to [lb, ub]
@@ -224,8 +241,16 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         x : array_like
             The unscaled state
         """
-        if self.bounds:
-            lb = np.array(self.bounds)[:, 0]
-            ub = np.array(self.bounds)[:, 1]
-            u = lb + u * (ub - lb)
-        return u
+        u = np.asarray(u)
+        x = np.zeros_like(u)
+
+        if self.transform is False:
+            return u
+
+        for i in range(len(u)):
+            if (self.lb[i] is not None) and (self.ub[i] is not None):
+                x[i] = self.lb[i] + u[i] * (self.ub[i] - self.lb[i])
+            else:
+                x[i] = u[i]  # No scaling if bounds are None
+                
+        return x
