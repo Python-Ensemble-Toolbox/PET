@@ -47,10 +47,7 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         # Set objective function (callable)
         self.obj_func = objective
 
-        # Initialize state-related variables
-        self.state_func_values = None
-        self.ens_func_values = None
-
+        # Initialize state-related attributes
         self.stateX = np.array([]) # Current state vector, (nx,)
         self.stateF = None         # Function value(s) of current state
         self.bounds = []           # Bounds for each variable in stateX
@@ -146,18 +143,25 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         self._aux_input()
 
         # check for ensmble
-        if len(x.shape) == 1: self.ne = self.num_models
+        if len(x.shape) == 1: 
+            x = x[:,np.newaxis]
+            self.ne = self.num_models
         else: self.ne = x.shape[1]
 
+        # Run simulation
+        x = self.invert_scale_state(x)
+        run_success = self.calc_prediction(enX=x, save_prediction=self.save_prediction)
+        x = self.scale_state(x).flatten()
+
         # convert x (nparray) to state (dict)
-        self.state = self.vec_to_state(x)
+        #self.state = self.vec_to_state(x)
 
         # run the simulation
-        self._invert_scale_state()  # ensure that state is in [lb,ub]
-        self._set_multilevel_state(self.state, x)  # set multilevel state if applicable
-        run_success = self.calc_prediction(save_prediction=self.save_prediction)  # calculate flow data
-        self._set_multilevel_state(self.state, x) # For some reason this has to be done again after calc_prediction
-        self._scale_state()  # scale back to [0, 1]
+        #self._invert_scale_state()  # ensure that state is in [lb,ub]
+        #self._set_multilevel_state(self.state, x)  # set multilevel state if applicable
+        #run_success = self.calc_prediction(save_prediction=self.save_prediction)  # calculate flow data
+        #self._set_multilevel_state(self.state, x) # For some reason this has to be done again after calc_prediction
+        #self._scale_state()  # scale back to [0, 1]
 
         # Evaluate the objective function
         if run_success:
@@ -170,8 +174,10 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         else:
             func_values = np.inf  # the simulations have crashed
 
-        if len(x.shape) == 1: self.state_func_values = func_values
-        else: self.ens_func_values = func_values
+        if len(x.shape) == 1: 
+            self.stateF = func_values
+        else:
+            self.enF = func_values 
         
         return func_values
     

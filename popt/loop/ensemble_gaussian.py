@@ -65,10 +65,6 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
         # Initialize PETEnsemble
         super().__init__(options, simulator, objective)
 
-        # Objective function values
-        self.state_func_values = None
-        self.ens_func_values = None
-
         # Inflation factor used in SmcOpt
         self.inflation_factor = None
         self.survival_factor = None
