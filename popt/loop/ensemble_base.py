@@ -51,13 +51,13 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         self.state_func_values = None
         self.ens_func_values = None
 
-        self.stateX = np.array([]) # Current state vector
+        self.stateX = np.array([]) # Current state vector, (nx,)
         self.stateF = None         # Function value(s) of current state
         self.bounds = []           # Bounds for each variable in stateX
         self.varX   = np.array([]) # Variance for state vector
         self.covX   = None         # Covariance matrix for state vector
-        self.enX    = None         # Ensemble of state vectors (nx, ne)
-        self.enF    = None         # Ensemble of function values (ne, )
+        self.enX    = None         # Ensemble of state vectors ,(nx, ne)
+        self.enF    = None         # Ensemble of function values, (ne, )
         self.lb     = np.array([]) # Lower bounds for state vector
         self.ub     = np.array([]) # Upper bounds for state vector
         
@@ -94,9 +94,6 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         # Scale state if applicable
         self.stateX = self.scale_state(self.stateX)
 
-        print(self.stateX)
-        print(self.state)
-
     
     def get_state(self):
         """
@@ -105,7 +102,7 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         x : numpy.ndarray
             Control vector as ndarray, shape (number of controls, number of perturbations)
         """
-        return ot.aug_optim_state(self.state, list(self.state.keys()))
+        return self.stateX
     
     def get_cov(self):
         """
@@ -114,7 +111,7 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         cov : numpy.ndarray
             Covariance matrix, shape (number of controls, number of controls)
         """
-        return self.cov
+        return self.covX
     
     def vec_to_state(self, x):
         """
