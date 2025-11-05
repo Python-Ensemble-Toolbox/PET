@@ -90,7 +90,7 @@ class elasticproperties:
         pass
 
     def calc_props(self, phases, saturations, pressure,
-                   porosity, wait_for_proc=None, ntg=None, Rs=None, press_init=None, ensembleMember=None):
+                   porosity, dens = None, wait_for_proc=None, ntg=None, Rs=None, press_init=None, ensembleMember=None):
         ###
         # This doesn't initialize for models with no uncertainty
         ###
@@ -135,11 +135,19 @@ class elasticproperties:
         # Load "overburden" into local variable to
         # comply with remaining code parts
         overburden = self.overburden
+
         if press_init is None:
             p_init = self.p_init
         else:
             p_init = press_init
         #
+        poverburden = self.overburden
+
+        # debug
+        self.pressure = pressure
+        self.peff = poverburden - pressure
+        self.porosity = porosity
+
         # Check that no. of phases is equal to no. of
         # entries in saturations list
         #
@@ -208,8 +216,7 @@ class elasticproperties:
             #
             # Density
             #
-            self.dens[i] = (porosity[i]*densf +
-                            (1-porosity[i])*denss)*0.001
+            self.dens[i] = (porosity[i]*densf + (1-porosity[i])*denss)
             #
             # Moduli
             #
@@ -225,10 +232,10 @@ class elasticproperties:
             # instead of km/s)
             #
             self.bulkvel[i] = \
-                100*np.sqrt((abs(self.bulkmod[i]) +
+                1000*np.sqrt((abs(self.bulkmod[i]) +
                              4*self.shearmod[i]/3)/(self.dens[i]))
             self.shearvel[i] = \
-                100*np.sqrt(self.shearmod[i] /
+                1000*np.sqrt(self.shearmod[i] /
                             (self.dens[i]))
             #
             # Impedances (m/s)*(Kg/m3)
@@ -287,6 +294,17 @@ class elasticproperties:
     def getShearImp(self):
         return self.shearimp
 
+    def getOverburdenP(self):
+        return self.overburden
+
+    def getPressure(self):
+        return self.pressure
+
+    def getPeff(self):
+        return self.peff
+
+    def getPorosity(self):
+        return self.porosity
     #
     # ===================================================
     # Fluid properties start

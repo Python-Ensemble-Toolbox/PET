@@ -15,6 +15,7 @@ import datetime as dt
 from tqdm.auto import tqdm
 from p_tqdm import p_map
 import logging
+from geostat.decomp import Cholesky  # Making realizations
 
 # Internal imports
 import pipt.misc_tools.analysis_tools as at
@@ -24,7 +25,6 @@ from pipt.misc_tools import cov_regularization
 from pipt.misc_tools import wavelet_tools as wt
 from misc import read_input_csv as rcsv
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
-
 
 
 class Ensemble:
@@ -139,15 +139,24 @@ class Ensemble:
                 # individually).
                 self.state = {key: val for key, val in tmp_load.items()}
 
-                # Find the number of ensemble members from state variable
+                # Find the number of ensemble members from loaded state variables
                 tmp_ne = []
                 for tmp_state in self.state.keys():
                     tmp_ne.extend([self.state[tmp_state].shape[1]])
-                if max(tmp_ne) != min(tmp_ne):
-                    print('\033[1;33mInput states have different ensemble size\033[1;m')
-                    sys.exit(1)
-                self.ne = min(tmp_ne)
-                
+
+                if 'ne' not in self.keys_en: # NE not specified in input file
+                    if max(tmp_ne) != min(tmp_ne): #Check loaded ensembles are the same size (if more than one state variable)
+                        print('\033[1;33mInput states have different ensemble size\033[1;m')
+                        sys.exit(1)
+                    self.ne = min(tmp_ne) # Use the number of ensemble members in loaded ensemble
+                else:
+                    # Use the number of ensemble members specified in input file (may be fewer than loaded)
+                    self.ne = int(self.keys_en['ne'])
+                    if self.ne < min(tmp_ne):
+                        # pick correct number of ensemble members
+                        self.state = {key: val[:,:self.ne] for key, val in self.state.items()}
+                    else:
+                        print('\033[1;33mInput states are smaller than NE\033[1;m')
         if 'multilevel' in self.keys_en:
             ml_info = extract.extract_multilevel_info(self.keys_en)
             self.multilevel, self.tot_level, self.ml_ne, self.ML_error_corr, self.error_comp_scheme, self.ML_corr_done = ml_info
@@ -338,6 +347,20 @@ class Ensemble:
             # Index list of ensemble members
             list_member_index = list(range(self.ne))
 
+            # modified by xluo, for including the simulation of the mean reservoir model
+            # as used in the RLM-MAC algorithm
+            if 'daalg' in self.keys_en and self.keys_en['daalg'][1] == 'gies':
+                list_state.append({})
+                list_member_index.append(self.ne)
+
+                for key in self.state.keys():
+                    tmp_state = np.zeros(list_state[0][key].shape[0])
+
+                    for i in range(self.ne):
+                        tmp_state += list_state[i][key]
+
+                    list_state[self.ne][key] = tmp_state / self.ne
+
             if no_tot_run==1: # if not in parallel we use regular loop
                 en_pred = [self.sim.run_fwd_sim(state, member_index) for state, member_index in
                            tqdm(zip(list_state, list_member_index), total=len(list_state))]
@@ -392,6 +415,7 @@ class Ensemble:
             else: # Run prediction in parallel using p_map
                 en_pred = p_map(self.sim.run_fwd_sim, list_state,
                                 list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
+
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
             list_success = [indx for indx, el in enumerate(en_pred) if el is not False]

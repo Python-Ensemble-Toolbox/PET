@@ -73,8 +73,10 @@ class QAQC:
 
         assim_step = 0  # Assume simultaneous assimiation
         assim_ind = [keys['obsname'], keys['assimindex'][assim_step]]
+        #assim_ind = [keys['obsname'], keys['assimindex']]
         if isinstance(assim_ind[1], list):  # Check if prim. ind. is a list
             self.l_prim = [int(x) for x in assim_ind[1]]
+            #self.l_prim = [int(x[0]) for x in assim_ind[1]]
         else:  # Float
             self.l_prim = [int(assim_ind[1])]
 
@@ -133,16 +135,19 @@ class QAQC:
             else:
                 self.en_fcst[typ] = np.array(
                     [self.pred_data[ind][typ].flatten() for ind in self.l_prim if
+                     self.obs_data[ind][typ] is not None and
                      sum(np.isnan(self.obs_data[ind][typ])) == 0
                      and self.obs_data[ind][typ].shape == (1,)])
-                l = [self.pred_data[ind][typ] for ind in self.l_prim if sum(np.isnan(self.obs_data[ind][typ])) == 0
+                l = [self.pred_data[ind][typ] for ind in self.l_prim if
+                     self.obs_data[ind][typ] is not None
+                     and sum(np.isnan(self.obs_data[ind][typ])) == 0
                      and self.obs_data[ind][typ].shape[0] > 1]
                 if l:
                     self.en_fcst_vec[typ] = np.concatenate(l)
         self.state = state
         self.lam = lam
 
-    def calc_coverage(self, line=None, field_dim=None):
+    def calc_coverage(self, line=None, field_dim=None, uxl = None, uil = None, contours = None, uxl_c = None, uil_c = None):
         """
         Calculate the Data coverage for production and seismic data. For seismic data the plotting is based on the
         importance-scaled coverage developed by Espen O. Lie from GeoCore.
@@ -280,7 +285,7 @@ class QAQC:
             plt.savefig(filename)
             os.system('convert ' + filename + '.png' + ' -trim ' + filename + '.png')
 
-        for typ in [dat for dat in self.data_types if not dat in ['bulkimp', 'sim2seis']]:  # Only well data
+        for typ in [dat for dat in self.data_types if not dat in ['bulkimp', 'sim2seis', 'avo', 'grav']]:  # Only well data
             if hasattr(self, 'multilevel'):  # calc for each level
                 plt.figure()
                 cover_low = [True for _ in self.en_obs[typ]]
@@ -330,12 +335,13 @@ class QAQC:
         #  Plot the seismic data
         data_sim = []
         data = []
-        supported_data = ['sim2seis', 'bulkimp']
+        supported_data = ['sim2seis', 'bulkimp', 'avo', 'grav']
         my_data = [dat for dat in supported_data if dat in self.data_types]
         if len(my_data) == 0:
             return
         else:
             my_data = my_data[0]
+	    #my_data = my_data[1]
 
         # get the data
         seis_scaling = 1.0
@@ -391,15 +397,23 @@ class QAQC:
             rgb.append(f(attr))
             rgb = np.dstack(rgb)
 
-            try:
-                uxl = loadmat('seglines.mat')['uxl'].flatten()
-                uil = loadmat('seglines.mat')['uil'].flatten()
-            except:
-                uxl = [0, field_dim[0]]
-                uil = [0, field_dim[1]]
+            if uxl is None and uil is None:
+                try:
+                    uxl = loadmat('seglines.mat')['uxl'].flatten()
+                    uil = loadmat('seglines.mat')['uil'].flatten()
+                except:
+                    uxl = [0, field_dim[0]]
+                    uil = [0, field_dim[1]]
+
             extent = (uxl[0], uxl[-1], uil[-1], uil[0])
             plt.figure()
             plt.imshow(rgb, extent=extent)
+            if contours is not None and uil_c is not None and uxl_c is not None:
+                plt.contour(uxl_c, uil_c, contours[::-1, :], levels=1, colors='black')
+                plt.xlim(uxl[0], uxl[-1])
+                plt.ylim(uil[-1], uil[0])
+                plt.xlabel('Easting (km)')
+                plt.ylabel('Northing (km)')
             plt.title('Coverage - not scaled by Importance - epsilon=' + str(nl))
             filename = self.folder + 'coverage_vint_' + str(vint)
             plt.savefig(filename)
@@ -415,6 +429,12 @@ class QAQC:
             rgb_scaled = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
             rgb = rgb_scaled / 255
             plt.imshow(rgb, extent=extent)
+            if contours is not None and uil_c is not None and uxl_c is not None:
+                plt.contour(uxl_c, uil_c, contours[::-1, :], levels=1, colors='black',  extent=extent)
+                plt.xlim(uxl[0], uxl[-1])
+                plt.ylim(uil[-1], uil[0])
+                plt.xlabel('Easting (km)')
+                plt.ylabel('Northing (km)')
             plt.title('Coverage - scaled by Importance - epsilon=' + str(nl))
             filename = self.folder + 'coverage_importance_vint_' + str(vint)
             plt.savefig(filename)
@@ -422,7 +442,13 @@ class QAQC:
             plt.close()
 
             plt.figure()
-            plt.imshow(sat, extent=extent)
+            plt.imshow(sat[::-1,:], extent=extent)
+            if contours is not None and uil_c is not None and uxl_c is not None:
+                plt.contour(uxl_c, uil_c, contours[::-1, :], levels=1, colors='black', extent=extent)
+                plt.xlim(uxl[0], uxl[-1])
+                plt.ylim(uil[-1], uil[0])
+                plt.xlabel('Easting (km)')
+                plt.ylabel('Northing (km)')
             plt.title('Importance - epsilon=' + str(nl))
             filename = self.folder + 'importance_vint_' + str(vint)
             plt.savefig(filename)
@@ -594,7 +620,8 @@ class QAQC:
                     else:
                         idx = actnum
                 kg = np.ma.array(data=tmp, mask=~idx)
-                dim = (self.prior_info[param]['nx'], self.prior_info[param]['ny'], self.prior_info[param]['nz'])
+                #dim = (self.prior_info[param]['nx'], self.prior_info[param]['ny'], self.prior_info[param]['nz'])
+                dim = next((item[1] for item in self.prior_info[param] if item[0] == 'grid'), None)
                 input_time = None
                 if write_to_resinsight:
                     if time is None:
@@ -643,7 +670,7 @@ class QAQC:
                                             :]
                                 mean_residual = (en_obs[typ][ind] - en_ml_fcst[typ][l][ind, :]).mean()
                                 mean_residual = mean_residual[np.newaxis, np.newaxis].flatten()
-                                delta_d = (en_obs[typ][ind] - en_ml_fcst[typ][l][ind, :])[np.newaxis, :]
+                                delta_d = (en_obs[typ][ind] - en_ml_fcst[typ][l][ind, :self.ne])[np.newaxis, :]
                                 X2 = _calc_proj()
                                 self.state = self.ML_state[l]
                                 num_cell = self.state[param].shape[0]
@@ -656,10 +683,10 @@ class QAQC:
                             self.state = copy.deepcopy(self.ML_state)
                             delattr(self, 'ML_state')
                         else:
-                            pert_pred = (en_fcst[typ][ind, :] - en_fcst[typ][ind, :].mean())[np.newaxis, :]
-                            mean_residual = (en_obs[typ][ind] - en_fcst[typ][ind, :]).mean()
+                            pert_pred = (en_fcst[typ][ind, :self.ne] - en_fcst[typ][ind, :self.ne].mean())[np.newaxis, :]
+                            mean_residual = (en_obs[typ][ind] - en_fcst[typ][ind, :self.ne]).mean()
                             mean_residual = mean_residual[np.newaxis, np.newaxis].flatten()
-                            delta_d = (en_obs[typ][ind] - en_fcst[typ][ind, :])[np.newaxis, :]
+                            delta_d = (en_obs[typ][ind] - en_fcst[typ][ind, :self.ne])[np.newaxis, :]
                             X2 = _calc_proj()
                             num_cell = self.state[param].shape[0]
                             tmp = _calc_kalman_gain()
@@ -688,7 +715,7 @@ class QAQC:
                             if len(en_ml_fcst[typ][l].shape) == 2:
                                 pert_pred = en_ml_fcst[typ][l] - np.dot(en_ml_fcst[typ][l].mean(axis=1)[:, np.newaxis],
                                                                         np.ones((1, self.ml_ne[l])))
-                            delta_d = en_obs[typ] - en_ml_fcst[typ][l]
+                            delta_d = en_obs[typ] - en_ml_fcst[typ][l][:,:self.ne]
                             mean_residual = (en_obs[typ] - en_ml_fcst[typ][l]).mean(axis=1)
                             X2 = _calc_proj()
                             self.state = self.ML_state[l]
@@ -709,10 +736,10 @@ class QAQC:
                 else:
                     # combine time instances
                     if len(en_fcst[typ].shape) == 2:
-                        pert_pred = en_fcst[typ] - np.dot(en_fcst[typ].mean(axis=1)[:, np.newaxis],
+                        pert_pred = en_fcst[typ][:, :self.ne] - np.dot(en_fcst[typ][:, :self.ne].mean(axis=1)[:, np.newaxis],
                                                           np.ones((1, self.ne)))
-                    delta_d = en_obs[typ] - en_fcst[typ]
-                    mean_residual = (en_obs[typ] - en_fcst[typ]).mean(axis=1)
+                    delta_d = en_obs[typ] - en_fcst[typ][:, :self.ne]
+                    mean_residual = (en_obs[typ] - en_fcst[typ][:, :self.ne]).mean(axis=1)
                     X2 = _calc_proj()
                     for param in self.list_state:
                         num_cell = self.state[param].shape[0]
@@ -750,12 +777,12 @@ class QAQC:
                         param = el[1]
                         time = len(self.l_prim)
                         time_str = '-'
-                        pert_pred = en_fcst[typ] - np.dot(en_fcst[typ].mean(axis=1)[:, np.newaxis],
+                        pert_pred = en_fcst[typ][:, :self.ne] - np.dot(en_fcst[typ][:, :self.ne].mean(axis=1)[:, np.newaxis],
                                                           np.ones((1, self.ne)))
                         mean_residual = (en_obs[typ] - en_fcst[typ]).mean(axis=1)
                         t_var = [self.datavar[ind][typ] for ind in en_time[typ] if self.datavar[ind][typ] is not None]
                     X2 = _calc_proj()
-                    delta_d = en_obs[typ] - en_fcst[typ]
+                    delta_d = en_obs[typ] - en_fcst[typ][:, :self.ne]
                     num_cell = self.state[param].shape[0]
                     tmp = _calc_kalman_gain()
                     if el_ind < len(kg_max_mean):
@@ -805,7 +832,7 @@ class QAQC:
                 en_fcst_pert = en_fcst + np.sqrt(en_var[:, 0])[:, np.newaxis] * \
                                np.random.randn(en_fcst.shape[0], en_fcst.shape[1])
 
-            else:  # some data should be defines as blocks. To get the correct measure we project the data onto the subspace
+            else:  # some data should be defined as blocks. To get the correct measure we project the data onto the subspace
                 # spanned by the first principal component. The level 1, 2 and 3. Difference is then calculated in
                 # similar fashion as for the full data-space. have simple rules for generating combinations. All data are
                 # aquired at some time, at some position, and there might be multiple data types at the same time and
@@ -814,7 +841,7 @@ class QAQC:
                 if 'time' in combi_type or 'vector' in combi_type:
                     tmp_fcst = []
                     for typ in self.data_types:
-                        tmp_fcst.append([self.en_fcst[typ][ind, :][np.newaxis, :] for ind in self.l_prim
+                        tmp_fcst.append([self.en_fcst[typ][ind, :self.ne][np.newaxis, :self.ne] for ind in self.l_prim
                                          if self.obs_data[ind][typ] is not None and sum(
                                 np.isnan(self.obs_data[ind][typ])) == 0])
                     filt_fcst = [x for x in tmp_fcst if len(x)]  # remove all empty lists
@@ -1001,7 +1028,7 @@ class QAQC:
                         idx = np.ones(self.state[key].shape[0], dtype=bool)
                 else:
                     idx = actnum
-                if M.size == np.sum(idx):  # we have a grid parameter
+                if M.size == np.sum(idx) and M.size > 1:  # we have a grid parameter
                     tmp = np.zeros(M.shape)
                     tmp[M > S] = 1
                     tmp[M > 2 * S] = 2
@@ -1013,6 +1040,7 @@ class QAQC:
                     data[idx] = tmp
                     field = np.ma.array(data=data, mask=~idx)
                     dim = (self.prior_info[key]['nx'], self.prior_info[key]['ny'], self.prior_info[key]['nz'])
+                    #dim = next((item[1] for item in self.prior_info[key] if item[0] == 'grid'), None)
                     input_time = None
                     if hasattr(self.sim, 'write_to_grid'):
                         self.sim.write_to_grid(field, f'da_stat_{key}', self.folder, dim, input_time)
