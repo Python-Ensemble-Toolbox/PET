@@ -46,53 +46,48 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
 
         # Set objective function (callable)
         self.obj_func = objective
+
+        # Initialize state-related variables
         self.state_func_values = None
         self.ens_func_values = None
 
-        # Initialize prior
-        self._initialize_state_info() # Initialize cov, bounds, and state
-        self._scale_state() # Scale self.state to [0, 1] if transform is True
-
-    def _initialize_state_info(self):
-        '''
-        Initialize covariance and bounds based on prior information.
-        '''
-        self.cov = np.array([])
-        self.lb = []
-        self.ub = []
-        self.bounds = []
+        self.stateX = np.array([]) # Current state vector
+        self.stateF = None         # Function value(s) of current state
+        self.bounds = []           # Bounds for each variable in stateX
+        self.varX   = np.array([]) # Variance for state vector
+        self.covX   = None         # Covariance matrix for state vector
+        self.enX    = None         # Ensemble of state vectors (nx, ne)
+        self.enF    = None         # Ensemble of function values (ne, )
         
+        # Intialize state information
         for key in self.prior_info.keys():
-            variable = self.prior_info[key]
-            
-            # mean
-            self.state[key] = np.asarray(variable['mean'])
 
-            # Covariance
-            dim = self.state[key].size
-            var = variable['variance']*np.ones(dim)
-        
-            if 'limits' in variable.keys():
-                lb, ub = variable['limits']
-                self.lb.append(lb)
-                self.ub.append(ub)
-        
-                # transform var to [0, 1] if transform is True
-                if self.transform:
-                    var = var/(ub - lb)**2
-                    var = np.clip(var, 0, 1, out=var)
-                    self.bounds += dim*[(0, 1)]
-                else:
-                    self.bounds += dim*[(lb, ub)]
+            # Extract prior information for this variable
+            mean   = np.asarray(self.prior_info[key]['mean'])
+            var    = self.prior_info[key]['variance']*np.ones(mean.size)
+            lb, ub = self.prior_info[key].get('limits', (None, None))
+
+            # Fill in state vector and index information    
+            self.stateX = np.append(self.stateX, mean)
+            self.idX[key] = (self.stateX.size - mean.size, self.stateX.size)
+
+            # Set bounds and transform variance if applicable
+            if self.transform and (lb is not None) and (ub is not None):
+                var = var/(ub - lb)**2
+                var = np.clip(var, 0, 1, out=var)
+                self.bounds += mean.size*[(0, 1)]
             else:
-                self.bounds += dim*[(None, None)]
+                self.bounds.append((lb, ub))
 
-            # Add to covariance
-            self.cov = np.append(self.cov, var)
-            self.dim = self.cov.shape[0]
+            # Fill in variance vector
+            self.varX = np.append(self.varX, var)
 
-        # Make cov full covariance matrix
-        self.cov = np.diag(self.cov)
+        self.covX = np.diag(self.varX)  # Covariance matrix
+        self.dimX = self.stateX.size    # Dimension of state vector
+
+        # Scale state if applicable
+        self._scale_state() # Scale self.state to [0, 1] if transform is True
+        
     
     def get_state(self):
         """
