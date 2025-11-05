@@ -197,6 +197,7 @@ class elasticproperties:
             if dens is None:
                 densf_SI = self._fluid_densSIprop(self.phases,
                                           saturations[i, :], pressure[i])
+                bulkf_Brie = self._fluidprops_Brie(self.phases, saturations[i, :], pressure[i], densf_SI)
                 densf, bulkf = \
                     self._fluidprops_Wood(self.phases,
                                           saturations[i, :], pressure[i], Rs[i])
@@ -495,7 +496,7 @@ class elasticproperties:
     #
     #-----------------------------------------------------------
     #
-    def _phaseprops_Smeaheia(self, fphase, press, fdens, Rs=None, t = 37, CO2 = None):
+    def _phaseprops_Smeaheia(self, fphase, press, fdens, Rs=None, t = 37, CO2 = True):
         #
         # Calculate properties for a single fluid phase
         #
@@ -554,8 +555,8 @@ class elasticproperties:
             dz_dp = self.dz_dp(p_pr, t_pr)
             pbulk = press / (1 - p_pr * dz_dp / Z) * r_0
 
-            pbulk_test = self.test_new_implementation(press)
-            print(np.max(pbulk-pbulk_test))
+            #pbulk_test = self.test_new_implementation(press)
+            #print(np.max(pbulk-pbulk_test))
 
         elif fphase.lower() == "gas": # refers to Methane
             gs = 0.5537 #https://www.engineeringtoolbox.com/specific-gravities-gases-d_334.html
