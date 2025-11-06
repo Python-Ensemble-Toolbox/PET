@@ -101,102 +101,82 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
         else:
             x = self.get_state()
         return x
-
+    
     def gradient(self, x, *args, **kwargs):
-        r"""
-        Calculate the preconditioned gradient associated with ensemble, defined as:
-
-        $$ S \approx C_x \times G^T $$
-
-        where $C_x$ is the state covariance matrix, and $G$ is the standard
-        gradient. The ensemble sensitivity matrix is calculated as:
-
-        $$ S = X \times J^T /(N_e-1) $$
-
-        where $X$ and $J$ are ensemble matrices of $x$ (or control variables) and objective function
-        perturbed by their respective means. In practice (and in this method), $S$ is calculated by perturbing the
-        current control variable with Gaussian random numbers from $N(0, C_x)$ (giving $X$), running
-        the generated ensemble ($X$) through the simulator to give an ensemble of objective function values
-        ($J$), and in the end calculate $S$. Note that $S$ is an $N_x \times 1$ vector, where
-        $N_x$ is length of the control vector and the objective function is scalar.
-        
-        Note: In the case of multi-fidelity optimization, it is possible to specify 0 members for some of the levels 
-        in order to skip these levels. In that case, cov_wgt should have the same length as the number of levels 
-        that is acutally used. 
+        '''
+        Ensemble-based Gradient (EnOpt)
 
         Parameters
         ----------
         x : ndarray
             Control vector, shape (number of controls, )
-
+        
         args : tuple
             Covarice ($C_x$), shape (number of controls, number of controls)
-
+        
         Returns
         -------
-        gradient : numpy.ndarray
-                The gradient evaluated at x, shape (number of controls, )
-        """
+        gradient : ndarray
+            Ensemble gradient, shape (number of controls, )
+        '''
+        # Update state vector
+        self.stateX = x
 
-        # Set the ensemble state equal to the input control vector x
-        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
+        # Set covariance equal to the input
+        self.covX = args[0]
 
-        # Set the covariance equal to the input
-        self.cov = args[0]
-
-        # If bias correction is used we need to temporarily store the initial state
-        initial_state = None
-        if self.bias_file is not None and self.bias_factors is None:  # first iteration
-            initial_state = deepcopy(self.state)  # store this to update current objective values
-
-        # Generate ensemble of states
+        # Generate state ensemble
         self.ne = self.num_samples
-        nr = self._aux_input()
-        self.state = self._gen_state_ensemble()
-        
-        state_ens = at.aug_state(self.state, list(self.state.keys()))
-        self.function(state_ens, **kwargs)
+        nr = self._aux_input()   
+        self.enX = np.random.multivariate_normal(self.stateX, self.covX, self.ne).T
 
-        # If bias correction is used we need to calculate the bias factors, J(u_j,m_j)/J(u_j,m)
-        if self.bias_file is not None:  # use bias corrections
-            self._bias_factors(self.ens_func_values, initial_state)
+        # Shift ensemble to have correct mean
+        self.enX = self.enX - self.enX.mean(axis=1, keepdims=True) + self.stateX[:,None]
 
-        # Perturb state and function values with their mean
-        state_ens = at.aug_state(self.state, list(self.state.keys()))
-        pert_state = state_ens - np.dot(state_ens.mean(1)[:, None], np.ones((1, self.ne)))
+        # Truncate to bounds
+        if (self.lb is not None) and (self.ub is not None):
+            self.enX = np.clip(self.enX, self.lb[:, None], self.ub[:, None])
 
-        if not isinstance(self.ens_func_values,list):
-            self.ens_func_values = [self.ens_func_values]
-        start_index = 0
-        level_gradient = []
-        gradient = np.zeros(state_ens.shape[0])
-        L = len(self.ens_func_values)
-        for l in range(L):
+        # Evaluate objective function for ensemble
+        self.enF = self.function(self.enX, *args, **kwargs)
 
-            if self.bias_file is not None:  # use bias corrections
-                self.ens_func_values[l] *= self._bias_correction(self.state)
-                pert_obj_func = self.ens_func_values[l] - np.mean(self.ens_func_values[l])
-            else:
-                pert_obj_func = self.ens_func_values[l] - np.array(np.repeat(self.state_func_values, nr))
+        # Make function ensemble to a list (for Multilevel) 
+        if not isinstance(self.enF, list):
+            self.enF = [self.enF]
 
-            # Calculate the gradient
-            ml_ne = self.ens_func_values[l].size
-            g_m = np.zeros(state_ens.shape[0])
-            for i in np.arange(ml_ne):
-                g_m = g_m + pert_obj_func[i] * pert_state[:, start_index + i]
+        # Define some variables for gradient calculation
+        index = 0       
+        nlevels = len(self.enF)
+        grad_ml = np.zeros((nlevels, self.dimX))
 
-            start_index += ml_ne
-            level_gradient.append(g_m / (ml_ne - 1))
+        # Loop over levels (only one level if not multilevel)
+        for id_level in range(nlevels):
+            dF = self.enF[id_level] - np.repeat(self.stateF, nr)
+            ne = self.enF[id_level].shape[0] 
 
-        if 'multilevel' in self.keys_en.keys():
-            cov_wgt = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
-            for l in range(L):
-                gradient += level_gradient[l]*cov_wgt[l]
-            gradient /= self.ne
+            # Calculate ensemble gradient for level
+            g = np.zeros(self.dimX)
+            for n in range(ne):
+                g = g + dF[n] * (self.enX[:, index+n] - self.stateX)
+
+            grad_ml[id_level] = g/ne
+            index += ne
+
+        if 'multilevel' in self.keys_en:
+            weight = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
+            weight = np.array(weight)
+            if not np.sum(weight) == 1.0:
+                weight = weight / np.sum(weight)  
+            grad = np.dot(grad_ml, weight)
         else:
-            gradient = level_gradient[0]
+            grad = grad_ml[0]
 
-        return gradient
+        # Check if natural or averaged gradient (default is natural)
+        if not self.keys_en.get('natural_gradient', True):
+            cov_inv = np.linalg.inv(self.covX)
+            grad = np.matmul(cov_inv, grad)
+
+        return grad
 
     def hessian(self, x=None, *args):
         r"""

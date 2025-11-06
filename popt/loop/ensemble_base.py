@@ -55,8 +55,8 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         self.covX   = None         # Covariance matrix for state vector
         self.enX    = None         # Ensemble of state vectors ,(nx, ne)
         self.enF    = None         # Ensemble of function values, (ne, )
-        self.lb     = np.array([]) # Lower bounds for state vector
-        self.ub     = np.array([]) # Upper bounds for state vector
+        self.lb     = np.array([]) # Lower bounds for state vector, (nx,)
+        self.ub     = np.array([]) # Upper bounds for state vector, (nx,)
         
         # Intialize state information
         for key in self.prior_info.keys():
@@ -151,7 +151,7 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         # Run simulation
         x = self.invert_scale_state(x)
         run_success = self.calc_prediction(enX=x, save_prediction=self.save_prediction)
-        x = self.scale_state(x).flatten()
+        x = self.scale_state(x).squeeze()
 
         # convert x (nparray) to state (dict)
         #self.state = self.vec_to_state(x)
