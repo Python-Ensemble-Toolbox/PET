@@ -20,8 +20,10 @@ for path in sorted(src.rglob("*.py")):
     # Skip "venv" and other similarly named directories
     if path.name.startswith("venv") or path.name.startswith(".venv") or path.name.startswith(".") or "site-packages" in path.parts:
         continue
+
     # Skip and print "cause"
     cause = None
+    # Skip if read issue
     try:
         txt = path.read_text()
     except UnicodeDecodeError:
@@ -34,10 +36,16 @@ for path in sorted(src.rglob("*.py")):
             if not line or line.startswith("#"):
                 continue
             if not line.startswith(('"', "'")):
-                print()
                 cause = f"Warning: Skipping (due to missing docstring) {path.relative_to(root)}"
             break
+    # namespace packages not unsupported.
+    # Fix? https://github.com/mkdocstrings/mkdocstrings/discussions/563
+    if path.name != "__init__.py":
+        parent_has_init = (path.parent / "__init__.py").exists()
+        if not parent_has_init:
+            cause = f"Warning: Skipping namespace package file: {path.relative_to(root)}"
     if cause:
+        print(cause)
         continue
 
     parts = tuple(path.relative_to(src).with_suffix("").parts)
