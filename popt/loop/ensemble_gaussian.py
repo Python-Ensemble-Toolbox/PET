@@ -104,7 +104,7 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
     
     def gradient(self, x, *args, **kwargs):
         '''
-        Ensemble-based Gradient (EnOpt)
+        Ensemble-based Gradient (EnOpt).
 
         Parameters
         ----------
@@ -178,66 +178,72 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
 
         return grad
 
-    def hessian(self, x=None, *args):
-        r"""
-        Calculate the hessian matrix associated with ensemble, defined as:
-
-        $$ H = J(XX^T - \Sigma)/ (N_e-1) $$
-
-        where $X$ and $J$ are ensemble matrices of $x$ (or control variables) and objective function
-        perturbed by their respective means.
-
-        !!! note
-            state and ens_func_values are assumed to already exist from computation of the gradient.
-            Save time by not running them again.
+    def hessian(self, x=None, *args, **kwargs):
+        '''
+        Ensemble-based Hessian.
 
         Parameters
         ----------
         x : ndarray
-            Control vector, shape (number of controls, number of perturbations)
+            Control vector, shape (number of controls, ). If None, use the last x used in gradient.
+            If x is not None and it does not match the last x used in gradient, recompute the gradient first.
 
+        args : tuple
+            Additional arguments passed to function
+        
         Returns
         -------
-        hessian: numpy.ndarray
-            The hessian evaluated at x, shape (number of controls, number of controls)
-
+        hessian : ndarray
+            Ensemble hessian, shape (number of controls, number of controls)
+        
         References
         ----------
         Zhang, Y., Stordal, A.S. & Lorentzen, R.J. A natural Hessian approximation for ensemble based optimization.
         Comput Geosci 27, 355–364 (2023). https://doi.org/10.1007/s10596-022-10185-z
-        """
+        '''
+        # Check if self.gradient has been called with this x
+        if (not np.array_equal(x, self.stateX)) and (x is not None):
+            self.gradient(x, *args, **kwargs)
 
-        # Perturb state and function values with their mean
-        state_ens = at.aug_state(self.state, list(self.state.keys()))
-        pert_state = state_ens - np.dot(state_ens.mean(1)[:, None], np.ones((1, self.ne)))
         nr = self._aux_input()
 
-        if not isinstance(self.ens_func_values,list):
-            self.ens_func_values = [self.ens_func_values]
-        start_index = 0
-        level_hessian = []
-        L = len(self.ens_func_values)
-        hessian = np.zeros(self.cov.shape)
-        for l in range(L):
-            pert_obj_func = self.ens_func_values[l] - np.array(np.repeat(self.state_func_values, nr))
-            ml_ne = self.ens_func_values[l].size
-            
-            # Calculate the gradient for mean and covariance matrix
-            g_c = np.zeros(self.cov.shape)
-            for i in np.arange(ml_ne):
-                g_c = g_c + pert_obj_func[i] * (np.outer(pert_state[:, start_index + i], pert_state[:, start_index + i]) - self.cov)
+        # Make function ensemble to a list (for Multilevel) 
+        if not isinstance(self.enF, list):
+            self.enF = [self.enF]
 
-            start_index += ml_ne
-            level_hessian.append(g_c / (ml_ne - 1))
+        # Define some variables for gradient calculation
+        index = 0       
+        nlevels = len(self.enF)
+        hess_ml = np.zeros((nlevels, self.dimX, self.dimX))
 
-        if 'multilevel' in self.keys_en.keys():
-            cov_wgt = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
-            for l in range(L):
-                hessian += level_hessian[l]*cov_wgt[l]
-            hessian /= self.ne
+        # Loop over levels (only one level if not multilevel)
+        for id_level in range(nlevels):
+            dF = self.enF[id_level] - np.repeat(self.stateF, nr)
+            ne = self.enF[id_level].shape[0] 
+
+            # Calculate ensemble Hessian for level
+            h = np.zeros((self.dimX, self.dimX))
+            for n in range(ne):
+                dx = (self.enX[:, index+n] - self.stateX)
+                h = h + dF[n] * (np.outer(dx, dx) - self.covX)
+
+            hess_ml[id_level] = h/ne
+            index += ne
+
+        if 'multilevel' in self.keys_en:
+            weight = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
+            weight = np.array(weight)
+            if not np.sum(weight) == 1.0:
+                weight = weight / np.sum(weight)  
+            hessian = np.sum([h*w for h, w in zip(hess_ml, weight)], axis=0)
         else:
-            hessian = level_hessian[0]
-            
+            hessian = hess_ml[0]
+        
+        # Check if natural or averaged Hessian (default is natural)
+        if not self.keys_en.get('natural_gradient', True):
+            cov_inv = np.linalg.inv(self.covX)
+            hessian = cov_inv @ hessian @ cov_inv
+        
         return hessian
 
     def calc_ensemble_weights(self, x, *args, **kwargs):
