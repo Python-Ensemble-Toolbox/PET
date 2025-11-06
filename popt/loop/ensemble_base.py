@@ -111,12 +111,6 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
             Covariance matrix, shape (number of controls, number of controls)
         """
         return self.covX
-    
-    def vec_to_state(self, x):
-        """
-        Converts a control vector to the internal state representation.
-        """
-        return ot.update_optim_state(x, self.state, list(self.state.keys()))
 
     def get_bounds(self):
         """
