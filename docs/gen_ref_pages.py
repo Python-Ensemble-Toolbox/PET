@@ -19,7 +19,11 @@ for path in sorted(src.rglob("*.py")):
 
     # Skip files that don't have docstrings (avoid build abortion)
     # More elaborate solution: https://github.com/mkdocstrings/mkdocstrings/discussions/412
-    if (txt := path.read_text()) and txt.splitlines()[0][0] not in ["'", '"']:
+    if (txt := path.read_text()) and (not txt.splitlines()[0] or txt.splitlines()[0][0] not in ["'", '"']):
+            print(path,' will not be included in docs because of unknown issue')
+            continue
+    except UnicodeDecodeError:
+        print(path, ' will not be included in docs because of unknown issue')
         continue
 
     parts = tuple(path.relative_to(src).with_suffix("").parts)
