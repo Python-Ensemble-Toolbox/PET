@@ -82,26 +82,6 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
         self.bias_weights = np.ones(self.num_samples) / self.num_samples  # initialize with equal weights
         self.bias_points = None  # this is the points used to estimate the bias correction
     
-    def get_final_state(self, return_dict=False):
-        """
-        Parameters
-        ----------
-        return_dict : bool
-            Retrun dictionary if true
-
-        Returns
-        -------
-        x : numpy.ndarray
-            Control vector as ndarray, shape (number of controls, number of perturbations)
-        """
-
-        self._invert_scale_state()
-        if return_dict:
-            x = self.state
-        else:
-            x = self.get_state()
-        return x
-    
     def gradient(self, x, *args, **kwargs):
         '''
         Ensemble-based Gradient (EnOpt).
