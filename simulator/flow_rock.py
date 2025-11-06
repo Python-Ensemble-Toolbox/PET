@@ -78,30 +78,76 @@ class mixIn_multi_data():
 
         return water_depths
 
-    def measurement_locations(self, grid, water_depth, pad=1500, dxy=1500):
+    def measurement_locations(self, grid, water_depth, pad=1500, dxy=3000, well_coord = None, dxy_fine = 1500, r0 = 5000):
 
         # Determine the size of the measurement area as defined by the field extent
-        cell_centre = self.find_cell_centre(grid)  
-        xmin = np.min(cell_centre[0])
-        xmax = np.max(cell_centre[0])
-        ymin = np.min(cell_centre[1])
-        ymax = np.max(cell_centre[1])
+        cell_centre = self.find_cell_centre(grid)
+        x_min = np.min(cell_centre[0])
+        x_max = np.max(cell_centre[0])
+        y_min = np.min(cell_centre[1])
+        y_max = np.max(cell_centre[1])
 
-        xmin -= pad
-        xmax += pad
-        ymin -= pad
-        ymax += pad
+        x_min -= pad
+        x_max += pad
+        y_min -= pad
+        y_max += pad
 
-        xspan = xmax - xmin
-        yspan = ymax - ymin
+        x_span = x_max - x_min
+        y_span = y_max - y_min
 
-        Nx = int(np.ceil(xspan / dxy))
-        Ny = int(np.ceil(yspan / dxy))
+        nx = int(np.ceil(x_span / dxy))
+        ny = int(np.ceil(y_span / dxy))
 
-        xvec = np.linspace(xmin, xmax, Nx)
-        yvec = np.linspace(ymin, ymax, Ny)
+        x_vec = np.linspace(x_min, x_max, nx)
+        y_vec = np.linspace(y_min, y_max, ny)
+        x, y = np.meshgrid(x_vec, y_vec)
 
-        x, y = np.meshgrid(xvec, yvec)
+        # allow for finer measurement grid around injection well
+        if well_coord is not None:
+            # choose center point and radius for area with finer measurement grid
+            # y = 64, x = 34  # alpha well position Smeaheia
+            xc = cell_centre[well_coord[0]]
+            yc = cell_centre[well_coord[1]]
+
+            # Fine grid covering bounding box of the circle (clamped to domain)
+            fx_min = max(x_min, xc - r0)
+            fx_max = min(x_max, xc + r0)
+            fy_min = max(y_min, yc - r0)
+            fy_max = min(y_max, yc + r0)
+
+            pts_coarse = np.column_stack((x.ravel(), y.ravel()))
+
+            if fx_max > fx_min and fy_max > fy_min:
+                nfx = int(np.ceil((fx_max - fx_min) / dxy_fine)) + 1
+                nfy = int(np.ceil((fy_max - fy_min) / dxy_fine)) + 1
+                x_fine = np.linspace(fx_min, fx_max, nfx)
+                y_fine = np.linspace(fy_min, fy_max, nfy)
+                xf, yf = np.meshgrid(x_fine, y_fine)
+                pts_fine = np.column_stack((xf.ravel(), yf.ravel()))
+
+                # Keep only fine points inside the circle
+                d2 = (pts_fine[:, 0] - xc) ** 2 + (pts_fine[:, 1] - yc) ** 2
+                mask_inside = d2 <= r0 ** 2
+                pts_fine_inside = pts_fine[mask_inside]
+
+                # remove the coarse points inside the circle
+                d2 = (pts_coarse[:, 0] - xc) ** 2 + (pts_coarse[:, 1] - yc) ** 2
+                mask_inside = d2 <= r0 ** 2
+                pts_coarse = pts_coarse[~mask_inside]
+
+                # Combine and remove duplicates by rounding to a tolerance or using a structured array
+                # Use tolerance based on the smaller spacing
+                tol = min(dxy, dxy_fine) * 1e-3
+                all_pts = np.vstack((pts_coarse, pts_fine_inside))
+
+                # Round coordinates to avoid floating point duplicates then use np.unique
+                # Determine digits to round so differences smaller than tol collapse
+                digits = max(0, int(-np.floor(np.log10(tol))))
+                all_pts_rounded = np.round(all_pts, digits)
+                uniq_pts = np.unique(all_pts_rounded, axis=0)
+                x = uniq_pts[:, 0]
+                y = uniq_pts[:, 1]
+
 
         pos = {'x': x.flatten(), 'y': y.flatten()}
 
@@ -122,7 +168,7 @@ class flow_rock(flow):
     """
 
     def __init__(self, input_dict=None, filename=None, options=None):
-        super().__init__(input_dict, filename, options)
+        super().__init__(input_dict)
         self._getpeminfo(input_dict)
 
         self.date_slack = None

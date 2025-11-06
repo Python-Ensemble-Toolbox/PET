@@ -540,7 +540,24 @@ class Ensemble(PETEnsemble):
         self.state_scaling = at.calc_scaling(
             self.prior_state, self.list_states, self.prior_info)
 
-        self.Am = None
+        delta_scaled_prior = self.state_scaling[:, None] * \
+            np.dot(at.aug_state(self.prior_state, self.list_states), self.proj)
+
+        u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
+
+        # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
+        # zero. This part is a good place to include eventual additional truncation.
+        energy = 0
+        trunc_index = len(s_d) - 1  # inititallize
+        for c, elem in enumerate(s_d):
+            energy += elem
+            if energy / sum(s_d) >= self.trunc_energy:
+                trunc_index = c  # take the index where all energy is preserved
+                break
+        u_d, s_d, v_d = u_d[:, :trunc_index +
+                            1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
+        self.Am = np.dot(u_d, np.eye(trunc_index+1) *
+                         ((s_d**(-1))[:, None]))  # notation from paper
 
     def save_temp_state_assim(self, ind_save):
         """

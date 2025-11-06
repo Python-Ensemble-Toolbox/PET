@@ -70,7 +70,7 @@ class GIESMixIn(Ensemble):
             self.data_random_state = cp.deepcopy(np.random.get_state())
             self._ext_obs()
             # Get state scaling and svd of scaled prior
-            self._ext_state()
+            self._ext_scaling()
             self.current_state = cp.deepcopy(self.state)
 
     def calc_analysis(self):

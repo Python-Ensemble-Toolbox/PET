@@ -152,7 +152,7 @@ class Ensemble:
                 else:
                     # Use the number of ensemble members specified in input file (may be fewer than loaded)
                     self.ne = int(self.keys_en['ne'])
-                    if self.ne < min(tmp_ne):
+                    if self.ne <= min(tmp_ne):
                         # pick correct number of ensemble members
                         self.state = {key: val[:,:self.ne] for key, val in self.state.items()}
                     else:

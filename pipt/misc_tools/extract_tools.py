@@ -271,8 +271,12 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
     sparse['dim'] = [dim[2], dim[1], dim[0]]
 
     # Read mask_files
-    sparse['mask'] = [] 
-    for idx, filename in enumerate(info['mask'], start=1):
+    sparse['mask'] = []
+    m_info = info['mask']
+    # allow for one mask with filename given as string
+    if isinstance(m_info, str):
+        m_info = [m_info]
+    for idx, filename in enumerate(m_info, start=1):
         if not os.path.exists(filename):
             mask = np.ones(sparse['dim'], dtype=bool)
             np.savez(f'mask_{idx}.npz', mask=mask)
