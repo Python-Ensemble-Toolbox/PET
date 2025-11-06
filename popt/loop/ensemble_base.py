@@ -1,5 +1,6 @@
 # External imports
 import numpy as np
+import pandas as pd
 import sys
 import warnings
 
@@ -10,6 +11,7 @@ from popt.misc_tools import optim_tools as ot
 from pipt.misc_tools import analysis_tools as at
 from ensemble.ensemble import Ensemble as SupEnsemble
 from simulator.simple_models import noSimulation
+from pipt.misc_tools.ensemble_tools import matrix_to_dict
 
 __all__ = ['EnsembleOptimizationBaseClass']
 
@@ -257,3 +259,30 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
                 x[i] = u[i]  # No scaling if bounds are None
                 
         return x
+
+    def save_stateX(self, path='./', filetype='npz'):
+        '''
+        Save the state vector.
+
+        Parameters
+        ----------
+        path : str
+            Path to save the state vector. Default is current directory.
+        
+        filetype : str
+            File type to save the state vector. Options are 'csv', 'npz' or 'npy'. Default is 'npz'.
+        '''
+        if self.transform:
+            stateX = self.invert_scale_state(self.stateX)
+        else:
+            stateX = self.stateX
+
+        if filetype == 'csv':
+            state_dict = matrix_to_dict(stateX, self.idX)
+            state_df = pd.DataFrame(data=state_dict)
+            state_df.to_csv(path + 'stateX.csv', index=False)
+        elif filetype == 'npz':
+            state_dict = matrix_to_dict(stateX, self.idX)
+            np.savez_compressed(path + 'stateX.npz', **state_dict)
+        elif filetype == 'npy':
+            np.save(path + 'stateX.npy', stateX)
