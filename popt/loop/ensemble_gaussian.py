@@ -347,35 +347,6 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
 
         return state_en
 
-    def _bias_correction(self, state):
-        """
-        Calculate bias correction. Currently, the bias correction is a constant independent of the state
-        """
-        if self.bias_factors is not None:
-            return np.sum(self.bias_weights * self.bias_factors)
-        else:
-            return 1
-
-    def _bias_factors(self, obj_func_values, initial_state):
-        """
-        Function for computing the bias factors
-        """
-
-        if self.bias_factors is None:  # first iteration
-            currentfile = self.sim.file
-            self.sim.file = self.bias_file
-            self.ne = self.num_samples
-            self.aux_input = list(np.arange(self.ne))
-            self.calc_prediction()
-            self.sim.file = currentfile
-            bias_func_values = self.obj_func(self.pred_data, self.sim.input_dict, self.sim.true_order)
-            bias_func_values = np.array(bias_func_values)
-            self.bias_factors = bias_func_values / obj_func_values
-            self.bias_points = deepcopy(self.state)
-            self.state_func_values *= self._bias_correction(initial_state)
-        elif self.bias_adaptive is not None and self.bias_adaptive > 0:  # update factors to account for new information
-            pass  # not implemented yet
-
 
 
 
