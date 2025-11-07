@@ -71,16 +71,6 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
         self.particles = []  # list in case of multilevel
         self.particle_values = []  # list in case of multilevel
         self.resample_index = None
-
-        # Initialize variables for bias correction
-        if 'bias_file' in self.sim.input_dict:  # use bias correction
-            self.bias_file = self.sim.input_dict['bias_file'].upper()  # mako file for simulations
-        else:
-            self.bias_file = None
-        self.bias_adaptive = None  # flag to adaptively update the bias correction (not implemented yet)
-        self.bias_factors = None  # this is J(x_j,m_j)/J(x_j,m)
-        self.bias_weights = np.ones(self.num_samples) / self.num_samples  # initialize with equal weights
-        self.bias_points = None  # this is the points used to estimate the bias correction
     
     def gradient(self, x, *args, **kwargs):
         '''
