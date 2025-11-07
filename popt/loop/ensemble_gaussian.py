@@ -82,7 +82,7 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
             Control vector, shape (number of controls, )
         
         args : tuple
-            Covarice ($C_x$), shape (number of controls, number of controls)
+            Covarice matrix, shape (number of controls, number of controls)
         
         Returns
         -------
@@ -325,27 +325,6 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
             sens_matrix = level_sens[0]
 
         return sens_matrix, best_ens, best_func
-
-    def _gen_state_ensemble(self):
-        """
-        Generate ensemble with the current state (control variable) as the mean and using the covariance matrix
-        """
-
-        state_en = {}
-        cov_blocks = ot.corr2BlockDiagonal(self.state, self.cov)
-        for i, statename in enumerate(self.state.keys()):
-            mean = self.state[statename]
-            cov = cov_blocks[i]
-            temp_state_en = np.random.multivariate_normal(mean, cov, self.ne).transpose()
-            shifted_ensemble = np.array([mean]).T + temp_state_en - np.array([np.mean(temp_state_en, 1)]).T
-            if self.lb and self.ub:
-                if self.transform:
-                    np.clip(shifted_ensemble, 0, 1, out=shifted_ensemble)
-                else:
-                    np.clip(shifted_ensemble, self.lb[i], self.ub[i], out=shifted_ensemble)
-            state_en[statename] = shifted_ensemble
-
-        return state_en
 
 
 
