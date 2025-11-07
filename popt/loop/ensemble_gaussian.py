@@ -16,25 +16,13 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
 
     Methods
     -------
-    get_state()
-        Returns control vector as ndarray
-
-    get_final_state(return_dict)
-        Returns final control vector between [lb,ub]
-
-    get_cov()
-        Returns the ensemble covariance matrix
-
-    function(x,*args)
-        Objective function called during optimization
-
-    gradient(x,*args)
+    gradient(x, *args, **kwargs)
         Ensemble gradient
-
-    hessian(x,*args)
+ 
+    hessian(x, *args, **kwargs)
         Ensemble hessian
 
-    calc_ensemble_weights(self,x,*args):
+    calc_ensemble_weights(self,x, *args, **kwargs):
         Calculate weights used in sequential monte carlo optimization
 
     """
@@ -43,7 +31,7 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
         """
         Parameters
         ----------
-        keys_en : dict
+        options : dict
             Options for the ensemble class
 
             - disable_tqdm: supress tqdm progress bar for clean output in the notebook
@@ -52,11 +40,12 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
             - prior_<name>: the prior information the state variables, including mean, variance and variable limits
             - num_models: number of models (if robust optimization) (default 1)
             - transform: transform variables to [0,1] if true (default true)
+            - natural_gradient: use natural gradient if true (default false)
 
-        sim : callable
+        simulator : callable
             The forward simulator (e.g. flow)
 
-        obj_func : callable
+        objective : callable
             The objective function (e.g. npv)
         """
 
