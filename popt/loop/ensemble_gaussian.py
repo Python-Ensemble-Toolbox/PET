@@ -1,13 +1,11 @@
 # External imports
 import numpy as np
-import sys
 import warnings
 
 from copy import deepcopy
 
 # Internal imports
 from popt.misc_tools import optim_tools as ot
-from pipt.misc_tools import analysis_tools as at
 from popt.loop.ensemble_base import EnsembleOptimizationBaseClass
 
 __all__ = ['GaussianEnsemble']
