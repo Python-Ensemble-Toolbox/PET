@@ -219,6 +219,7 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
     def calc_ensemble_weights(self, x, *args, **kwargs):
         r"""
         Calculate weights used in sequential monte carlo optimization.
+        Updated version that accommodates new base class changes.
 
         Parameters
         ----------
@@ -233,54 +234,53 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
         sens_matrix, best_ens, best_func : tuple
                 The weighted ensemble, the best ensemble member, and the best objective function value
         """
+        # Update state vector using new base class method
+        self.stateX = x
 
-        # Set the ensemble state equal to the input control vector x
-        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
-
-        # Set the inflation factor and covariance equal to the input
+        # Set the inflation factor, covariance and survival factor equal to the input
         self.inflation_factor = args[0]
-        self.cov = args[1]
+        self.covX = args[1]
         self.survival_factor = args[2]
-
-        # If bias correction is used we need to temporarily store the initial state
-        initial_state = None
-        if self.bias_file is not None and self.bias_factors is None:  # first iteration
-            initial_state = deepcopy(self.state)  # store this to update current objective values
 
         # Generate ensemble of states
         if self.resample_index is None:
             self.ne = self.num_samples
         else:
             self.ne = int(np.round(self.num_samples*self.survival_factor))
-        self._aux_input()
-        self.state = self._gen_state_ensemble()
+        
+        nr = self._aux_input()
+        
+        # Generate state ensemble
+        self.enX = np.random.multivariate_normal(self.stateX, self.covX, self.ne).T
+        
+        # Truncate to bounds
+        if (self.lb is not None) and (self.ub is not None):
+            self.enX = np.clip(self.enX, self.lb[:, None], self.ub[:, None])
 
-        state_ens = at.aug_state(self.state, list(self.state.keys()))
-        self.function(state_ens, **kwargs)
+        # Evaluate objective function for ensemble
+        self.enF = self.function(self.enX, **kwargs)
 
-        if not isinstance(self.ens_func_values, list):
-            self.ens_func_values = [self.ens_func_values]
-        L = len(self.ens_func_values)
+        if not isinstance(self.enF, list):
+            self.enF = [self.enF]
+
+        L = len(self.enF)
         if self.resample_index is None:
             self.resample_index = [None]*L
-
-        # If bias correction is used we need to calculate the bias factors, J(u_j,m_j)/J(u_j,m)
-        if self.bias_file is not None:  # use bias corrections
-            self._bias_factors(self.ens_func_values, initial_state)
 
         warnings.filterwarnings('ignore')  # suppress warnings
         start_index = 0
         level_sens = []
-        sens_matrix = np.zeros(state_ens.shape[0])
+        sens_matrix = np.zeros(self.enX.shape[0])
         best_ens = 0
         best_func = 0
         ml_ne_new_total = 0
+        
         if 'multilevel' in self.keys_en.keys():
             en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
         else:
             en_size = [self.num_samples]
+            
         for l in range(L):
-
             ml_ne = en_size[l] 
             if L > 1 and l == L-1:
                 ml_ne_new = int(np.round(self.num_samples*self.survival_factor)) - ml_ne_new_total
@@ -290,29 +290,29 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
             ml_ne_surv = ml_ne - ml_ne_new  # surviving samples
 
             if self.resample_index[l] is None:
-                self.particles.append(deepcopy(state_ens[:, start_index:start_index + ml_ne]))
-                self.particle_values.append(deepcopy(self.ens_func_values[l]))
+                self.particles.append(deepcopy(self.enX[:, start_index:start_index + ml_ne]))
+                self.particle_values.append(deepcopy(self.enF[l]))
             else:
                 self.particles[l][:, :ml_ne_surv] = self.particles[l][:, self.resample_index[l]]
-                self.particles[l][:, ml_ne_surv:] = deepcopy(state_ens[:, start_index:start_index + ml_ne_new])
+                self.particles[l][:, ml_ne_surv:] = deepcopy(self.enX[:, start_index:start_index + ml_ne_new])
                 self.particle_values[l][:ml_ne_surv] = self.particle_values[l][self.resample_index[l]]
-                self.particle_values[l][ml_ne_surv:] = deepcopy(self.ens_func_values[l])
+                self.particle_values[l][ml_ne_surv:] = deepcopy(self.enF[l])
 
             # Calculate the weights and ensemble sensitivity matrix
             weights = np.zeros(ml_ne)
-            for i in np.arange(ml_ne):
+            for i in range(ml_ne):
                 weights[i] = np.exp(np.clip(-(self.particle_values[l][i] - np.min(
                     self.particle_values[l])) * self.inflation_factor, None, 10))
 
-            weights = weights + 0.000001
-            weights = weights/np.sum(weights)  # TODO: Sjekke at disse er riktig
+            weights = weights + 1e-6  # Add small regularization
+            weights = weights/np.sum(weights)
 
             level_sens.append(self.particles[l] @ weights)
             if l == L-1:  # keep the best from the finest level
                 index = np.argmin(self.particle_values[l])
                 best_ens = self.particles[l][:, index]
                 best_func = self.particle_values[l][index]
-            self.resample_index[l] = np.random.choice(ml_ne,ml_ne_surv,replace=True,p=weights)
+            self.resample_index[l] = np.random.choice(ml_ne, ml_ne_surv, replace=True, p=weights)
 
             start_index += ml_ne_new
 
