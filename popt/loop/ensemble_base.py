@@ -52,14 +52,14 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         # Initialize state-related attributes
         self.stateX = np.array([]) # Current state vector, (nx,)
         self.stateF = None         # Function value(s) of current state
-        self.bounds = []           # Bounds for each variable in stateX
+        self.bounds = []           # Bounds (untransformed) for each variable in stateX
         self.varX   = np.array([]) # Variance for state vector
         self.covX   = None         # Covariance matrix for state vector
         self.enX    = None         # Ensemble of state vectors ,(nx, ne)
         self.enF    = None         # Ensemble of function values, (ne, )
-        self.lb     = np.array([]) # Lower bounds for state vector, (nx,)
-        self.ub     = np.array([]) # Upper bounds for state vector, (nx,)
-        
+        self.lb     = np.array([]) # Lower bounds (transformed) for state vector, (nx,)
+        self.ub     = np.array([]) # Upper bounds (transformed) for state vector, (nx,)
+
         # Intialize state information
         for key in self.prior_info.keys():
 
@@ -93,35 +93,6 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         # Scale state if applicable
         self.stateX = self.scale_state(self.stateX)
 
-    
-    def get_state(self):
-        """
-        Returns
-        -------
-        x : numpy.ndarray
-            Control vector as ndarray, shape (number of controls, number of perturbations)
-        """
-        return self.stateX
-    
-    def get_cov(self):
-        """
-        Returns
-        -------
-        cov : numpy.ndarray
-            Covariance matrix, shape (number of controls, number of controls)
-        """
-        return self.covX
-
-    def get_bounds(self):
-        """
-        Returns
-        -------
-        bounds : list
-            (min, max) pairs for each element in x. None is used to specify no bound.
-        """
-
-        return self.bounds
-    
     def function(self, x, *args, **kwargs):
         """
         This is the main function called during optimization.
@@ -176,27 +147,34 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
             self.enF = func_values 
         
         return func_values
+
+    def get_state(self):
+        """
+        Returns
+        -------
+        x : numpy.ndarray
+            Control vector as ndarray, shape (number of controls, number of perturbations)
+        """
+        return self.stateX
     
-    def _set_multilevel_state(self, state, x):
-        if 'multilevel' in self.keys_en.keys() and len(x.shape) > 1:  
-            en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
-            self.state = ot.toggle_ml_state(self.state, en_size)
-
-
-    def _aux_input(self):
+    def get_cov(self):
         """
-        Set the auxiliary input used for multiple geological realizations
+        Returns
+        -------
+        cov : numpy.ndarray
+            Covariance matrix, shape (number of controls, number of controls)
+        """
+        return self.covX
+
+    def get_bounds(self):
+        """
+        Returns
+        -------
+        bounds : list
+            (min, max) pairs for each element in x. None is used to specify no bound.
         """
 
-        nr = 1  # nr is the ratio of samples over models
-        if self.num_models > 1:
-            if np.remainder(self.num_samples, self.num_models) == 0:
-                nr = int(self.num_samples / self.num_models)
-                self.aux_input = list(np.repeat(np.arange(self.num_models), nr))
-            else:
-                print('num_samples must be a multiplum of num_models!')
-                sys.exit(0)
-        return nr
+        return self.bounds
 
     def scale_state(self, x):
         """
@@ -280,3 +258,24 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
             np.savez_compressed(path + 'stateX.npz', **state_dict)
         elif filetype == 'npy':
             np.save(path + 'stateX.npy', stateX)
+
+    def _set_multilevel_state(self, state, x):
+        if 'multilevel' in self.keys_en.keys() and len(x.shape) > 1:  
+            en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
+            self.state = ot.toggle_ml_state(self.state, en_size)
+
+
+    def _aux_input(self):
+        """
+        Set the auxiliary input used for multiple geological realizations
+        """
+
+        nr = 1  # nr is the ratio of samples over models
+        if self.num_models > 1:
+            if np.remainder(self.num_samples, self.num_models) == 0:
+                nr = int(self.num_samples / self.num_models)
+                self.aux_input = list(np.repeat(np.arange(self.num_models), nr))
+            else:
+                print('num_samples must be a multiplum of num_models!')
+                sys.exit(0)
+        return nr
