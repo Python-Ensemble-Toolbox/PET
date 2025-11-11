@@ -260,8 +260,8 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
 
     # Redefine all 'yes' and 'no' values to bool
     for key, val in info.items():
-        if val == 'yes': info[key] == True
-        if val == 'no':  info[key] == False
+        if val == 'yes': info[key] = True
+        if val == 'no':  info[key] = False
 
     # Intial dict
     sparse = {}
