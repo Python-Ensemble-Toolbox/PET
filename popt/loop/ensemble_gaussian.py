@@ -12,7 +12,7 @@ __all__ = ['GaussianEnsemble']
 
 class GaussianEnsemble(EnsembleOptimizationBaseClass):
     """
-    Class to store control states and evaluate objective functions.
+    Gaussian Ensemble class for ensemble-based optimization.
 
     Methods
     -------
@@ -24,7 +24,6 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
 
     calc_ensemble_weights(self,x, *args, **kwargs):
         Calculate weights used in sequential monte carlo optimization
-
     """
 
     def __init__(self, options, simulator, objective):
