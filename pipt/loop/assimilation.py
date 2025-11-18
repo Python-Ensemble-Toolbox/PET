@@ -536,12 +536,12 @@ class Assimilate:
                                 self.ensemble.pred_data[i][k] = np.zeros(
                                     (len(self.ensemble.obs_data[i][k]), self.ensemble.ne))
                             for m in range(pred_data_tmp[i][k].shape[1]):
-                                data_array = self.ensemble.compress(pred_data_tmp[i][k][:, m], vintage,
+                                data_array = self.ensemble.compress_manager(pred_data_tmp[i][k][:, m], vintage,
                                                                     self.ensemble.sparse_info['use_ensemble'])
                                 self.ensemble.pred_data[i][k][:, m] = data_array
                             vintage = vintage + 1
             if self.ensemble.sparse_info['use_ensemble']:
-                self.ensemble.compress()
+                self.ensemble.compress_manager()
                 self.ensemble.sparse_info['use_ensemble'] = None
 
         # Extra option debug
