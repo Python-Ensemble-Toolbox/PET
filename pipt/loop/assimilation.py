@@ -102,8 +102,9 @@ class Assimilate:
             )
 
         # Run a while loop until max. iterations or convergence is reached
-        while self.ensemble.iteration < self.max_iter and conv is False:
+        while (self.ensemble.iteration < self.max_iter) and (conv is False):
             # Add a check to see if this is the prior model
+            
             if self.ensemble.iteration == 0:
                 # Calc forecast for prior model
                 # Inset 0 as input to forecast all data

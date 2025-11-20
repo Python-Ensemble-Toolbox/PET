@@ -60,14 +60,31 @@ class lmenrmlMixIn(Ensemble):
 
         if self.restart is False:
             # Save prior state in separate variable
-            #self.prior_state = cp.deepcopy(self.state)
             self.prior_enX = cp.deepcopy(self.enX) # not sure if this is wise!
 
-            # Extract parameters like conv. tol. and damping param. from ITERATION keyword in DATAASSIM
-            self._ext_iter_param()
+            # Set parameters needed for LM-EnRML
+            options = self.keys_da['iteration']
+            if isinstance(options, list):
+                options = extract.list_to_dict(options)
 
-            # Within variables
+            self.data_misfit_tol = options.get('data_misfit_tol', 0.01)
+            self.trunc_energy = options.get('energy', 0.95)
+            self.step_tol  = options.get('step_tol', 0.01)
+            self.lam       = options.get('lambda', 100)
+            self.lam_max   = options.get('lambda_max', 1e10)
+            self.lam_min   = options.get('lambda_min', 0.01)
+            self.gamma     = options.get('lambda_factor', 5)
+            self.iteration = 0
+
+            # Ensure that it is given as percentage
+            if self.trunc_energy > 1:
+                    self.trunc_energy /= 100.
+
+            # Initalize some variables
             self.prev_data_misfit = None  # Data misfit at previous iteration
+            self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
+
+            # Load ACTNUM if given
             if 'actnum' in self.keys_da.keys():
                 try:
                     self.actnum = np.load(self.keys_da['actnum'])['actnum']
@@ -75,15 +92,12 @@ class lmenrmlMixIn(Ensemble):
                     print('ACTNUM file cannot be loaded!')
             else:
                 self.actnum = None
+
             # At the moment, the iterative loop is threated as an iterative smoother and thus we check if assim. indices
             # are given as in the Simultaneous loop.
             self.check_assimindex_simultaneous()
-            # define the assimilation index
-            self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
-
             # define the list of datatypes
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
-                self.obs_data, self.assim_index)
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
             # Get the perturbed observations and observation scaling
             self.data_random_state = cp.deepcopy(np.random.get_state())
             self._ext_obs()
@@ -97,14 +111,22 @@ class lmenrmlMixIn(Ensemble):
         Calculate the update step in LM-EnRML, which is just the Levenberg-Marquardt update algorithm with
         the sensitivity matrix approximated by the ensemble.
         """
-
-        # reformat predicted data
-        _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                     self.list_datatypes)
+        # Get Ensemble of predicted data
+        _, self.enPred = at.aug_obs_pred_data(
+            self.obs_data,
+            self.pred_data,
+            self.assim_index,
+            self.list_datatypes
+        )
 
         if self.iteration == 1:  # first iteration
+            
+            # Calculate the prior data misfit
             data_misfit = at.calc_objectivefun(
-                self.real_obs_data, self.aug_pred_data, self.cov_data)
+                pert_obs=self.enObs,
+                pred_data=self.enPred,
+                Cd=self.cov_data
+            )
 
             # Store the (mean) data misfit (also for conv. check)
             self.data_misfit = np.mean(data_misfit)
@@ -112,7 +134,7 @@ class lmenrmlMixIn(Ensemble):
             self.data_misfit_std = np.std(data_misfit)
 
             if self.lam == 'auto':
-                self.lam = (0.5 * self.prior_data_misfit)/self.aug_pred_data.shape[0]
+                self.lam = (0.5 * self.prior_data_misfit)/self.enPred.shape[0]
 
             self.logger.info(
                 f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}. Lambda for initial analysis: {self.lam}')
@@ -123,8 +145,8 @@ class lmenrmlMixIn(Ensemble):
             # Perform the update
             self.update(
                 enX = self.enX, 
-                enY = self.aug_pred_data, 
-                enE = self.real_obs_data, 
+                enY = self.enPred, 
+                enE = self.enObs, 
                 prior = self.prior_enX
             )
 
@@ -154,8 +176,14 @@ class lmenrmlMixIn(Ensemble):
             met
         """
 
-        _, pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                            self.list_datatypes)
+        # Get Ensemble of predicted data
+        _, enPred = at.aug_obs_pred_data(
+            self.obs_data,
+            self.pred_data,
+            self.assim_index,
+            self.list_datatypes
+        )
+
         # Initialize the initial success value
         success = False
 
@@ -167,7 +195,7 @@ class lmenrmlMixIn(Ensemble):
         # mat_obs = np.dot(obs_data_vector.reshape((len(obs_data_vector),1)), np.ones((1, self.ne))) # use the perturbed
         # data instead.
 
-        data_misfit = at.calc_objectivefun(self.real_obs_data, pred_data, self.cov_data)
+        data_misfit = at.calc_objectivefun(self.enObs, enPred, self.cov_data)
 
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
@@ -258,29 +286,6 @@ class lmenrmlMixIn(Ensemble):
 
             # Return conv = False, why_stop var.
             return False, success, why_stop
-
-    def _ext_iter_param(self):
-        """
-        Extract parameters needed in LM-EnRML from the ITERATION keyword given in the DATAASSIM part of PIPT init.
-        file. These parameters include convergence tolerances and parameters for the damping parameter. Default
-        values for these parameters have been given here, if they are not provided in ITERATION.
-        """
-        options = self.keys_da['iteration']
-        if isinstance(options, list):
-            options = extract.list_to_dict(options)
-
-        # unpack options
-        self.data_misfit_tol = options.get('data_misfit_tol', 0.01)
-        self.trunc_energy = options.get('energy', 0.95)
-        self.step_tol  = options.get('step_tol', 0.01)
-        self.lam       = options.get('lambda', 100)
-        self.lam_max   = options.get('lambda_max', 1e10)
-        self.lam_min   = options.get('lambda_min', 0.01)
-        self.gamma     = options.get('lambda_factor', 5)
-        self.iteration = 0
-
-        if self.trunc_energy > 1:  # ensure that it is given as percentage
-                self.trunc_energy /= 100.
 
 
 class lmenrml_approx(lmenrmlMixIn, approx_update):

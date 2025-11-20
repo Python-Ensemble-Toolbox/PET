@@ -493,8 +493,69 @@ class Ensemble(PETEnsemble):
                     vintage = vintage + 1
 
     def _ext_obs(self):
-        self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                       self.list_datatypes)
+        #self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
+        #                                               self.list_datatypes)
+        
+        self.vecObs, _ = at.aug_obs_pred_data(
+            self.obs_data, 
+            self.pred_data, 
+            self.assim_index,
+            self.list_datatypes
+        )
+
+        # Generate ensemble of perturbed observed data
+        if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
+
+            if hasattr(self, 'cov_data'):  # cd matrix has been imported
+                # enObs: samples from N(0,Cd)
+                enObs = cholesky(self.cov_data).T @ np.random.randn(self.cov_data.shape[0], self.ne)
+            else:
+                enObs = at.extract_tot_empirical_cov(
+                    self.datavar, 
+                    self.assim_index, 
+                    self.list_datatypes, 
+                    self.ne
+                )
+
+            # Screen data if required
+            if ('screendata' in self.keys_da) and (self.keys_da['screendata'] == 'yes'):
+                enObs = at.screen_data(
+                    enObs, 
+                    self.enPred, 
+                    self.vecObs, 
+                    self.iteration
+                )
+            
+            # Center the ensemble of perturbed observed data
+            self.enObs = self.vecObs[:, np.newaxis] + enObs
+            self.cov_data = np.var(self.enObs, ddof=1, axis=1)
+            self.scale_data = np.sqrt(self.cov_data)
+        
+        else:
+            if not hasattr(self, 'cov_data'):  # if cd is not loaded
+                self.cov_data = at.gen_covdata(
+                    datavar = self.datavar,
+                    assim_index = self.assim_index,
+                    list_data = self.list_datatypes,
+                )
+            # data screening
+            if ('screendata' in self.keys_da) and (self.keys_da['screendata'] == 'yes'):
+                self.cov_data = at.screen_data(
+                    data = self.cov_data, 
+                    aug_pred_data = self.enPred, 
+                    obs_data_vector = self.vecObs, 
+                    iteration = self.iteration
+                )
+            
+            generator = Cholesky()  # Initialize GeoStat class for generating realizations
+            self.enObs, self.scale_data = generator.gen_real(
+                mean = self.vecObs, 
+                var = self.cov_data, 
+                number = self.ne,
+                return_chol = True
+            )
+    
+        ''''
         # Generate the data auto-covariance matrix
         if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
             if hasattr(self, 'cov_data'):  # cd matrix has been imported
@@ -526,6 +587,7 @@ class Ensemble(PETEnsemble):
             init_en = Cholesky()  # Initialize GeoStat class for generating realizations
             self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
                                                                    return_chol=True)
+        '''
 
     def _ext_scaling(self):
         # get vector of scaling

@@ -946,6 +946,7 @@ def aug_obs_pred_data(obs_data, pred_data, assim_index, list_data):
 
     tot_pred = tuple(pred_data[el][dat] for el in l_prim if pred_data[el]
                      is not None for dat in list_data if obs_data[el][dat] is not None)
+    
     if len(tot_pred):  # if this is done during the initiallization tot_pred contains nothing
         pred = np.concatenate(tot_pred)
     else:
@@ -1489,3 +1490,49 @@ def get_obs_size(obs_data, time_index, datatypes):
         ]
         for time in time_index
     ]
+
+def truncSVD(matrix, r=None, energy=None, full_matrices=False):
+    '''
+    Perform truncated SVD on input matrix.
+
+    Parameters
+    ----------
+    matrix : ndarray, shape (m, n)
+        Input matrix to perform SVD on.
+
+    r : int, optional
+        Rank to truncate the SVD to. If None, energy must be specified.
+
+    energy : float, optional
+        Percentage of energy to retain in the truncated SVD. If None, r must be specified.
+
+    full_matrices : bool, optional
+        Whether to compute full or reduced SVD. Default is False.
+    
+    Returns
+    -------
+    U : ndarray, shape (m, r)
+        Left singular vectors.
+    
+    S : ndarray, shape (r,)
+        Singular values.
+    
+    VT : ndarray, shape (r, n)
+        Right singular vectors transposed.
+    '''
+    # Perform SVD on input matrix
+    U, S, VT = np.linalg.svd(matrix, full_matrices=full_matrices)
+
+    # If not specified rank, energy must be given
+    if r is None:
+        if energy is not None:
+            # If energy is less than 100 we truncate the SVD matrices
+            if energy < 100:
+                r = (np.cumsum(S) / sum(S)) * 100 <= energy
+                U, S, VT = U[:,r], S[r], VT[r,:]
+        else:
+            raise ValueError("Either rank 'r' or 'energy' must be specified for truncSVD.")
+    else:
+        U, S, VT = U[:,:r], S[:r], VT[:r,:]
+
+    return U, S, VT
