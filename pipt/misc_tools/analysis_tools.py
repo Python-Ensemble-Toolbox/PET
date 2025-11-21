@@ -1527,12 +1527,11 @@ def truncSVD(matrix, r=None, energy=None, full_matrices=False):
     if r is None:
         if energy is not None:
             # If energy is less than 100 we truncate the SVD matrices
-            if energy < 100:
-                r = (np.cumsum(S) / sum(S)) * 100 <= energy
-                U, S, VT = U[:,r], S[r], VT[r,:]
+            if energy < 1:
+                r = np.sum((np.cumsum(S) / sum(S)) <= energy)
+            else:
+                r = np.sum((np.cumsum(S) / sum(S)) <= energy/100)
         else:
             raise ValueError("Either rank 'r' or 'energy' must be specified for truncSVD.")
-    else:
-        U, S, VT = U[:,:r], S[:r], VT[:r,:]
 
-    return U, S, VT
+    return U[:,:r], S[:r], VT[:r,:]

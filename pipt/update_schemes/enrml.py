@@ -99,9 +99,11 @@ class lmenrmlMixIn(Ensemble):
 
             # define the list of datatypes
             self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
+
             # Get the perturbed observations and observation scaling
             self.data_random_state = cp.deepcopy(np.random.get_state())
-            self._ext_obs()
+            self.vecObs, self.enObs = self.set_observations()
+            
             # Get state scaling and svd of scaled prior
             self._ext_scaling()
 

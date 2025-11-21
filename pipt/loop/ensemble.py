@@ -492,9 +492,13 @@ class Ensemble(PETEnsemble):
                     self.datavar[i][datatype[j]] = est_noise  # override the given value
                     vintage = vintage + 1
 
-    def _ext_obs(self):
-     
-        self.vecObs, _ = at.aug_obs_pred_data(
+
+    def set_observations(self):
+        '''
+        Generate the perturbed observed data ensemble
+        '''
+        # Make observed data vector
+        vecObs, _ = at.aug_obs_pred_data(
             self.obs_data, 
             self.pred_data, 
             self.assim_index,
@@ -520,13 +524,13 @@ class Ensemble(PETEnsemble):
                 enObs = at.screen_data(
                     enObs, 
                     self.enPred, 
-                    self.vecObs, 
+                    vecObs, 
                     self.iteration
                 )
             
             # Center the ensemble of perturbed observed data
-            self.enObs = self.vecObs[:, np.newaxis] - enObs
-            self.cov_data = np.var(self.enObs, ddof=1, axis=1)
+            enObs = vecObs[:, np.newaxis] - enObs
+            self.cov_data = np.var(enObs, ddof=1, axis=1)
             self.scale_data = np.sqrt(self.cov_data)
         
         else:
@@ -541,51 +545,19 @@ class Ensemble(PETEnsemble):
                 self.cov_data = at.screen_data(
                     data = self.cov_data, 
                     aug_pred_data = self.enPred, 
-                    obs_data_vector = self.vecObs, 
+                    obs_data_vector = vecObs, 
                     iteration = self.iteration
                 )
             
             generator = Cholesky()  # Initialize GeoStat class for generating realizations
-            self.enObs, self.scale_data = generator.gen_real(
-                mean = self.vecObs, 
+            enObs, self.scale_data = generator.gen_real(
+                mean = vecObs, 
                 var = self.cov_data, 
                 number = self.ne,
                 return_chol = True
             )
-    
-        ''''
-        # Generate the data auto-covariance matrix
-        if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
-            if hasattr(self, 'cov_data'):  # cd matrix has been imported
-                tmp_E = np.dot(cholesky(self.cov_data).T,
-                               np.random.randn(self.cov_data.shape[0], self.ne))
-            else:
-                tmp_E = at.extract_tot_empirical_cov(
-                    self.datavar, self.assim_index, self.list_datatypes, self.ne)
-            # self.E = (tmp_E - tmp_E.mean(1)[:,np.newaxis])/np.sqrt(self.ne - 1)/
-            if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                tmp_E = at.screen_data(tmp_E, self.aug_pred_data,
-                                       self.obs_data_vector, self.iteration)
-            self.E = tmp_E
-            self.real_obs_data = self.obs_data_vector[:, np.newaxis] - tmp_E
-
-            self.cov_data = np.var(self.E, ddof=1,
-                                   axis=1)  # calculate the variance, to be used for e.g. data misfit calc
-            # self.cov_data = ((self.E * self.E)/(self.ne-1)).sum(axis=1) # calculate the variance, to be used for e.g. data misfit calc
-            self.scale_data = np.sqrt(self.cov_data)
-        else:
-            if not hasattr(self, 'cov_data'):  # if cd is not loaded
-                self.cov_data = at.gen_covdata(
-                    self.datavar, self.assim_index, self.list_datatypes)
-            # data screening
-            if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                self.cov_data = at.screen_data(
-                    self.cov_data, self.aug_pred_data, self.obs_data_vector, self.iteration)
-
-            init_en = Cholesky()  # Initialize GeoStat class for generating realizations
-            self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
-                                                                   return_chol=True)
-        '''
+        
+        return vecObs, enObs
 
     def _ext_scaling(self):
         # get vector of scaling

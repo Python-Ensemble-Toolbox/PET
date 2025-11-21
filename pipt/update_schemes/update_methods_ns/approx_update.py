@@ -5,7 +5,10 @@ from copy import deepcopy
 import copy as cp
 from scipy.linalg import solve, solve_banded, cholesky, lu_solve, lu_factor, inv
 import pickle
+
+import pipt.misc_tools.ensemble_tools as entools
 import pipt.misc_tools.analysis_tools as at
+
 from pipt.misc_tools.cov_regularization import _calc_loc
 
 
@@ -80,7 +83,6 @@ class approx_update():
                     curr_param     = self.list_states,
                     prior_info     = self.prior_info
                 )
-                print(self.step)
 
 
             # Check for local analysis 
@@ -128,7 +130,7 @@ class approx_update():
                 )
 
                 # Center ensemble matrix
-                enXcentered = enX - np.mean(self.enX, axis=1, keepdims=True)
+                enXcentered = enX - np.mean(enX, axis=1, keepdims=True)
 
                 if not ('emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes'):
                     enXcentered /= np.sqrt(self.ne - 1)
@@ -141,21 +143,19 @@ class approx_update():
 
 
 
-            # Else do parallel update (NOT UPDATED, TO NEW DEFINITIONS OF ENSEMBLE MATRICES)
+            # Else do parallel update (NOT TESTED AFTER UPDATES)
             else:
                 act_data_list = {}
                 count = 0
                 for i in self.assim_index[1]:
-                    for el in self.list_datatypes:
+                    for el in list(self.idX.keys()):
                         if self.real_obs_data[int(i)][el] is not None:
-                            act_data_list[(
-                                el, float(self.keys_da['truedataindex'][int(i)]))] = count
+                            act_data_list[(el, float(self.keys_da['truedataindex'][int(i)]))] = count
                             count += 1
 
-                well = [w for w in
-                        set([el[0] for el in self.localization.loc_info.keys() if type(el) == tuple])]
-                times = [t for t in set(
-                    [el[1] for el in self.localization.loc_info.keys() if type(el) == tuple])]
+                well  = [w for w in set([el[0] for el in loc_info.keys() if type(el) == tuple])]
+                times = [t for t in set([el[1] for el in loc_info.keys() if type(el) == tuple])]
+
                 tot_dat_index = {}
                 for uniq_well in well:
                     tmp_index = []
@@ -163,22 +163,29 @@ class approx_update():
                         if (uniq_well, t) in act_data_list:
                             tmp_index.append(act_data_list[(uniq_well, t)])
                     tot_dat_index[uniq_well] = tmp_index
-                if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+
+                if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
                     emp_cov = True
                 else:
                     emp_cov = False
 
-                self.step = at.parallel_upd(self.list_states, self.prior_info, self.current_state, X,
-                                            self.localization.loc_info, self.real_obs_data, self.aug_pred_data,
-                                            int(self.keys_fwd['parallel']),
-                                            actnum=self.localization.loc_info['actnum'],
-                                            field_dim=self.localization.loc_info['field'],
-                                            act_data_list=tot_dat_index,
-                                            scale_data=self.scale_data,
-                                            num_states=len(
-                                                [el for el in self.list_states]),
-                                            emp_d_cov=emp_cov)
-                self.step = at.aug_state(self.step, self.list_states)
+                self.step = at.parallel_upd(
+                    list(self.idX.keys()), 
+                    self.prior_info, 
+                    entools.matrix_to_dict(enX, self.idX),
+                    X,
+                    loc_info, 
+                    enE, 
+                    enY,
+                    int(self.keys_fwd['parallel']),
+                    actnum=loc_info['actnum'],
+                    field_dim=loc_info['field'],
+                    act_data_list=tot_dat_index,
+                    scale_data=self.scale_data,
+                    num_states=len([el for el in list(self.idX.keys())]),
+                    emp_d_cov=emp_cov
+                )
+                self.step = at.aug_state(self.step, list(self.idX.keys()))
 
         else:
 
