@@ -493,16 +493,14 @@ class Ensemble(PETEnsemble):
                     vintage = vintage + 1
 
     def _ext_obs(self):
-        #self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-        #                                               self.list_datatypes)
-        
+     
         self.vecObs, _ = at.aug_obs_pred_data(
             self.obs_data, 
             self.pred_data, 
             self.assim_index,
             self.list_datatypes
         )
-
+        
         # Generate ensemble of perturbed observed data
         if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
 
@@ -527,7 +525,7 @@ class Ensemble(PETEnsemble):
                 )
             
             # Center the ensemble of perturbed observed data
-            self.enObs = self.vecObs[:, np.newaxis] + enObs
+            self.enObs = self.vecObs[:, np.newaxis] - enObs
             self.cov_data = np.var(self.enObs, ddof=1, axis=1)
             self.scale_data = np.sqrt(self.cov_data)
         

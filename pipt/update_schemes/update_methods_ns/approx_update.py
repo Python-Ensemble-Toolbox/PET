@@ -36,7 +36,6 @@ class approx_update():
         enYcentered = self.scale(np.dot(enY, self.proj), self.scale_data)
 
         # Perform truncated SVD
-        #u_d, s_d, v_d = at.truncSVD(enYcentered, energy=self.trunc_energy)
         Ud, Sd, VTd = at.truncSVD(enYcentered, energy=self.trunc_energy)
 
         # Check for localization methods
@@ -57,10 +56,6 @@ class approx_update():
                 reg_term = (self.lam + 1) * np.diag(eigval) + np.eye(len(eigval))
                 X = (VTd.T @ eigvec) @ solve(reg_term, (Ud.T @ (Sinv @ eigvec)).T)
                 
-
-                #x_0 = np.diag(1/s_d) @ u_d.T @ enEcentered
-                #Lam, z = np.linalg.eig(x_0 @ x_0.T)
-                #X = (v_d.T @ z) @ solve( (self.lam + 1)*np.diag(Lam) + np.eye(len(Lam)), (u_d.T @ (np.diag(1/s_d) @ z)).T )
             else:
                 reg_term = (self.lam + 1)*np.eye(Sd.size) + np.diag(Sd**2)
                 X = VTd.T @ np.diag(Sd) @ solve(reg_term, Ud.T)
@@ -85,6 +80,7 @@ class approx_update():
                     curr_param     = self.list_states,
                     prior_info     = self.prior_info
                 )
+                print(self.step)
 
 
             # Check for local analysis 
@@ -204,33 +200,16 @@ class approx_update():
                 X2 = solve((self.lam + 1) * np.diag(eigval) + np.eye(len(eigval)), X1)
                 X3 = np.dot(VTd.T, eigvec) @ X2
                 self.step = np.dot(self.state_scaling[:, None]*enXcentered, X3)
-
-
-                #x_0 = np.diag(s_d ** -1) @ u_d.T @ E_hat
-                #Lam, z = np.linalg.eig(x_0 @ x_0.T)
-
-                #if len(self.scale_data.shape) == 1:
-                #    delta_data = (1/self.scale_data)[:, None] * (self.real_obs_data - self.aug_pred_data)
-                #else:
-                #    delta_data = solve(self.scale_data, self.real_obs_data - self.aug_pred_data)
-
-                #x_1 = (u_d @ (np.diag(s_d ** -1).T @ z)).T @ delta_data
-                #x_2 = solve((self.lam + 1) * np.diag(Lam) + np.eye(len(Lam)), x_1)
-                #x_3 = np.dot(np.dot(v_d.T, z), x_2)
-                #self.step = np.dot(self.state_scaling[:, None] * pert_state, x_3)
  
             else:
                 enXcentered = self.scale(np.dot(enX, self.proj), self.state_scaling)
-
-                # Compute the approximate update (follow notation in paper)
-                if len(self.scale_data.shape) == 1:
-                    x_1 = np.dot(u_d.T, (1/self.scale_data)[:, None] * (self.real_obs_data - self.aug_pred_data))
-                else:
-                    x_1 = np.dot(u_d.T, solve(self.scale_data, self.real_obs_data - self.aug_pred_data))
-
-                x_2 = solve(((self.lam + 1) * np.eye(len(s_d)) + np.diag(s_d ** 2)), x_1)
-                x_3 = np.dot(np.dot(v_d.T, np.diag(s_d)), x_2)
-                self.step = np.dot(self.state_scaling[:, None] * pert_state, x_3)
+                enRes = self.scale(enE - enY, self.scale_data)
+                
+                # Compute the update step
+                X1 = Ud.T @ enRes
+                X2 = solve((self.lam + 1)*np.eye(Sd.size) + np.diag(Sd**2), X1)
+                X3 = VTd.T @ np.diag(Sd) @ X2
+                self.step = np.dot(self.state_scaling[:, None] * enXcentered, X3)
 
 
     def scale(self, data, scaling):

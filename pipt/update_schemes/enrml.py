@@ -82,7 +82,6 @@ class lmenrmlMixIn(Ensemble):
 
             # Initalize some variables
             self.prev_data_misfit = None  # Data misfit at previous iteration
-            self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
 
             # Load ACTNUM if given
             if 'actnum' in self.keys_da.keys():
@@ -96,6 +95,8 @@ class lmenrmlMixIn(Ensemble):
             # At the moment, the iterative loop is threated as an iterative smoother and thus we check if assim. indices
             # are given as in the Simultaneous loop.
             self.check_assimindex_simultaneous()
+            self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
+
             # define the list of datatypes
             self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
             # Get the perturbed observations and observation scaling
