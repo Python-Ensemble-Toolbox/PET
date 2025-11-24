@@ -296,6 +296,7 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
     sparse['keep_ca'] = info.get('keep_ca', False)
     sparse['inactive_value'] = info['inactive_value']
     sparse['use_ensemble'] = info.get('use_ensemble', None)
+    if sparse['use_ensemble'] == False: sparse['use_ensemble'] = None
 
     return sparse
 
