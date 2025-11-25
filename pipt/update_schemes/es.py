@@ -67,7 +67,8 @@ class esMixIn():
         if self.data_misfit == self.prev_data_misfit:
             self.logger.info(
                 f'ES update {self.iteration} complete!')
-            self.current_state = deepcopy(self.state)
+            self.enX = deepcopy(self.enX_temp)
+            self.enX_temp = None
         else:
             if self.data_misfit < self.prior_data_misfit:
                 self.logger.info(

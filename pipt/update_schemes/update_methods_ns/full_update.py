@@ -31,10 +31,7 @@ class full_update():
         enXcentered = self.scale(np.dot(enX, self.proj), self.state_scaling)
 
         # Perform tuncated SVD
-        u_d, s_d, v_d = np.linalg.svd(enYcentered, full_matrices=False)
-        if self.trunc_energy < 1:
-            ti = (np.cumsum(s_d) / sum(s_d)) <= self.trunc_energy
-            u_d, s_d, v_d = u_d[:, ti].copy(), s_d[ti].copy(), v_d[ti, :].copy()
+        u_d, s_d, v_d = at.truncSVD(enYcentered, energy=self.trunc_energy)
 
         # Compute the update step
         x_1 = np.dot(u_d.T, self.scale(enE - enY, self.scale_data))
