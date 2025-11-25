@@ -48,17 +48,18 @@ class esmdaMixIn(Ensemble):
         if self.restart is False:
             self.prior_enX = deepcopy(self.enX)
             self.list_states = list(self.idX.keys())
+
             # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
             # are given as in the Simultaneous loop.
             self.check_assimindex_simultaneous()
             self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
-                self.obs_data, self.assim_index)
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
 
             # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
             # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
             self.max_iter = len(self._ext_assim_steps())+1
             self.iteration = 0
+
             self.lam = 0  # set LM lamda to zero as we are doing one full update.
             if 'energy' in self.keys_da:
                 # initial energy (Remember to extract this)
@@ -67,9 +68,11 @@ class esmdaMixIn(Ensemble):
                     self.trunc_energy /= 100.
             else:
                 self.trunc_energy = 0.98
+
             # Get the perturbed observations and observation scaling
-            self._ext_obs()
-            self.real_obs_data_conv = deepcopy(self.real_obs_data)
+            self.vecObs, self.enObs = self.set_observations()
+            self.enObs_conv = deepcopy(self.enObs)
+
             # Get state scaling and svd of scaled prior
             self._ext_scaling()
 
@@ -103,15 +106,25 @@ class esmdaMixIn(Ensemble):
 
         where $N_a$ being the total number of assimilation steps.
         """
-        # Get assimilation order as a list
-        # reformat predicted data
-        _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                     self.list_datatypes)
+        # Get Ensemble of predicted data
+        _, self.enPred = at.aug_obs_pred_data(
+            self.obs_data,
+            self.pred_data,
+            self.assim_index,
+            self.list_datatypes
+        )
 
-        init_en = Cholesky()  # Initialize GeoStat class for generating realizations
+        # Initialize GeoStat class for generating realizations
+        generator = Cholesky() 
+
         if self.iteration == 1:  # first iteration
+
+            # Calculate the prior data misfit
             data_misfit = at.calc_objectivefun(
-                self.real_obs_data_conv, self.aug_pred_data, self.cov_data)
+                pert_obs=self.enObs,
+                pred_data=self.enPred,
+                Cd=self.cov_data
+            )
 
             # Store the (mean) data misfit (also for conv. check)
             self.prior_data_misfit = np.mean(data_misfit)
@@ -122,21 +135,24 @@ class esmdaMixIn(Ensemble):
             self.logger.info(
                 f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
             self.data_random_state = deepcopy(np.random.get_state())
-            self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
-                                                                   self.alpha[self.iteration-1] *
-                                                                   self.cov_data, self.ne,
-                                                                   return_chol=True)
-            self.E = np.dot(self.real_obs_data, self.proj)
+            
+            self.enObs, self.scale_data = generator.gen_real(
+                self.vecObs,
+                self.alpha[self.iteration - 1] * self.cov_data,
+                self.ne,
+                return_chol=True
+            )
+            self.E = np.dot(self.enObs, self.proj)
+
         else:
             self.data_random_state = deepcopy(np.random.get_state())
-            self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                           self.list_datatypes)
-            self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
-                                                                   self.alpha[self.iteration -
-                                                                              1] * self.cov_data,
-                                                                   self.ne,
-                                                                   return_chol=True)
-            self.E = np.dot(self.real_obs_data, self.proj)
+            self.enObs, self.scale_data = generator.gen_real(
+                self.vecObs,
+                self.alpha[self.iteration - 1] * self.cov_data,
+                self.ne,
+                return_chol=True
+            )
+            self.E = np.dot(self.enObs, self.proj)
 
         if 'localanalysis' in self.keys_da:
             self.local_analysis_update()
@@ -144,8 +160,8 @@ class esmdaMixIn(Ensemble):
             # Perform the update
             self.update(
                 enX = self.enX, 
-                enY = self.aug_pred_data, 
-                enE = self.real_obs_data, 
+                enY = self.enPred, 
+                enE = self.enObs, 
                 prior = self.prior_enX
             )
 
@@ -178,12 +194,15 @@ class esmdaMixIn(Ensemble):
         self.prev_data_misfit = self.data_misfit
         self.prev_data_misfit_std = self.data_misfit_std
 
-        # Prelude to calc. conv. check (everything done below is from calc_analysis)
-        obs_data_vector, pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                          self.list_datatypes)
+        # Get Ensemble of predicted data
+        _, enPred = at.aug_obs_pred_data(
+            self.obs_data,
+            self.pred_data,
+            self.assim_index,
+            self.list_datatypes
+        )
 
-        data_misfit = at.calc_objectivefun(
-            self.real_obs_data_conv, pred_data, self.cov_data)
+        data_misfit = at.calc_objectivefun(self.enObs_conv, enPred, self.cov_data)
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
 
