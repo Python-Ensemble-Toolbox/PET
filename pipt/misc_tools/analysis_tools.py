@@ -1533,5 +1533,11 @@ def truncSVD(matrix, r=None, energy=None, full_matrices=False):
                 r = np.sum((np.cumsum(S) / sum(S)) <= energy/100)
         else:
             raise ValueError("Either rank 'r' or 'energy' must be specified for truncSVD.")
+    
+    if r == 0:
+        r = 1  # Ensure at least one singular value is retained
+    if r > len(S):
+        print("Warning: Specified rank exceeds number of singular values. Using maximum available rank.")
+        r = len(S)
 
     return U[:,:r], S[:r], VT[:r,:]

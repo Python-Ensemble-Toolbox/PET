@@ -18,17 +18,38 @@ class subspace_update():
     Frontiers in Applied Mathematics and Statistics, 5(October), 114. https://doi.org/10.3389/fams.2019.00047
     """
 
-    def update(self):
+    def update(self, enX, enY, enE, **kwargs):
+
         if self.iteration == 1:  # method requires some initiallization
             self.current_W = np.zeros((self.ne, self.ne))
-            self.E = np.dot(self.real_obs_data, self.proj)
-        Y = np.dot(self.aug_pred_data, self.proj)
-        # Y = self.pert_preddata
+            self.E = np.dot(enE, self.proj)
+        
+        # Center ensemble matrices
+        Y = np.dot(enY, self.proj)
 
         omega = np.eye(self.ne) + np.dot(self.current_W, self.proj)
-        LU = lu_factor(omega.T)
-        S = lu_solve(LU, Y.T).T
+        S = lu_solve(lu_factor(omega.T), Y.T).T
 
+        # Compute scaled misfit (residual between predicted and observed data)
+        enRes = self.scale(enY - enE, self.scale_data)
+
+        # Truncate SVD of S
+        Us, Ss, VsT = at.truncSVD(S, energy=self.trunc_energy)
+        Sinv = np.diag(1/Ss)
+
+        # Compute update step
+        X = Sinv @ Us.T @ self.scale(self.E, self.scale_data)
+        eigval, eigvec = np.linalg.eig(X @ X.T)
+        X2 = Us @ Sinv.T @ eigvec
+        X3 = S.T @ X2
+
+        lam_term = np.eye(len(eigval)) + (1+self.lam) * np.diag(eigval)
+        deltaM = X3 @ solve(lam_term, X3.T @ self.current_W)
+        deltaD = X3 @ solve(lam_term, X2.T @ enRes)
+        self.w_step = -self.current_W/(1 + self.lam) - (deltaD - deltaM)/(1 + self.lam)
+        
+
+        ''''
         # scaled_misfit = (self.aug_pred_data - self.real_obs_data)
         if len(self.scale_data.shape) == 1:
             scaled_misfit = (self.scale_data ** (-1)
@@ -73,3 +94,21 @@ class subspace_update():
         #                                                solve((np.eye(len(Lam)) + (self.lam+1)*np.diag(Lam)),
         #                                                       np.dot(X2.T, scaled_misfit))))
         self.w_step = -self.current_W/(1+self.lam) - (step_d - step_m/(1+self.lam))
+        '''
+
+    def scale(self, data, scaling):
+        """
+        Scale the data perturbations by the data error standard deviation.
+
+        Args:
+            data (np.ndarray): data perturbations
+            scaling (np.ndarray): data error standard deviation
+
+        Returns:
+            np.ndarray: scaled data perturbations
+        """
+
+        if len(scaling.shape) == 1:
+            return (scaling ** (-1))[:, None] * data
+        else:
+            return solve(scaling, data)
