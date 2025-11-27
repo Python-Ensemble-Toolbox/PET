@@ -241,7 +241,7 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
     info : dict or list
         Input configuration for sparse representation. If a list, it will be converted
         to a dictionary. Expected keys include:
-            - 'dim': list of 3 ints, the dimensions of the data grid.
+            - 'dim': list of ints, the dimensions of the data to be compressed
             - 'mask': list of filenames for mask arrays.
             - 'level', 'wname', 'threshold_rule', 'th_mult', 'order', 'min_noise',
               'colored_noise', 'use_hard_th', 'keep_ca', 'inactive_value', 'use_ensemble'.
@@ -266,9 +266,7 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
     # Intial dict
     sparse = {}
 
-    # Flip dim to align with flow/eclipse
-    dim = [int(x) for x in info['dim']]
-    sparse['dim'] = [dim[2], dim[1], dim[0]]
+    sparse['dim']  = [int(x) for x in info['dim']]
 
     # Read mask_files
     sparse['mask'] = []
