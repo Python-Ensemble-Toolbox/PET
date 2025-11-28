@@ -184,8 +184,8 @@ class LineSearchClass(Optimize):
         super(LineSearchClass, self).__init__(**options)
 
         # Set input as class variables
-        self.function = fun      
-        self.xk       = x      
+        self._xk      = x
+        self.function = fun
         self.jacobian = jac     
         self.method   = method  
         self.hessian  = hess     
@@ -229,7 +229,7 @@ class LineSearchClass(Optimize):
 
         # set tolerance for convergence
         self.xtol = options.get('xtol', 1e-8) # tolerance for control vector
-        self.ftol = options.get('ftol', 1e-4) # relative tolerance for function value
+        self._ftol = options.get('ftol', 1e-4) # relative tolerance for function value
         self.gtol = options.get('gtol', 1e-5) # tolerance for inf-norm of jacobian
 
         # Check method
@@ -245,13 +245,13 @@ class LineSearchClass(Optimize):
             self.start_time = time.perf_counter()
 
             # Check for initial callable values
-            self.fk = options.get('fun0', None)
+            self._fk = options.get('fun0', None)
             self.jk = options.get('jac0', None)
             self.Hk = options.get('hess0', None)
 
-            if self.fk is None: self.fk = self._fun(self.xk)
-            if self.jk is None: self.jk = self._jac(self.xk)
-            if self.Hk is None: self.Hk = self._hess(self.xk)
+            if self._fk is None: self._fk = self._fun(self._xk)
+            if self.jk is None: self.jk = self._jac(self._xk)
+            if self.Hk is None: self.Hk = self._hess(self._xk)
 
             # Check for initial inverse hessian for the BFGS method
             if self.method == 'BFGS':
@@ -273,28 +273,46 @@ class LineSearchClass(Optimize):
                 self.logger.info('\nSPECIFIED OPTIONS:\n'+pprint.pformat(OptimizeResult(self.options)))
                 self.logger.info('')
                 self.logger.info(f'       {"iter.":<10} {fun_xk_symbol:<15} {jac_inf_symbol:<15} {"step-size":<15}')
-                self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {la.norm(self.jk, np.inf):<15.4e} {0:<15.4e}')
+                self.logger.info(f'       {self.iteration:<10} {self._fk:<15.4e} {la.norm(self.jk, np.inf):<15.4e} {0:<15.4e}')
                 self.logger.info('')
 
-        self.run_loop() 
+        self.run_loop()
 
+    def fun(self, x, *args, **kwargs): 
+        return self.function(x, *args, **kwargs)
+
+    @property
+    def xk(self):
+        return self._xk
+
+    @property
+    def fk(self):
+        return self._fk
+
+    @property
+    def ftol(self):
+        return self._ftol
+
+    @ftol.setter
+    def ftol(self, value):
+        self._ftol = value
 
     def _fun(self, x):
         self.nfev += 1
         x = ot.clip_state(x, self.bounds) # ensure bounds are respected
         if self.args is None:
-            f = np.mean(self.function(x, **self.epf))
+            f = np.mean(self.function(x, epf = self.epf))
         else:
-            f = np.mean(self.function(x, *self.args, **self.epf))
+            f = np.mean(self.function(x, *self.args, epf = self.epf))
         return f
 
     def _jac(self, x):
         self.njev += 1
         x = ot.clip_state(x, self.bounds) # ensure bounds are respected
         if self.args is None:
-            g = self.jacobian(x)
+            g = self.jacobian(x, epf=self.epf)
         else:
-            g = self.jacobian(x, *self.args)
+            g = self.jacobian(x, *self.args, epf=self.epf)
 
         # project gradient onto the feasible set
         if self.bounds is not None:
@@ -322,11 +340,11 @@ class LineSearchClass(Optimize):
         # If in resampling mode, compute jacobian
         # Else, jacobian from in __init__ or from latest line_search is used
         if self.jk is None:
-            self.jk = self._jac(self.xk)
+            self.jk = self._jac(self._xk)
 
         # Compute hessian
         if (self.iteration != 1) or (iter_resamp > 0):
-            self.Hk = self._hess(self.xk)
+            self.Hk = self._hess(self._xk)
 
         # Check normalization
         if self.normalize:
@@ -340,15 +358,15 @@ class LineSearchClass(Optimize):
         if self.method == 'BFGS':
             pk = - np.matmul(self.Hk_inv, self.jk)
         if self.method == 'Newton-CG':
-            pk = newton_cg(self.jk, Hk=self.Hk, xk=self.xk, jac=self._jac, logger=self.logger.info)
+            pk = newton_cg(self.jk, Hk=self.Hk, xk=self._xk, jac=self._jac, logger=self.logger.info)
 
         # porject search direction onto the feasible set
         if self.bounds is not None:
-            pk = self._project_pk(pk, self.xk)
+            pk = self._project_pk(pk, self._xk)
         
         # Set step_size
         if self.bounds is not None:
-            self.step_size_max = self._set_max_step_size(pk, self.xk)
+            self.step_size_max = self._set_max_step_size(pk, self._xk)
             self.lskwargs['amax'] = self.step_size_max
         step_size = self._set_step_size(pk, self.step_size_max)
 
@@ -357,22 +375,22 @@ class LineSearchClass(Optimize):
         if self.lskwargs['method'] == 0:
             ls_res = line_search_backtracking(
                 step_size=step_size,
-                xk=self.xk,
+                xk=self._xk,
                 pk=pk,
                 fun=self._fun,
                 jac=self._jac,
-                fk=self.fk,
+                fk=self._fk,
                 jk=self.jk,
                 **self.lskwargs
             )
         else:
             ls_res = line_search(
                 step_size=step_size,
-                xk=self.xk,
+                xk=self._xk,
                 pk=pk,
                 fun=self._fun,
                 jac=self._jac,
-                fk=self.fk,
+                fk=self._fk,
                 jk=self.jk,
                 **self.lskwargs
             )
@@ -381,16 +399,16 @@ class LineSearchClass(Optimize):
         if not (step_size is None):
         
             # Save old values
-            x_old = self.xk
+            x_old = self._xk
             j_old = self.jk
-            f_old = self.fk
+            f_old = self._fk
 
             # Update control
             x_new = ot.clip_state(x_old + step_size*pk, self.bounds)
 
             # Update state
-            self.xk = x_new
-            self.fk = f_new
+            self._xk = x_new
+            self._fk = f_new
             self.jk = j_new
             
             # Update old fun, jac and pk values
@@ -421,7 +439,7 @@ class LineSearchClass(Optimize):
             if self.logger is not None:
                 self.logger.info('')
                 self.logger.info(f'       {"iter.":<10} {fun_xk_symbol:<15} {jac_inf_symbol:<15} {"step-size":<15}')
-                self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {la.norm(self.jk, np.inf):<15.4e} {step_size:<15.4e}')
+                self.logger.info(f'       {self.iteration:<10} {self._fk:<15.4e} {la.norm(self.jk, np.inf):<15.4e} {step_size:<15.4e}')
                 self.logger.info('')
             
             # Check for convergence
@@ -430,7 +448,7 @@ class LineSearchClass(Optimize):
                 self.logger.info(self.msg)
                 success = False
                 return success
-            if (np.abs(self.fk - f_old) < self.ftol * np.abs(f_old)):
+            if (np.abs(self._fk - f_old) < self._ftol * np.abs(f_old)):
                 self.msg = 'Convergence criteria met: |f(x+dx) - f(x)| < ftol * |f(x)|'
                 self.logger.info(self.msg)
                 success = False
@@ -473,8 +491,8 @@ class LineSearchClass(Optimize):
 
         # Define default results
         results = {
-            'fun': self.fk, 
-            'x': self.xk, 
+            'fun': self._fk,
+            'x': self._xk, 
             'jac': self.jk,
             'nfev': self.nfev,
             'njev': self.njev,
@@ -518,7 +536,7 @@ class LineSearchClass(Optimize):
 
         else:
             if (self.step_size_adapt == 1) and (np.dot(pk, self.jk) != 0):
-                alpha = 2*(self.fk - self.f_old)/np.dot(pk, self.jk)
+                alpha = 2*(self._fk - self.f_old)/np.dot(pk, self.jk)
             elif (self.step_size_adapt == 2) and (np.dot(pk, self.jk) == 0):
                 slope_old = np.dot(self.p_old, self.j_old)
                 slope_new = np.dot(pk, self.jk)

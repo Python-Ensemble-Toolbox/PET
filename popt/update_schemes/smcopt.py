@@ -60,7 +60,7 @@ class SmcOpt(Optimize):
 
         # Set input as class variables
         self.options = options  # options
-        self.fun = fun  # objective function
+        self.function = fun  # objective function
         self.sens = sens  # gradient function
         self.bounds = bounds  # parameter bounds
         self.mean_state = x  # initial mean state
@@ -80,7 +80,7 @@ class SmcOpt(Optimize):
         # Calculate objective function of startpoint
         if not self.restart:
             self.start_time = time.perf_counter()
-            self.obj_func_values = self.fun(self.mean_state)
+            self.obj_func_values = self.function(self.mean_state)
             self.best_func = np.mean(self.obj_func_values)
             self.nfev += 1
             self.optimize_result = ot.get_optimize_result(self)
@@ -97,6 +97,25 @@ class SmcOpt(Optimize):
 
         # The SmcOpt class self-ignites
         self.run_loop()  # run_loop resides in the Optimization class (super)
+
+    def fun(self, x, *args, **kwargs):
+        return self.function(x, *args, **kwargs)
+
+    @property
+    def xk(self):
+        return self._xk
+
+    @property
+    def fk(self):
+        return self.obj_func_values
+
+    @property
+    def ftol(self):
+        return self.obj_func_tol
+
+    @ftol.setter
+    def ftol(self, value):
+        self.obj_func_tol = value
 
     def calc_update(self,):
         """
@@ -128,7 +147,7 @@ class SmcOpt(Optimize):
                 new_state = ot.clip_state(new_state, self.bounds)
 
                 # Calculate new objective function
-                new_func_values = self.fun(new_state)
+                new_func_values = self.function(new_state)
                 self.nfev += 1
 
                 if np.mean(self.obj_func_values) - np.mean(new_func_values) > self.obj_func_tol or \

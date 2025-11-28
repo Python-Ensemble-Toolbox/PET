@@ -54,7 +54,7 @@ class GenOpt(Optimize):
 
         # Set input as class variables
         self.options    = options    # options
-        self.fun        = fun        # objective function
+        self.function   = fun        # objective function
         self.jac        = jac        # gradient function
         self.jac_mut    = jac_mut    # mutation function
         self.corr_adapt = corr_adapt # correlation adaption function
@@ -82,7 +82,7 @@ class GenOpt(Optimize):
         # Calculate objective function of startpoint
         if not self.restart:
             self.start_time = time.perf_counter()
-            self.obj_func_values = self.fun(self.mean_state)
+            self.obj_func_values = self.function(self.mean_state)
             self.nfev += 1
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
@@ -109,6 +109,25 @@ class GenOpt(Optimize):
 
         # The GenOpt class self-ignites, and it is possible to send the EnOpt class as a callale method to scipy.minimize
         self.run_loop()  # run_loop resides in the Optimization class (super)
+
+    def fun(self, x, *args, **kwargs):
+        return self.function(x, *args, **kwargs)
+
+    @property
+    def xk(self):
+        return self.mean_state
+
+    @property
+    def fk(self):
+        return self.obj_func_values
+
+    @property
+    def ftol(self):
+        return self.obj_func_tol
+
+    @ftol.setter
+    def ftol(self, value):
+        self.obj_func_tol = value
 
     def calc_update(self):
         """
@@ -148,7 +167,7 @@ class GenOpt(Optimize):
                 new_state = ot.clip_state(new_state, self.bounds)
 
                 # Calculate new objective function
-                new_func_values = self.fun(new_state)
+                new_func_values = self.function(new_state)
                 self.nfev += 1
 
                 if np.mean(self.obj_func_values) - np.mean(new_func_values) > self.obj_func_tol:
