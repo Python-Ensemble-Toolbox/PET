@@ -155,20 +155,21 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         self._invert_scale_state()  # ensure that state is in [lb,ub]
         self._set_multilevel_state(self.state, x)  # set multilevel state if applicable
         run_success = self.calc_prediction(save_prediction=self.save_prediction)  # calculate flow data
-        self._set_multilevel_state(self.state, x) # For some reason this has to be done again after calc_prediction
-        self._scale_state()  # scale back to [0, 1]
+        self._set_multilevel_state(self.state, x)  # toggle back after calc_prediction
 
         # Evaluate the objective function
         if run_success:
             func_values = self.obj_func(
                 self.pred_data, 
                 input_dict=self.sim.input_dict,
-                true_order=self.sim.true_order, 
+                true_order=self.sim.true_order,
+                state=self.state, # pass state for possible use in objective function
                 **kwargs
             )
         else:
             func_values = np.inf  # the simulations have crashed
 
+        self._scale_state()  # scale back to [0, 1]
         if len(x.shape) == 1: self.state_func_values = func_values
         else: self.ens_func_values = func_values
         

@@ -141,7 +141,7 @@ class TrustRegionClass(Optimize):
 
         # Set class attributes
         self.function = fun
-        self.xk       = x
+        self._xk       = x
         self.jacobian = jac
         self.hessian  = hess
         self.method   = method
@@ -188,13 +188,13 @@ class TrustRegionClass(Optimize):
             self.start_time = time.perf_counter()
 
             # Check for initial callable values
-            self.fk = options.get('fun0', None)
+            self._fk = options.get('fun0', None)
             self.jk = options.get('jac0', None)
             self.Hk = options.get('hess0', None)
 
-            if self.fk is None: self.fk = self._fun(self.xk)
-            if self.jk is None: self.jk = self._jac(self.xk)
-            if self.Hk is None: self.Hk = self._hess(self.xk)
+            if self._fk is None: self._fk = self._fun(self._xk)
+            if self.jk is None: self.jk = self._jac(self._xk)
+            if self.Hk is None: self.Hk = self._hess(self._xk)
 
             # Initial results
             self.optimize_result = self.update_results()
@@ -204,12 +204,30 @@ class TrustRegionClass(Optimize):
             self._log(f'       ====== Running optimization - Trust Region ======')
             self._log('\n'+pprint.pformat(OptimizeResult(self.options)))
             self._log(f'       {"iter.":<10} {"fun":<15} {"tr-radius":<15} {"rho":<15}')
-            self._log(f'       {self.iteration:<10} {self.fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
+            self._log(f'       {self.iteration:<10} {self._fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
             self._log('')
         
         # Run the optimization
         self.run_loop()
-            
+
+    def fun(self, x, *args, **kwargs):
+        return self.function(x, *args, **kwargs)
+
+    @property
+    def xk(self):
+        return self._xk
+
+    @property
+    def fk(self):
+        return self._fk
+
+    @property
+    def ftol(self):
+        return self.obj_func_tol
+
+    @ftol.setter
+    def ftol(self, value):
+        self.obj_func_tol = value
 
     def _fun(self, x):
         self.nfev += 1
@@ -256,12 +274,12 @@ class TrustRegionClass(Optimize):
         """
 
         # Define quadratic model
-        quad = lambda p: self.fk + np.dot(g,p) + np.dot(p,np.dot(B,p))/2
+        quad = lambda p: self._fk + np.dot(g,p) + np.dot(p,np.dot(B,p))/2
 
 
         if self.method == 'iterative':
             subproblem = IterativeSubproblem(
-                x=self.xk, 
+                x=self._xk,
                 fun=quad, 
                 jac=lambda _: g, 
                 hess=lambda _: B,
@@ -270,7 +288,7 @@ class TrustRegionClass(Optimize):
         
         elif self.method == 'CG-Steihaug':
             subproblem = CGSteihaugSubproblem(
-                x=self.xk, 
+                x=self._xk,
                 fun=quad, 
                 jac=lambda _: g, 
                 hess=lambda _: B,
@@ -296,22 +314,22 @@ class TrustRegionClass(Optimize):
         if self.bounds is not None:
             lb = np.array(self.bounds)[:, 0]
             ub = np.array(self.bounds)[:, 1]
-            sk = np.clip(sk, lb - self.xk, ub - self.xk)
+            sk = np.clip(sk, lb - self._xk, ub - self._xk)
 
         # Calculate the actual function value
-        xk_new  = self.xk + sk
+        xk_new  = self._xk + sk
         fun_new = self._fun(xk_new)
 
         # Calculate rho
-        actual_reduction    = self.fk - fun_new
+        actual_reduction    = self._fk - fun_new
         predicted_reduction = - np.dot(self.jk, sk) - np.dot(sk, np.dot(self.Hk, sk))/2
         self.rho = actual_reduction/predicted_reduction
 
         if self.rho > self.rho_tol:
             
             # Update the control
-            self.xk = xk_new
-            self.fk = fun_new
+            self._xk = xk_new
+            self._fk = fun_new
 
             # Save Results
             self.optimize_result = self.update_results()
@@ -321,7 +339,7 @@ class TrustRegionClass(Optimize):
             # Write logging info
             self._log('')
             self._log(f'       {"iter.":<10} {"fun":<15} {"tr-radius":<15} {"rho":<15}')
-            self._log(f'       {self.iteration:<10} {self.fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
+            self._log(f'       {self.iteration:<10} {self._fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
             self._log('')
 
             # Call the callback function
@@ -354,8 +372,8 @@ class TrustRegionClass(Optimize):
                 success = False
             else:
                 # Calculate the jacobian and hessian
-                self.jk = self._jac(self.xk)
-                self.Hk = self._hess(self.xk)
+                self.jk = self._jac(self._xk)
+                self.Hk = self._hess(self._xk)
             
             # Update iteration
             self.iteration += 1
@@ -378,8 +396,8 @@ class TrustRegionClass(Optimize):
                 # Check for resampling of Jac and Hess
                 if self.resample:
                     self._log('Resampling gradient and hessian')
-                    self.jk = self._jac(self.xk)
-                    self.Hk = self._hess(self.xk)
+                    self.jk = self._jac(self._xk)
+                    self.Hk = self._hess(self._xk)
 
                 # Recursivly call function
                 success = self.calc_update(inner_iter=inner_iter+1)
@@ -391,8 +409,8 @@ class TrustRegionClass(Optimize):
     
     def update_results(self):
         res = {
-            'fun': self.fk, 
-            'x': self.xk, 
+            'fun': self._fk,
+            'x': self._xk,
             'jac': self.jk,
             'hess': self.Hk,
             'nfev': self.nfev,
