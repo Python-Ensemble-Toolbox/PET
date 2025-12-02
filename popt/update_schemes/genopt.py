@@ -101,8 +101,8 @@ class GenOpt(Optimize):
                                                                   round(np.mean(self.obj_func_values),4)))
 
         # Initialize optimizer
-        optimizer = __set__variable('optimizer', 'GA')
-        if optimizer == 'GA':
+        optimizer = __set__variable('optimizer', 'GD')
+        if optimizer == 'GD':
             self.optimizer = opt.GradientDescent(self.alpha, self.beta)
         elif optimizer == 'Adam':
             self.optimizer = opt.Adam(self.alpha, self.beta)
