@@ -64,7 +64,7 @@ python3 -m pip install -e .
 
 ## Examples
 
-PET needs to be set up with a configuration file. See the example repository for inspiration (https://github.com/Python-Ensemble-Toolbox/Examples).
+PET needs to be set up with a configuration file. See the example [repository](https://github.com/Python-Ensemble-Toolbox/Examples) for inspiration.
 
 ## Tutorials
 
