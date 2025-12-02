@@ -114,7 +114,7 @@ class EnOpt(Optimize):
         # Calculate objective function of startpoint
         if not self.restart:
             self.start_time = time.perf_counter()
-            self.obj_func_values = self._fun(self.mean_state, epf=self.epf)
+            self.obj_func_values = self.fun(self.mean_state, epf=self.epf)
             self.nfev += 1
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
@@ -128,8 +128,8 @@ class EnOpt(Optimize):
                 self.logger.info('       {:<21} {:<15.4e}'.format(self.iteration, np.mean(self.obj_func_values)))
 
         # Initialize optimizer
-        optimizer = __set__variable('optimizer', 'GA')
-        if optimizer == 'GA':
+        optimizer = __set__variable('optimizer', 'GD')
+        if optimizer == 'GD':
             self.optimizer = opt.GradientDescent(self.alpha, self.beta)
         elif optimizer == 'Adam':
             self.optimizer = opt.Adam(self.alpha, self.beta)
@@ -205,7 +205,7 @@ class EnOpt(Optimize):
                 new_state = ot.clip_state(new_state, self.bounds)
 
                 # Calculate new objective function
-                new_func_values = self._fun(new_state, epf=self.epf)
+                new_func_values = self.fun(new_state, epf=self.epf)
                 self.nfev += 1
 
                 if np.mean(self.obj_func_values) - np.mean(new_func_values) > self.obj_func_tol:

@@ -346,6 +346,10 @@ def get_optimize_result(obj):
             savedata = obj.options['savedata']
         else:
             savedata = [ obj.options['savedata']]
+
+        if 'args' in savedata:
+            for a, arg in enumerate(obj.args):
+                results[f'args[{a}]'] = arg
       
         # Loop over variables to store in save list
         for save_typ in savedata:
