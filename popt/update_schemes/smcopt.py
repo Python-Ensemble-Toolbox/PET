@@ -93,7 +93,7 @@ class SmcOpt(Optimize):
                 self.logger.info(info_str)
                 self.logger.info('       {:<21} {:<15.4e}'.format(self.iteration, np.mean(self.obj_func_values)))
 
-        self.optimizer = opt.GradientAscent(self.alpha, 0)
+        self.optimizer = opt.GradientDescent(self.alpha, 0)
 
         # The SmcOpt class self-ignites
         self.run_loop()  # run_loop resides in the Optimization class (super)
