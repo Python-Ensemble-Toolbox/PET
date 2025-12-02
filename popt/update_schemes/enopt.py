@@ -67,7 +67,7 @@ class EnOpt(Optimize):
             - beta: momentum coefficient for running accelerated optimization (default 0.0)
             - alpha_maxiter: maximum number of backtracing trials (default 5)
             - resample: number indicating how many times resampling is tried if no improvement is found
-            - optimizer: 'GA' (gradient accent) or Adam (default 'GA')
+            - optimizer: 'GD' (gradient descent) or Adam (default 'GD')
             - nesterov: use Nesterov acceleration if true (default false)
             - hessian: use Hessian approximation (if the algorithm permits use of Hessian) (default false)
             - normalize: normalize the gradient if true (default true)
@@ -138,6 +138,8 @@ class EnOpt(Optimize):
             self.optimizer = opt.AdaMax(self.alpha, self.beta)
         elif optimizer == 'Steihaug':
             self.optimizer = opt.Steihaug(delta0=3.0)
+        else:
+            raise ValueError(f'Optimizer {optimizer} not recognized for EnOpt!')
 
         # The EnOpt class self-ignites, and it is possible to send the EnOpt class as a callale method to scipy.minimize
         self.run_loop()  # run_loop resides in the Optimization class (super)
