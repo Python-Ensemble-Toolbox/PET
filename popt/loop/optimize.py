@@ -205,6 +205,10 @@ class Optimize(ABC):
                     self.ftol *= self.epf['tol_factor']  # decrease tolerance
                     self.obj_func_values = self.fun(self.xk, epf = self.epf)
                     self.iteration = 0
+                    info_str = '       {:<10} {:<10} {:<15} {:<15} {:<15} '.format('iter', 'alpha_iter',
+                                                                                   'obj_func', 'step-size', 'cov[0,0]')
+                    self.logger.info(info_str)
+                    self.logger.info('       {:<21} {:<15.4e}'.format(self.iteration, np.mean(self.obj_func_values)))
                     self.epf_iteration += 1
                     optimize_result = ot.get_optimize_result(self)
                     ot.save_optimize_results(optimize_result)
