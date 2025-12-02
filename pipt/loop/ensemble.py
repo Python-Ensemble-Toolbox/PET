@@ -174,7 +174,7 @@ class Ensemble(PETEnsemble):
     def _org_obs_data(self):
         """
         Organize the input true observed data. The obs_data will be a list of length equal length of "TRUEDATAINDEX",
-        and each entery in the list will be a dictionary with keys equal to the "DATATYPE".
+        and each entry in the list will be a dictionary with keys equal to the "DATATYPE".
         Also, the pred_data variable (predicted data or forward simulation) will be initialized here with the same
         structure as the obs_data variable.
 

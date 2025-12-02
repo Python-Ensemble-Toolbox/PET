@@ -63,7 +63,7 @@ class EnOpt(Optimize):
             - restart: restart optimization from a restart file (default false)
             - restartsave: save a restart file after each successful iteration (defalut false)
             - tol: convergence tolerance for the objective function (default 1e-6)
-            - alpha: step size for the steepest decent method (default 0.1)
+            - alpha: step size for the steepest descent method (default 0.1)
             - beta: momentum coefficient for running accelerated optimization (default 0.0)
             - alpha_maxiter: maximum number of backtracing trials (default 5)
             - resample: number indicating how many times resampling is tried if no improvement is found
@@ -130,7 +130,7 @@ class EnOpt(Optimize):
         # Initialize optimizer
         optimizer = __set__variable('optimizer', 'GA')
         if optimizer == 'GA':
-            self.optimizer = opt.GradientAscent(self.alpha, self.beta)
+            self.optimizer = opt.GradientDescent(self.alpha, self.beta)
         elif optimizer == 'Adam':
             self.optimizer = opt.Adam(self.alpha, self.beta)
         elif optimizer == 'AdaMax':
