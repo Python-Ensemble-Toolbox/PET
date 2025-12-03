@@ -138,6 +138,7 @@ class GenOpt(Optimize):
         improvement = False
         success = False
         resampling_iter = 0
+        self.optimizer.restore_parameters()
 
         while improvement is False:  # resampling loop
 

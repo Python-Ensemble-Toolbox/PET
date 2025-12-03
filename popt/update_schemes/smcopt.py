@@ -126,11 +126,13 @@ class SmcOpt(Optimize):
         success = False
         resampling_iter = 0
         inflate = 2 * (self.inflation_factor + self.iteration)
+        self.optimizer.restore_parameters()
 
         while improvement is False:  # resampling loop
 
-            # Shrink covariance each time we try resampling
+            # Shrink covariance and step size each time we try resampling
             shrink = self.cov_factor ** resampling_iter
+            self.optimizer.apply_backtracking(np.sqrt(self.cov_factor) ** resampling_iter)
 
             # Calc sensitivity
             (sens_matrix, self.best_state, best_func_tmp) = self.sens(self.mean_state, inflate,

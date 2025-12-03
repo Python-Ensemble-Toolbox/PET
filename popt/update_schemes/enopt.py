@@ -172,11 +172,13 @@ class EnOpt(Optimize):
         improvement = False
         success = False
         resampling_iter = 0
+        self.optimizer.restore_parameters()
 
         while not improvement:  # resampling loop
 
-            # Shrink covariance each time we try resampling
+            # Shrink covariance and step size each time we try resampling
             shrink = self.cov_factor ** resampling_iter
+            self.optimizer.apply_backtracking(np.sqrt(self.cov_factor)** resampling_iter) 
 
             # Calculate gradient
             if self.nesterov:

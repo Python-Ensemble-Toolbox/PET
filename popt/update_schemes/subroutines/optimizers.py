@@ -124,12 +124,12 @@ class GradientDescent:
         new_control = (1-alpha) * control + alpha * gradient
         return new_control
 
-    def apply_backtracking(self):
+    def apply_backtracking(self, shrink=0.5):
         """
         Apply backtracking by reducing step size and momentum temporarily.
         """
-        self._step_size = 0.5*self._step_size
-        self._momentum  = 0.5*self._momentum
+        self._step_size = shrink*self._step_size
+        self._momentum  = shrink*self._momentum
     
     def restore_parameters(self):
         """
