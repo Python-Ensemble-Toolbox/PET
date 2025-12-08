@@ -397,6 +397,7 @@ def save_optimize_results(intermediate_result):
 
     # Save the variables
     if 'epf_iteration' in intermediate_result:
-        np.savez(save_folder + '/optimize_result_{0}_{1}'.format(suffix, str(intermediate_result['epf_iteration'])), **intermediate_result)
+        np.savez(save_folder + '/optimize_result_{0}_{1}'.format(str(intermediate_result['epf_iteration']), suffix), 
+                 **intermediate_result)
     else:
         np.savez(save_folder + '/optimize_result_{0}'.format(suffix), **intermediate_result)
