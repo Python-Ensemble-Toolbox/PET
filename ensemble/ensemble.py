@@ -23,14 +23,15 @@ import pipt.misc_tools.ensemble_tools as entools
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
 
 # Settings
-################################################################################################
+#######################################################################################################
 progbar_settings = {
-    #'desc': '   Progress',
     'ncols': 100,
-    'colour': '#305069',
-    'bar_format': '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
+    'colour': "#285475",
+    'bar_format': '{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
+    'ascii': '-◼', # Custom bar characters for a sleeker look
+    'unit': 'member',
 }
-################################################################################################
+#######################################################################################################
 
 class Ensemble:
     """
