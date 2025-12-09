@@ -10,7 +10,8 @@ __all__ = [
 ]
 
 # Imports 
-import numpy as np
+import numpy  as np
+import pandas as pd
 import pickle
 import os
 
@@ -124,6 +125,161 @@ def extract_prior_info(keys: dict) -> dict:
         prior_info[name] = prior
         
     return prior_info
+
+
+def extract_initial_controls(keys: dict) -> dict:
+    """
+    Extract and process control variable information from configuration dictionary.
+
+    This function parses control variable specifications from the input configuration,
+    handling various formats for initial values, bounds, and variance.
+    It supports loading data from files (.npy, .npz, .csv).
+
+    Parameters
+    ----------
+    keys : dict
+        Configuration dictionary containing a 'controls' key. Each control variable
+        should be a nested dictionary with the name of the control variable as the key.
+        The dictionary for each control variable should contain the following possible keys:
+        
+        - 'initial' or 'mean' : Initial value or mean of control variable
+            Can be scalar, list, numpy array, or filename (.npy, .npz, .csv).
+            If .npz or .csv, the variable name should match the control variable name.
+            Multiple variables can be specified in the same file.
+
+        - 'limits' : tuple or list, optional
+            (lower_bound, upper_bound) for the control variable
+
+        - 'var' or 'variance' : float, list, or array, optional
+            Variance of the control variable
+            
+        - 'std' : float, list, array, or str, optional
+            Standard deviation. If string ending with '%', interpreted as percentage
+            of the bound range (requires 'limits' to be specified). Only if 'var'/'variance'
+            is not provided.
+
+    Returns
+    -------
+    control_info : dict
+        Dictionary with control variable names as keys. Each value is a dict containing:
+        
+        - 'mean' : numpy.ndarray
+            Initial/mean values for the control variable
+        - 'limits' : list
+            [lower_bound, upper_bound], or [None, None] if not specified
+        - 'variance' : float, numpy.ndarray, or None
+            Variance of the control variable (if provided)
+
+    Raises
+    ------
+    AssertionError
+        If neither 'initial' nor 'mean' is provided for a control variable
+        If attempting to use percentage-based 'std' without specifying 'limits'
+        If loading from file fails (e.g., variable name not found in file)
+
+    Examples
+    --------
+    >>> keys = {
+    ...     'controls': {
+    ...         'pressure': {
+    ...             'initial': 100.0,
+    ...             'limits': [50.0, 150.0],
+    ...             'std': '10%'
+    ...         },
+    ...         'rate': {
+    ...             'mean': [10, 20, 30],
+    ...             'variance': 2.5
+    ...         }
+    ...     }
+    ... }
+    >>> control_info = extract_initial_controls(keys)
+    >>> control_info['pressure']['mean']
+    array([100.])
+    >>> control_info['pressure']['variance']
+    100.0  # (10% of range [50, 150])^2
+    """
+    control_info = {}
+
+    # Loop over names
+    for name in keys['controls'].keys():
+        info = keys['controls'][name]
+
+        # Assert that initial or mean is there
+        assert ('initial' in info) or ('mean' in info), f'INITIAL or MEAN missing in CONTROLS for {name}!'
+
+        # Rename to mean if initial is there
+        if 'initial' in info: 
+            info['mean'] = info.pop('initial', None)
+
+        # Mean
+        ############################################################################################################
+        if isinstance(info['mean'], str):
+            # Check if NPZ file
+            if info['mean'].endswith('.npz'):
+                file = np.load(info['mean'], allow_pickle=True)
+                if not (name in file.files):
+                    # Assume only one variable in file
+                    msg = f'Variable {name} not in {info["mean"]} and more than one variable located in the file!'
+                    assert len(file.files) == 1, msg
+                    info['mean'] = file[file.files[0]]
+                else:
+                    info['mean'] = file[name]
+
+            # Check for NPY file
+            elif info['mean'].endswith('.npy'):
+                info['mean'] = np.load(info['mean'])
+
+            # Check for CSV file
+            elif info['mean'].endswith('.csv'):
+                df = pd.read_csv(info['mean'])
+                assert name in df.columns, f'Column {name} not in {info["mean"]}!'
+                info['mean'] = df[name].to_numpy() 
+
+        elif isinstance(info['mean'], (int, float)):
+            info['mean'] = np.array([info['mean']])
+        else:
+            info['mean'] = np.asarray(info['mean'])
+        ############################################################################################################
+
+        # Limits
+        info['limits'] = info.get('limits', [None, None])
+
+        # Clip mean to limits if limits are given
+        if info['limits'][0] is not None:
+            info['mean'] = np.maximum(info['mean'], info['limits'][0])
+        if info['limits'][1] is not None:
+            info['mean'] = np.minimum(info['mean'], info['limits'][1])
+        
+
+        # Check for var VAR or STD
+        ############################################################################################################
+        if ('var' in info) or ('variance' in info):
+            if 'var' in info:
+                info['variance'] = info.pop('var', None)
+
+        elif 'std' in info:
+            std = info.pop('std', None)
+            
+            # Standard deviation can be given as percentage of bound range
+            if isinstance(std, str) and (info['limits'][0] is not None) and (info['limits'][1] is not None):
+                if std.endswith('%'):
+                    std, _ = std.split('%')
+                    std = float(std)/100.0 * (info['limits'][1] - info['limits'][0])
+                else:
+                    raise AssertionError(f'If STD for {name} does not end with %')
+
+            info['variance'] = np.square(std)
+        ############################################################################################################
+
+        # Add control_info
+        control_info[name] = info
+
+    return control_info
+            
+        
+
+
+
 
 
 def extract_multilevel_info(keys: Union[dict, list]) -> dict:

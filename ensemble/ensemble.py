@@ -131,8 +131,12 @@ class Ensemble:
                 self.disable_tqdm = False
 
             # extract information that is given for the prior model
-            self.prior_info = extract.extract_prior_info(self.keys_en)
+            if 'state' in self.keys_en:
+                self.prior_info = extract.extract_prior_info(self.keys_en)
+            elif 'controls' in self.keys_en:
+                self.prior_info = extract.extract_initial_controls(self.keys_en)
 
+            
             # Calculate initial ensemble if IMPORTSTATICVAR has not been given in init. file.
             # Prior info. on state variables must be given by PRIOR_<STATICVAR-name> keyword.
             if 'importstaticvar' not in self.keys_en:
