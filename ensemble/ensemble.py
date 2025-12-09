@@ -25,7 +25,7 @@ from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threade
 # Settings
 ################################################################################################
 progbar_settings = {
-    'desc': 'Progress',
+    #'desc': '   Progress',
     'ncols': 100,
     'colour': '#305069',
     'bar_format': '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'

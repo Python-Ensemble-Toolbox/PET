@@ -12,7 +12,7 @@ import popt.misc_tools.optim_tools as ot
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # set log level
 file_handler = logging.FileHandler('popt.log')  # define file handler and set formatter
-formatter = logging.Formatter('%(asctime)s : %(levelname)s : %(name)s : %(message)s')
+formatter = logging.Formatter('%(asctime)s : %(message)s')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)  # add file handler to logger
 console_handler = logging.StreamHandler()
