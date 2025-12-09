@@ -22,7 +22,15 @@ import pipt.misc_tools.extract_tools as extract
 import pipt.misc_tools.ensemble_tools as entools
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
 
-
+# Settings
+################################################################################################
+progbar_settings = {
+    'desc': 'Progress',
+    'ncols': 100,
+    'colour': '#305069',
+    'bar_format': '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]'
+}
+################################################################################################
 
 class Ensemble:
     """
@@ -242,7 +250,8 @@ class Ensemble:
             # No parralelization
             if nparallel==1:
                 en_pred = []
-                for member_index, state in tqdm(enumerate(enX), total=self.ne, desc="Running simulations"):
+                pbar = tqdm(enumerate(enX), total=self.ne, **progbar_settings)
+                for member_index, state in pbar:
                     en_pred.append(self.sim.run_fwd_sim(state, member_index))
             
             # Parallelization on HPC using SLURM
@@ -256,7 +265,8 @@ class Ensemble:
                     enX,
                     list(range(self.ne)), 
                     num_cpus=nparallel, 
-                    disable=self.disable_tqdm
+                    disable=self.disable_tqdm,
+                    **progbar_settings
                 )
             ######################################################################################################################
                 
