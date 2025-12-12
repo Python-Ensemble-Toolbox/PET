@@ -86,7 +86,7 @@ class Assimilate:
         success_iter = True
 
         # Initiallize progressbar
-        pbar_out = tqdm(total=self.max_iter, desc='Iterations (Obj. func. val: )', position=0)
+        #pbar_out = tqdm(total=self.max_iter, desc='Iterations (Obj. func. val: )', position=0)
 
         # Check if we want to perform a Quality Assurance of the forecast
         qaqc = None
@@ -193,16 +193,16 @@ class Assimilate:
             if self.ensemble.iteration >= 0 and success_iter is True:
                 if self.ensemble.iteration == 0:
                     self.ensemble.iteration += 1
-                    pbar_out.update(1)
+                    #pbar_out.update(1)
                     # pbar_out.set_description(f'Iterations (Obj. func. val:{self.data_misfit:.1f})')
                     # self.prior_data_misfit = self.data_misfit
                     # self.pbar_out.refresh()
                 else:
                     self.ensemble.iteration += 1
-                    pbar_out.update(1)
-                    pbar_out.set_description(
-                        f'Iterations (Obj. func. val:{self.ensemble.data_misfit:.1f}'
-                        f' Reduced: {100 * (1 - (self.ensemble.data_misfit / self.ensemble.prev_data_misfit)):.0f} %)')
+                    #pbar_out.update(1)
+                    #pbar_out.set_description(
+                    #    f'Iterations (Obj. func. val:{self.ensemble.data_misfit:.1f}'
+                    #    f' Reduced: {100 * (1 - (self.ensemble.data_misfit / self.ensemble.prev_data_misfit)):.0f} %)')
                     # self.pbar_out.refresh()
 
             if 'restartsave' in self.ensemble.keys_da and self.ensemble.keys_da['restartsave'] == 'yes':
@@ -235,7 +235,7 @@ class Assimilate:
         with open('why_iter_loop_stopped.p', 'wb') as f:
             pickle.dump(why, f, protocol=4)
         # pbar.close()
-        pbar_out.close()
+        #pbar_out.close()
         if self.ensemble.prev_data_misfit is not None:
             out_str = 'Convergence was met.'
             if self.ensemble.prior_data_misfit > self.ensemble.data_misfit:

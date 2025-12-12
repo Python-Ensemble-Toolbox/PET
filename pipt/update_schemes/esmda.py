@@ -132,8 +132,8 @@ class esmdaMixIn(Ensemble):
             self.data_misfit = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
 
-            self.logger.info(
-                f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
+            # Log initial data misfit
+            self.log_update(prior_run=True)
             self.data_random_state = deepcopy(np.random.get_state())
             
             self.enObs, self.scale_data = generator.gen_real(
@@ -211,12 +211,10 @@ class esmdaMixIn(Ensemble):
                     'data_misfit': self.data_misfit,
                     'prev_data_misfit': self.prev_data_misfit}
 
-        if self.data_misfit < self.prev_data_misfit:
-            self.logger.info(
-                f'MDA iteration number {self.iteration}! Objective function reduced from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
-        else:
-            self.logger.info(
-                f'MDA iteration number {self.iteration}! Objective function increased from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
+        # Log update results
+        success = self.data_misfit < self.prev_data_misfit
+        self.log_update(success=success)
+        
         # Return conv = False, why_stop var.
         # Update state ensemble
         self.enX = deepcopy(self.enX_temp)
@@ -226,6 +224,30 @@ class esmdaMixIn(Ensemble):
 
         return False, True, why_stop
 
+    def log_update(self, success=None, prior_run=False):
+        '''
+        Log the update results in a formatted table.
+        '''
+        def _log_table(iteration, status, misfit, change_pct, change_label="Reduction"):
+            """Helper method to log iteration results in a formatted table."""
+            self.logger.info('')
+            self.logger.info(f'   {"Iteration":<11}| {"Status":<11}| {"Data Misfit":<16}| {f"{change_label} (%)":<15}')
+            self.logger.info(f'   {"—"*11}|{"—"*12}|{"—"*17}|{"—"*16}')
+            self.logger.info(f'   {iteration:<11}| {status:<11}| {misfit:<16.2f}| {change_pct:<15.2f}')
+            self.logger.info('')
+
+        if prior_run:
+            iteration_str = f'0/{self.max_iter}'
+            _log_table(iteration_str, "Success", self.data_misfit, 0.0)
+        elif success:
+            iteration_str = f'{self.iteration}/{self.max_iter}'
+            reduction = 100 * (1 - self.data_misfit / self.prev_data_misfit)
+            _log_table(iteration_str, "Success", self.data_misfit, reduction)
+        else:
+            iteration_str = f'{self.iteration}/{self.max_iter}'
+            increase = 100 * (1 - self.prev_data_misfit / self.data_misfit)
+            _log_table(iteration_str, "Failed", self.data_misfit, increase, "Increase")
+            
     def _ext_inflation_param(self):
         r"""
         Extract the data covariance inflation parameter from the MDA keyword in DATAASSIM part. Also, we check that

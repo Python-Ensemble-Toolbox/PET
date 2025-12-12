@@ -2,6 +2,7 @@
 
 __all__ = [
     'extract_prior_info',
+    'extract_initial_controls',
     'extract_multilevel_info',
     'extract_local_analysis_info',
     'extract_maxiter',

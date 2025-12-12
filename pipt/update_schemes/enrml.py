@@ -139,8 +139,8 @@ class lmenrmlMixIn(Ensemble):
             if self.lam == 'auto':
                 self.lam = (0.5 * self.prior_data_misfit)/self.enPred.shape[0]
 
-            self.logger.info(
-                f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}. Lambda for initial analysis: {self.lam}')
+            # Log initial data misfit
+            self.log_update(success=True, prior_run=True)
 
         if 'localanalysis' in self.keys_da:
             self.local_analysis_update()
@@ -219,13 +219,16 @@ class lmenrmlMixIn(Ensemble):
 
             if self.data_misfit >= self.prev_data_misfit:
                 success = False
+                self.logger.info('')
                 self.logger.info(
                     f'Iterations have converged after {self.iteration} iterations. Objective function reduced '
                     f'from {self.prior_data_misfit:0.1f} to {self.prev_data_misfit:0.1f}')
             else:
+                self.logger.info('')
                 self.logger.info(
                     f'Iterations have converged after {self.iteration} iterations. Objective function reduced '
                     f'from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}')
+                
             # Return conv = True, why_stop var.
             return True, success, why_stop
 
@@ -273,22 +276,39 @@ class lmenrmlMixIn(Ensemble):
                 self.lam = self.lam * self.gamma
                 success = False
 
-            if success:
-                self.logger.info(f'Successfull iteration number {self.iteration}! Objective function reduced from '
-                                 f'{self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}. New Lamba for next analysis: '
-                                 f'{self.lam}')
-                # self.prev_data_misfit = self.data_misfit
-                # self.prev_data_misfit_std = self.data_misfit_std
-            else:
-                self.logger.info(f'Failed iteration number {self.iteration}! Objective function increased from '
-                                 f'{self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}. New Lamba for repeated analysis: '
-                                 f'{self.lam}')
+            # Log update results
+            self.log_update(success=success)
+
+            if not success:
                 # Reset the objective function after report
                 self.data_misfit = self.prev_data_misfit
                 self.data_misfit_std = self.prev_data_misfit_std
 
             # Return conv = False, why_stop var.
             return False, success, why_stop
+
+    def log_update(self, success, prior_run=False):
+        '''
+        Log the update results in a formatted table.
+        '''
+        def _log_table(iteration, status, misfit, change_pct, lambda_val, change_label="Reduction"):
+            """Helper method to log iteration results in a formatted table."""
+            self.logger.info('')
+            self.logger.info(f'   {"Iteration":<11}| {"Status":<11}| {"Data Misfit":<16}| {f"{change_label} (%)":<15}| {"λ":<10}')
+            self.logger.info(f'   {"—"*11}|{"—"*12}|{"—"*17}|{"—"*16}|{"—"*10}')
+            self.logger.info(f'   {iteration:<11}| {status:<11}| {misfit:<16.2f}| {change_pct:<15.2f}| {lambda_val:<10.2f}')
+            self.logger.info('')
+
+        if prior_run:
+            _log_table(0, "Success", self.data_misfit, 0.0, self.lam)
+        elif success:
+            reduction = 100 * (1 - self.data_misfit / self.prev_data_misfit)
+            _log_table(self.iteration, "Success", self.data_misfit, reduction, self.lam)
+        else:
+            increase = 100 * (1 - self.prev_data_misfit / self.data_misfit)
+            _log_table(self.iteration, "Failed", self.data_misfit, increase, self.lam, "Increase")
+        
+
 
 
 class lmenrml_approx(lmenrmlMixIn, approx_update):

@@ -25,7 +25,7 @@ from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threade
 # Settings
 #######################################################################################################
 progbar_settings = {
-    'ncols': 100,
+    'ncols': 110,
     'colour': "#285475",
     'bar_format': '{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
     'ascii': '-◼', # Custom bar characters for a sleeker look
@@ -71,10 +71,12 @@ class Ensemble:
         # Setup logger
         logging.basicConfig(
             level=logging.INFO,
-            filename='pet_logger.log',
-            filemode='w',
-            format='%(asctime)s : %(levelname)s : %(name)s : %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            format='%(asctime)s : %(levelname)s : %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+            handlers=[
+            logging.FileHandler('pet_logger.log', mode='w'),
+            logging.StreamHandler()
+            ]
         )
         self.logger = logging.getLogger('PET')
 

@@ -76,8 +76,9 @@ class Ensemble(PETEnsemble):
         self.logger = logging.getLogger('PET.PIPT')
 
         # write initial information
-        self.logger.info(f'Starting a {keys_da["daalg"][0]} run with the {keys_da["daalg"][1]} algorithm applying the '
-                         f'{keys_da["analysis"]} update scheme with {keys_da["energy"]} Energy.')
+        self.logger.info('')
+        self.logger.info(f'   =========== Running Data Assimilation - {keys_da["daalg"][0].upper()} ===========')
+        self.logger.info('')
 
         # Internalize PIPT dictionary
         if not hasattr(self, 'keys_da'):
