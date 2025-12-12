@@ -112,12 +112,12 @@ class eclipse:
 
         # In the ecl framework, all reference to the filename should be uppercase
         self.file = self.input_dict['runfile'].upper()
-
+    
         # Extract sim options
-        if isinstance(self.input_dict['simoptions'], list):
+        if isinstance(self.input_dict.get('simoptions', None), list):
             self.input_dict['simoptions'] = list_to_dict(self.input_dict['simoptions'])
         
-        simoptions = self.input_dict['simoptions']
+        simoptions = self.input_dict.get('simoptions', {})
         self.options = {}
 
         self.options['sim_path'] = simoptions.get('sim_path', '')

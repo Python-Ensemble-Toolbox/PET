@@ -8,17 +8,6 @@ import pickle
 # Internal imports
 import popt.misc_tools.optim_tools as ot
 
-# Gets or creates a logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # set log level
-file_handler = logging.FileHandler('popt.log')  # define file handler and set formatter
-formatter = logging.Formatter('%(asctime)s : %(message)s')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)  # add file handler to logger
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
-
 
 class Optimize:
     """
@@ -72,8 +61,17 @@ class Optimize:
         options : dict
             Optimization options
         """
-        # Set the logger
-        self.logger = logger
+        # Setup logger
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s : %(levelname)s : %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+            handlers=[
+            logging.FileHandler('optim.log', mode='w'),
+            logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
 
         # Save name for (potential) pickle dump/load
         self.pickle_restart_file = 'popt_restart_dump'

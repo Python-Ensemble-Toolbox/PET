@@ -68,17 +68,6 @@ class Ensemble:
         # to allow for different models when optimizing.
         self.aux_input = None
 
-        # Setup logger
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s : %(levelname)s : %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            handlers=[
-            logging.FileHandler('pet_logger.log', mode='w'),
-            logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger('PET')
 
         # Check if folder contains any En_ files, and remove them!
         for folder in glob('En_*'):

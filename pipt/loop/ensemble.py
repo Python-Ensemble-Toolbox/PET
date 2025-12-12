@@ -72,8 +72,17 @@ class Ensemble(PETEnsemble):
         # do the initiallization of the PETensemble
         super(Ensemble, self).__init__(keys_da|keys_en, sim)
 
-        # set logger
-        self.logger = logging.getLogger('PET.PIPT')
+        # Setup logger
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s : %(levelname)s : %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+            handlers=[
+            logging.FileHandler('assim.log', mode='w'),
+            logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
 
         # write initial information
         self.logger.info('')
