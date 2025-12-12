@@ -48,6 +48,12 @@ class Assimilate:
         # Internalize ensemble and simulator class instances
         self.ensemble = ensemble
 
+        # Save folder
+        if 'nosave' not in self.ensemble.keys_da:
+            self.save_folder = self.ensemble.keys_da.get('savefolder', 'SaveOutputs')
+            if not os.path.exists(self.save_folder):
+                os.makedirs(self.save_folder)
+
         if self.ensemble.restart is False:
             # Default max. iter if not defined in the ensemble
             if hasattr(ensemble, 'max_iter'):
@@ -131,7 +137,7 @@ class Assimilate:
 
                 # always store prior forcast, unless specifically told not to
                 if 'nosave' not in self.ensemble.keys_da:
-                    np.savez('prior_forecast.npz', pred_data=self.ensemble.pred_data)
+                    np.savez(f'{self.save_folder}/prior_forecast.npz', pred_data=self.ensemble.pred_data)
 
             # For the remaining iterations we start by applying the analysis and finish by running the forecast
             else:
@@ -211,12 +217,12 @@ class Assimilate:
         # always store posterior forcast and state, unless specifically told not to
         if 'nosave' not in self.ensemble.keys_da:
             try: # first try to save as npz file
-                np.savez('posterior_state_estimate.npz', **self.ensemble.enX)
-                np.savez('posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
+                np.savez(f'{self.save_folder}/posterior_state_estimate.npz', **self.ensemble.enX)
+                np.savez(f'{self.save_folder}/posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
             except: # If this fails, store as pickle
-                with open('posterior_state_estimate.p', 'wb') as file:
+                with open(f'{self.save_folder}/posterior_state_estimate.p', 'wb') as file:
                     pickle.dump(self.ensemble.enX, file)
-                with open('posterior_forecast.p', 'wb') as file:
+                with open(f'{self.save_folder}/posterior_forecast.p', 'wb') as file:
                     pickle.dump(self.ensemble.pred_data, file)
 
         # If none of the convergence criteria were met, max. iteration was the reason iterations stopped.
@@ -232,7 +238,7 @@ class Assimilate:
         why = self.why_stop
         if why is not None:
             why['conv_string'] = reason
-        with open('why_iter_loop_stopped.p', 'wb') as f:
+        with open(f'{self.save_folder}/why_iter_loop_stopped.p', 'wb') as f:
             pickle.dump(why, f, protocol=4)
         # pbar.close()
         #pbar_out.close()
@@ -349,6 +355,8 @@ class Assimilate:
             else:
                 print(f'Cannot save {save_typ}, because it is a local variable!\n\n')
 
+        save_dict['savefolder'] = self.save_folder
+
         # Save the variables
         at.save_analysisdebug(self.ensemble.iteration, **save_dict)
 
@@ -451,7 +459,7 @@ class Assimilate:
 
         # Extra option debug
         if 'saveforecast' in self.ensemble.sim.input_dict:
-            with open('sim_results.p', 'wb') as f:
+            with open(f'{self.save_folder}/sim_results.p', 'wb') as f:
                 pickle.dump(self.ensemble.pred_data, f)
 
     def post_process_forecast(self):

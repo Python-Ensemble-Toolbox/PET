@@ -661,10 +661,11 @@ def save_analysisdebug(ind_save, **kwargs):
     is passed to np.savez (kwargs) the variable will be stored with their original name.
     """
     # Save input variables
+    folder = kwargs.pop('savefolder')
     try:
-        np.savez('debug_analysis_step_{0}'.format(str(ind_save)), **kwargs)
+        np.savez(f'{folder}/debug_analysis_step_{ind_save}', **kwargs)
     except: # if npz save fails dump to a pickle file
-        with open(f'debug_analysis_step_{ind_save}.p', 'wb') as file:
+        with open(f'{folder}/debug_analysis_step_{ind_save}.p', 'wb') as file:
             pickle.dump(kwargs, file)
 
 
