@@ -219,15 +219,15 @@ class lmenrmlMixIn(Ensemble):
 
             if self.data_misfit >= self.prev_data_misfit:
                 success = False
-                self.logger.info('')
-                self.logger.info(
+                self.logger(
                     f'Iterations have converged after {self.iteration} iterations. Objective function reduced '
-                    f'from {self.prior_data_misfit:0.1f} to {self.prev_data_misfit:0.1f}')
+                    f'from {self.prior_data_misfit:0.1f} to {self.prev_data_misfit:0.1f}'
+            )
             else:
-                self.logger.info('')
                 self.logger.info(
                     f'Iterations have converged after {self.iteration} iterations. Objective function reduced '
-                    f'from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}')
+                    f'from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}'
+                )
                 
             # Return conv = True, why_stop var.
             return True, success, why_stop
@@ -291,22 +291,21 @@ class lmenrmlMixIn(Ensemble):
         '''
         Log the update results in a formatted table.
         '''
-        def _log_table(iteration, status, misfit, change_pct, lambda_val, change_label="Reduction"):
-            """Helper method to log iteration results in a formatted table."""
-            self.logger.info('')
-            self.logger.info(f'   {"Iteration":<11}| {"Status":<11}| {"Data Misfit":<16}| {f"{change_label} (%)":<15}| {"λ":<10}')
-            self.logger.info(f'   {"—"*11}|{"—"*12}|{"—"*17}|{"—"*16}|{"—"*10}')
-            self.logger.info(f'   {iteration:<11}| {status:<11}| {misfit:<16.2f}| {change_pct:<15.2f}| {lambda_val:<10.2f}')
-            self.logger.info('')
-
-        if prior_run:
-            _log_table(0, "Success", self.data_misfit, 0.0, self.lam)
-        elif success:
-            reduction = 100 * (1 - self.data_misfit / self.prev_data_misfit)
-            _log_table(self.iteration, "Success", self.data_misfit, reduction, self.lam)
+        log_data = {
+            "Iteration": f'{0 if prior_run else self.iteration}',
+            "Status": "Success" if (prior_run or success) else "Failed",
+            "Data Misfit": self.data_misfit,
+            "λ": self.lam
+        }
+        if not prior_run:
+            if success:
+                log_data["Reduction (%)"] = 100 * (1 - self.data_misfit / self.prev_data_misfit)
+            else:
+                log_data["Increase (%)"] = 100 * (self.data_misfit / self.prev_data_misfit - 1)
         else:
-            increase = 100 * (1 - self.prev_data_misfit / self.data_misfit)
-            _log_table(self.iteration, "Failed", self.data_misfit, increase, self.lam, "Increase")
+            log_data["Reduction (%)"] = 'N/A'
+        
+        self.logger(**log_data)
         
 
 

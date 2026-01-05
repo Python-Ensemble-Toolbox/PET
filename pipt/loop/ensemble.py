@@ -1,7 +1,7 @@
 """Descriptive description."""
 
 # External import
-import logging
+#import logging
 import os.path
 
 import numpy
@@ -15,6 +15,7 @@ from geostat.decomp import Cholesky
 
 # Internal import
 from ensemble.ensemble import Ensemble as PETEnsemble
+from ensemble.logger import PetLogger
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
 from pipt.misc_tools.cov_regularization import localization, _calc_distance
@@ -73,21 +74,9 @@ class Ensemble(PETEnsemble):
         super(Ensemble, self).__init__(keys_da|keys_en, sim)
 
         # Setup logger
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s : %(levelname)s : %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            handlers=[
-            logging.FileHandler('assim.log', mode='w'),
-            logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
+        self.logger = PetLogger(filename='assim.log')
+        self.logger(f'=========== Running Data Assimilation - {keys_da["daalg"][0].upper()} ===========')
 
-        # write initial information
-        self.logger.info('')
-        self.logger.info(f'   =========== Running Data Assimilation - {keys_da["daalg"][0].upper()} ===========')
-        self.logger.info('')
 
         # Internalize PIPT dictionary
         if not hasattr(self, 'keys_da'):

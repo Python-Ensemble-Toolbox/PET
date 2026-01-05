@@ -228,25 +228,23 @@ class esmdaMixIn(Ensemble):
         '''
         Log the update results in a formatted table.
         '''
-        def _log_table(iteration, status, misfit, change_pct, change_label="Reduction"):
-            """Helper method to log iteration results in a formatted table."""
-            self.logger.info('')
-            self.logger.info(f'   {"Iteration":<11}| {"Status":<11}| {"Data Misfit":<16}| {f"{change_label} (%)":<15}')
-            self.logger.info(f'   {"—"*11}|{"—"*12}|{"—"*17}|{"—"*16}')
-            self.logger.info(f'   {iteration:<11}| {status:<11}| {misfit:<16.2f}| {change_pct:<15.2f}')
-            self.logger.info('')
-
-        if prior_run:
-            iteration_str = f'0/{self.max_iter}'
-            _log_table(iteration_str, "Success", self.data_misfit, 0.0)
-        elif success:
-            iteration_str = f'{self.iteration}/{self.max_iter}'
-            reduction = 100 * (1 - self.data_misfit / self.prev_data_misfit)
-            _log_table(iteration_str, "Success", self.data_misfit, reduction)
+        iteration_str = f'{0 if prior_run else self.iteration}/{self.max_iter}'
+        
+        log_data = {
+            "Iteration": iteration_str,
+            "Status": "Success" if (prior_run or success) else "Failed",
+            "Data Misfit": self.data_misfit
+        }
+        
+        if not prior_run:
+            if success:
+                log_data["Reduction (%)"] = 100 * (1 - self.data_misfit / self.prev_data_misfit)
+            else:
+                log_data["Increase (%)"] = 100 * (self.data_misfit / self.prev_data_misfit - 1)
         else:
-            iteration_str = f'{self.iteration}/{self.max_iter}'
-            increase = 100 * (1 - self.prev_data_misfit / self.data_misfit)
-            _log_table(iteration_str, "Failed", self.data_misfit, increase, "Increase")
+            log_data["Reduction (%)"] = 'N/A'
+        
+        self.logger(**log_data)
             
     def _ext_inflation_param(self):
         r"""

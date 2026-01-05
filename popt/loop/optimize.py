@@ -1,12 +1,12 @@
 # External imports
 import os
 import numpy as np
-import logging
 import time
 import pickle
 
 # Internal imports
 import popt.misc_tools.optim_tools as ot
+from ensemble.logger import PetLogger
 
 
 class Optimize:
@@ -62,16 +62,7 @@ class Optimize:
             Optimization options
         """
         # Setup logger
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s : %(levelname)s : %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S',
-            handlers=[
-            logging.FileHandler('optim.log', mode='w'),
-            logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
+        self.logger = PetLogger('optim.log')
 
         # Save name for (potential) pickle dump/load
         self.pickle_restart_file = 'popt_restart_dump'
@@ -136,7 +127,9 @@ class Optimize:
         previous_state = None
         if self.epf:
             previous_state = self.mean_state
-            self.logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {self.epf["r"]} (outer iteration, penalty factor)')  # print epf info
+            self.logger(
+                f'─────> EPF-EnOpt: {self.epf_iteration}, {self.epf["r"]} (outer iteration, penalty factor)'
+            )  # print epf info
 
         while epf_not_converged:  # outer loop using epf
 
@@ -161,21 +154,21 @@ class Optimize:
                 self.optimize_result['message'] = self.msg
 
             # Logging some info to screen
-            self.logger.info('       ============================================')
-            self.logger.info('       Optimization converged in %d iterations ', self.iteration-1)
-            self.logger.info('       Optimization converged with final obj_func = %.4f',
-                        np.mean(self.optimize_result['fun']))
-            self.logger.info('       Total number of function evaluations = %d', self.optimize_result['nfev'])
-            self.logger.info('       Total number of jacobi evaluations = %d', self.optimize_result['njev'])
+            self.logger('')
+            self.logger('============================================')
+            self.logger(f'Optimization converged in {self.iteration-1} iterations ')
+            self.logger(f'Optimization converged with final obj_func = {np.mean(self.optimize_result["fun"]):.4f}')
+            self.logger(f'Total number of function evaluations = {self.optimize_result["nfev"]}')
+            self.logger(f'Total number of jacobi evaluations = {self.optimize_result["njev"]}')
             if self.start_time is not None:
-                self.logger.info('       Total elapsed time = %.2f minutes', (time.perf_counter()-self.start_time)/60)
-            self.logger.info('       ============================================')
+                self.logger(f'Total elapsed time = {(time.perf_counter()-self.start_time)/60:.2f} minutes')
+            self.logger('============================================')
 
             # Test for convergence of outer epf loop
             epf_not_converged = False
             if self.epf:
                 if self.epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
-                    self.logger.info(f'       -----> EPF-EnOpt: maximum epf iterations reached')  # print epf info
+                    self.logger(f'─────> EPF-EnOpt: maximum epf iterations reached')  # print epf info
                     break
                 p = np.abs(previous_state-self.mean_state) / (np.abs(previous_state) + 1.0e-9)
                 conv_crit = self.epf['conv_crit']
@@ -192,11 +185,11 @@ class Optimize:
                     self.nfev += 1
                     self.iteration = +1
                     r = self.epf['r']
-                    self.logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
+                    self.logger(f'─────> EPF-EnOpt: {self.epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
                 else:
-                    self.logger.info(f'       -----> EPF-EnOpt: converged, no variables changed more than {conv_crit*100} %')  # print epf info
+                    self.logger(f'─────> EPF-EnOpt: converged, no variables changed more than {conv_crit*100} %')  # print epf info
                     final_obj_no_penalty = str(round(float(self.fun(self.mean_state)),4))
-                    self.logger.info(f'       -----> EPF-EnOpt: objective value without penalty = {final_obj_no_penalty}') # print epf info
+                    self.logger(f'─────> EPF-EnOpt: objective value without penalty = {final_obj_no_penalty}') # print epf info
     def save(self):
         """
         We use pickle to dump all the information we have in 'self'. Can be used, e.g., if some error has occurred.

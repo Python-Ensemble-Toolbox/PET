@@ -347,6 +347,7 @@ def newton_cg(gk, Hk=None, maxiter=None, **kwargs):
     if logger is None:
         logger = print
     
+    logger('')
     logger('Running Newton-CG subroutine..........')
 
     if Hk is None:

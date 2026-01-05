@@ -247,8 +247,8 @@ class Assimilate:
             if self.ensemble.prior_data_misfit > self.ensemble.data_misfit:
                 out_str += f' Obj. function reduced from {self.ensemble.prior_data_misfit:0.1f} ' \
                            f'to {self.ensemble.data_misfit:0.1f}'
-            tqdm.write(out_str)
-            self.ensemble.logger.info(out_str)
+            #tqdm.write(out_str)
+            self.ensemble.logger(out_str)
 
     def remove_outliers(self):
 

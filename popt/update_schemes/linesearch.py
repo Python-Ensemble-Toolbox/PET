@@ -191,13 +191,16 @@ class LineSearchClass(Optimize):
         self.hessian  = hess     
         self.args     = args
         self.bounds   = bounds  
-        self.options  = options 
+        self.options  = options
 
         # Check for Callback function
         if callable(callback):
             self.callback = callback
         else:
             self.callback = None
+
+        # Remove 'datatype' form options if present (This is a temporary bugfix)
+        self.options.pop('datatype', None)
 
         # Custom convergence criteria (callable)
         convergence_criteria = options.get('convergence_criteria', None)
@@ -219,7 +222,7 @@ class LineSearchClass(Optimize):
             'amax': self.step_size_max,
             'maxiter': options.get('lsmaxiter', 10),
             'method' : options.get('lsmethod', 1),
-            'logger' : self.logger.info
+            'logger' : self.logger
         }
 
         # Set other options
@@ -269,12 +272,14 @@ class LineSearchClass(Optimize):
             if self.saveit:
                 ot.save_optimize_results(self.optimize_result)
             if self.logger is not None:
-                self.logger.info(f'       ====== Running optimization - Line search ({method}) ======')
-                self.logger.info('\nSPECIFIED OPTIONS:\n'+pprint.pformat(OptimizeResult(self.options)))
-                self.logger.info('')
-                self.logger.info(f'       {"iter.":<10} {fun_xk_symbol:<15} {jac_inf_symbol:<15} {"step-size":<15}')
-                self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {la.norm(self.jk, np.inf):<15.4e} {0:<15.4e}')
-                self.logger.info('')
+                self.logger(f'========== Running optimization - Line search ({method}) ==========')
+                self.logger(f'\n \nSPECIFIED OPTIONS:\n{pprint.pformat(OptimizeResult(self.options))}\n')
+                self.logger(**{
+                    'iter.': 0,
+                    fun_xk_symbol: self.fk,
+                    jac_inf_symbol: la.norm(self.jk, np.inf),
+                    'step-size': self.step_size
+                })
 
         self.run_loop() 
 
@@ -340,7 +345,7 @@ class LineSearchClass(Optimize):
         if self.method == 'BFGS':
             pk = - np.matmul(self.Hk_inv, self.jk)
         if self.method == 'Newton-CG':
-            pk = newton_cg(self.jk, Hk=self.Hk, xk=self.xk, jac=self._jac, logger=self.logger.info)
+            pk = newton_cg(self.jk, Hk=self.Hk, xk=self.xk, jac=self._jac, logger=self.logger)
 
         # porject search direction onto the feasible set
         if self.bounds is not None:
@@ -353,7 +358,7 @@ class LineSearchClass(Optimize):
         step_size = self._set_step_size(pk, self.step_size_max)
 
         # Perform line-search 
-        self.logger.info('Performing line search.............')
+        self.logger('Performing line search.............')
         if self.lskwargs['method'] == 0:
             ls_res = line_search_backtracking(
                 step_size=step_size,
@@ -419,32 +424,34 @@ class LineSearchClass(Optimize):
 
             # Write logging info
             if self.logger is not None:
-                self.logger.info('')
-                self.logger.info(f'       {"iter.":<10} {fun_xk_symbol:<15} {jac_inf_symbol:<15} {"step-size":<15}')
-                self.logger.info(f'       {self.iteration:<10} {self.fk:<15.4e} {la.norm(self.jk, np.inf):<15.4e} {step_size:<15.4e}')
-                self.logger.info('')
+                self.logger(**{
+                    'iter.': self.iteration,
+                    fun_xk_symbol: self.fk,
+                    jac_inf_symbol: la.norm(self.jk, np.inf),
+                    'step-size': step_size
+                })
             
             # Check for convergence
             if (la.norm(sk, np.inf) < self.xtol):
                 self.msg = 'Convergence criteria met: |dx| < xtol'
-                self.logger.info(self.msg)
+                self.logger(self.msg)
                 success = False
                 return success
             if (np.abs(self.fk - f_old) < self.ftol * np.abs(f_old)):
                 self.msg = 'Convergence criteria met: |f(x+dx) - f(x)| < ftol * |f(x)|'
-                self.logger.info(self.msg)
+                self.logger(self.msg)
                 success = False
                 return success
             if (la.norm(self.jk, np.inf) < self.gtol):
                 self.msg = f'Convergence criteria met: {jac_inf_symbol} < gtol'
-                self.logger.info(self.msg)
+                self.logger(self.msg)
                 success = False
                 return success
 
             # Check for custom convergence
             if callable(self.convergence_criteria):
                 if self.convergence_criteria(self):
-                    self.logger.info('Custom convergence criteria met. Stopping optimization.')
+                    self.logger('Custom convergence criteria met. Stopping optimization.')
                     success = False
                     return success
 
@@ -457,7 +464,7 @@ class LineSearchClass(Optimize):
         else:
             if iter_resamp < self.resample:
 
-                self.logger.info('Resampling Gradient')
+                self.logger('Resampling Gradient')
                 iter_resamp += 1
                 self.jk = None
 
