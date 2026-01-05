@@ -273,7 +273,7 @@ class LineSearchClass(Optimize):
                 ot.save_optimize_results(self.optimize_result)
             if self.logger is not None:
                 self.logger(f'========== Running optimization - Line search ({method}) ==========')
-                self.logger(f'\n \nSPECIFIED OPTIONS:\n{pprint.pformat(OptimizeResult(self.options))}\n')
+                self.logger(f'\n \nUSER-SPECIFIED OPTIONS:\n{pprint.pformat(OptimizeResult(self.options))}\n')
                 self.logger(**{
                     'iter.': 0,
                     fun_xk_symbol: self.fk,
