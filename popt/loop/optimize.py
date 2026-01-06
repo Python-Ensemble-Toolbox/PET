@@ -156,6 +156,7 @@ class Optimize:
             # Logging some info to screen
             self.logger('')
             self.logger('============================================')
+            self.logger(self.msg)
             self.logger(f'Optimization converged in {self.iteration-1} iterations ')
             self.logger(f'Optimization converged with final obj_func = {np.mean(self.optimize_result["fun"]):.4f}')
             self.logger(f'Total number of function evaluations = {self.optimize_result["nfev"]}')
