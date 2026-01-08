@@ -265,7 +265,7 @@ class Ensemble:
                     **progbar_settings
                 )
             ######################################################################################################################
-                
+
             # Convert state enemble back to matrix form
             enX = entools.list_to_matrix(enX, self.idX)
 
