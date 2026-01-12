@@ -32,6 +32,20 @@ class PetLogger:
         Parameters:
             *args: Positional arguments to log as a single message.
             **kwargs: Keyword arguments to log in a formatted table.
+
+        Example:
+            __call__('This is a log message.') ----> 
+            2024-06-01│12:00:00 :  This is a log message.
+
+            __call__(iteration=1, fun=0.5, step-size=0.1) ---->   
+
+            2024-06-01│12:00:00 :                                           
+            2024-06-01│12:00:00 : ┌────────────┬────────────┬────────────┐  
+            2024-06-01│12:00:00 : │ iteration  │    fun     │  step-size │  
+            2024-06-01│12:00:00 : ├────────────┼────────────┼────────────┤  
+            2024-06-01│12:00:00 : │    1       │  5.000e-01 │  1.000e-01 │  
+            2024-06-01│12:00:00 : └────────────┴────────────┴────────────┘  
+            2024-06-01│12:00:00 :                                                              
         '''
 
         if args:
@@ -42,25 +56,27 @@ class PetLogger:
         if kwargs:    
             # Make strings for table logging
             self._set_ns(**kwargs)
-            header_parts = []
-            values_parts = []
+            header = []
+            values = []
             for key, value in kwargs.items():
-                header_parts.append(f'{key:^{self.ns}}')
+                header.append(f'{key:^{self.ns}}')
                 try:
                     if isinstance(value, int) or isinstance(value, str):
-                        values_parts.append(f'{value:^{self.ns}}')
+                        values.append(f'{value:^{self.ns}}')
                     else:
-                        values_parts.append(f'{value:^{self.ns}.3e}')
+                        values.append(f'{value:^{self.ns}.3e}')
                 except: 
-                    values_parts.append(f'{"":^{self.ns}}')
+                    values.append(f'{"":^{self.ns}}')
       
             # Log table
+            seperator = ['─' * self.ns for _ in kwargs.keys()]
             self._logger.info('')
-            self._logger.info('  ' + '─' * (len(kwargs) * self.ns + (len(kwargs) - 1) * 3))
-            self._logger.info(' │' + ' │ '.join(header_parts) + '│')
-            self._logger.info(' │' + '─│─'.join(['─' * self.ns for _ in kwargs.keys()]) + '│')
-            self._logger.info(' │' + ' │ '.join(values_parts) + '│')
-            self._logger.info('  ' + '─' * (len(kwargs) * self.ns + (len(kwargs) - 1) * 3))
+            self._logger.info(' ┌' + '┬'.join(seperator) + '┐')
+            self._logger.info(' │' + '│'.join(header)    + '│')
+            self._logger.info(' ├' + '┼'.join(seperator) + '┤')
+            self._logger.info(' │' + '│'.join(values)    + '│')
+            self._logger.info(' └' + '┴'.join(seperator) + '┘')
+            self._logger.info('')
 
     def info(self, *args, **kwargs):
         self._logger.info(*args, **kwargs)
