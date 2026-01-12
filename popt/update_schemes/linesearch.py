@@ -358,7 +358,6 @@ class LineSearchClass(Optimize):
         step_size = self._set_step_size(pk, self.step_size_max)
 
         # Perform line-search 
-        self.logger('Performing line search.............')
         if self.lskwargs['method'] == 0:
             ls_res = line_search_backtracking(
                 step_size=step_size,
