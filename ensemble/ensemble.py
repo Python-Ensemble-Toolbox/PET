@@ -161,9 +161,11 @@ class Ensemble:
                 self.list_states = list(self.keys_en['staticvar'])
 
         if 'multilevel' in self.keys_en:
-            ml_info = extract.extract_multilevel_info(self.keys_en)
-            self.multilevel, self.tot_level, self.ml_ne, self.ML_error_corr, self.error_comp_scheme, self.ML_corr_done = ml_info
-
+            self.multilevel = extract.extract_multilevel_info(self.keys_en['multilevel'])
+            self.ml_ne = self.multilevel['ml_ne']
+            self.tot_level = int(self.multilevel['levels'])
+            self.ml_corr_done = False
+        
         
     def get_list_assim_steps(self):
         """
@@ -508,16 +510,18 @@ class Ensemble:
         return success
 
     def treat_modeling_error(self):
-        if not self.ML_error_corr=='none':
-            if self.error_comp_scheme=='sep':
+        if self.multilevel['ml_error_corr']:
+            scheme = self.multilevel['ml_error_corr'][1]
+
+            if scheme =='sep':
                 self.calc_modeling_error_sep()
                 self.address_ML_error()
-            elif self.error_comp_scheme=='once':
-                if not self.ML_corr_done:
+            elif scheme =='once':
+                if not self.ml_corr_done:
                     self.calc_modeling_error_ens()
-                    self.ML_corr_done = True
+                    self.ml_corr_done = True
                 self.address_ML_error()
-            elif self.error_comp_scheme=='ens':
+            elif scheme =='ens':
                 self.calc_modeling_error_ens()
 
     def calc_modeling_error_sep(self):
@@ -525,7 +529,7 @@ class Ensemble:
 
     def calc_modeling_error_ens(self):
 
-        if self.ML_error_corr =='bias_corr':
+        if self.multilevel['ml_error_corr'][0] =='bias_corr':
             # modify self.pred_data without changing its structure. Hence, for each level (except the finest one)
             # we correct each data at each point in time.
             for assim_index in range(len(self.pred_data)):

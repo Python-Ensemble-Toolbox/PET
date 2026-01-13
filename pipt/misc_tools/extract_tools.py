@@ -289,30 +289,32 @@ def extract_multilevel_info(keys: Union[dict, list]) -> dict:
     such that we only have one level -- the high fidelity one
     '''
     if isinstance(keys, list):
-        ml_info = list_to_dict(keys)
-    assert isinstance(ml_info, dict)
+        keys_ml = list_to_dict(keys)
+    assert isinstance(keys_ml, dict)
     
     # Set levels
-    levels = int(ml_info['levels'])
-    ml_info['levels'] = [elem for elem in range(levels)]
+    assert 'levels' in keys_ml, 'LEVELS keyword missing in MULTILEVEL!'
+    levels = int(keys_ml['levels'])
+    keys_ml['levels'] = [elem for elem in range(levels)]
 
     # Set multi-level ensemble size
-    en_size = ml_info.pop('en_size')
-    ml_info['ne'] = [range(int(elem)) for elem in en_size]
-    ml_ne = [int(elem) for elem in en_size]
+    assert 'en_size' in keys_ml, 'EN_SIZE keyword missing in MULTILEVEL!'
+    en_size = keys_ml.pop('en_size')
+    keys_ml['ne'] = [range(int(elem)) for elem in en_size]
+    keys_ml['ml_ne'] = [int(elem) for elem in en_size]
+    assert len(keys_ml['ml_ne']) == levels, 'The Ensemble Size must be specified for all levels!'
+
+    # Set weights
+    assert 'ml_weights' in keys_ml or 'cov_wgt' in keys_ml, 'ML_WEIGHTS (or COV_WGT) keyword missing in MULTILEVEL!'
+    if 'cov_wgt' in keys_ml:
+        keys_ml['ml_weights'] = keys_ml.pop('cov_wgt')
+    if not np.sum(keys_ml['ml_weights']) == 1.0:
+        keys_ml['ml_weights'] = keys_ml['ml_weights']/np.sum(keys_ml['ml_weights'])
 
     # Set multi-level error
-    if not 'ml_error_corr' in ml_info:
-        ml_error_corr = 'none'
-    else:
-        ml_error_corr = ml_info['ml_error_corr'][0]
-        ml_corr_done = False
-
-    if not ml_error_corr == 'none':
-        error_comp_scheme = ml_info['ml_error_corr'][1]
-
-    # set attribute
-    return ml_info, levels, ml_ne, ml_error_corr, error_comp_scheme, ml_corr_done 
+    keys_ml['ml_error_corr'] = keys_ml.get('ml_error_corr', None)
+    
+    return keys_ml
 
 
 def extract_local_analysis_info(keys: Union[dict, list], state: list) -> dict:

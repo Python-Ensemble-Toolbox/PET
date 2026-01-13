@@ -119,8 +119,7 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
             index += ne
 
         if 'multilevel' in self.keys_en:
-            weight = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
-            weight = np.array(weight)
+            weight = np.array(self.keys_en['multilevel']['ml_weights'])
             if not np.sum(weight) == 1.0:
                 weight = weight / np.sum(weight)  
             grad = np.dot(grad_ml, weight)
