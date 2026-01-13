@@ -281,13 +281,14 @@ def extract_initial_controls(keys: dict) -> dict:
 
 
 
-
+    
 
 def extract_multilevel_info(keys: Union[dict, list]) -> dict:
     '''
     Extract the info needed for ML simulations. Note if the ML keyword is not in keys_en we initialize
     such that we only have one level -- the high fidelity one
     '''
+    keys_ml = keys
     if isinstance(keys, list):
         keys_ml = list_to_dict(keys)
     assert isinstance(keys_ml, dict)

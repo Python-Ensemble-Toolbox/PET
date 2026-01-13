@@ -163,7 +163,7 @@ class Ensemble:
         if 'multilevel' in self.keys_en:
             self.multilevel = extract.extract_multilevel_info(self.keys_en['multilevel'])
             self.ml_ne = self.multilevel['ml_ne']
-            self.tot_level = int(self.multilevel['levels'])
+            self.tot_level = len(self.multilevel['levels'])
             self.ml_corr_done = False
         
         
@@ -211,18 +211,17 @@ class Ensemble:
             containing the responses at each time step given in PREDICTION.
 
         """
+        # Use input state if given
+        if enX is None: 
+            use_input_ensemble = False
+            enX = self.enX
+            self.enX = None # free memory
+        else:
+            use_input_ensemble = True
 
-        if isinstance(self.enX,list) and hasattr(self, 'multilevel'): # assume multilevel is used if state is a list 
+        if isinstance(enX,list) and hasattr(self, 'multilevel'): # assume multilevel is used if state is a list
             success = self.calc_ml_prediction(enX)
         else:
-
-            # Use input state if given
-            if enX is None: 
-                use_input_ensemble = False
-                enX = self.enX
-                self.enX = None # free memory
-            else:
-                use_input_ensemble = True
 
             # Number of parallel runs
             nparallel = int(self.sim.input_dict.get('parallel', 1))
@@ -321,6 +320,9 @@ class Ensemble:
 
         # some predicted data might need to be adjusted (e.g. scaled or compressed if it is 4D seis data). Do not
         # include this here.
+        if enX is not None:
+            self.enX = enX
+            enX = None  # free memory
 
         # Store results if needed
         if save_prediction is not None:
@@ -437,7 +439,7 @@ class Ensemble:
             if ml_ne:
 
                 level_enX = entools.matrix_to_list(enX[level], self.idX)
-                for n in range(ml_ne):
+                for n in ml_ne:
                     if self.aux_input is not None:
                         level_enX[n]['aux_input'] = self.aux_input[n]
 

@@ -1234,7 +1234,7 @@ def aug_state(state, list_state, cell_index=None):
     return aug
 
 
-def calc_scaling(state, list_state, prior_info):
+def calc_scaling(enX, idX, prior_info):
     """
     Form the scaling to be used in svd related algoritms. Scaling consist of standard deviation for each `STATICVAR`
     It is important that this is formed in the same manner as the augmentet state vector is formed. Hence, with the same
@@ -1256,7 +1256,7 @@ def calc_scaling(state, list_state, prior_info):
     """
 
     scaling = []
-    for elem in list_state:
+    for elem in idX.keys():
         # more than single value. This is for multiple layers. Assume all values are active
         if len(prior_info[elem]['variance']) > 1:
             scaling.append(np.concatenate(tuple(np.sqrt(prior_info[elem]['variance'][z]) *
@@ -1265,7 +1265,7 @@ def calc_scaling(state, list_state, prior_info):
                                                 for z in range(prior_info[elem]['nz']))))
         else:
             scaling.append(tuple(np.sqrt(prior_info[elem]['variance']) *
-                                 np.ones(state[elem].shape[0])))
+                                 np.ones(enX[idX[elem][0]:idX[elem][1]].shape[0])))
 
     return np.concatenate(scaling)
 
