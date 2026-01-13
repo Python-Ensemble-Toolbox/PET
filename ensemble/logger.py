@@ -34,10 +34,11 @@ class PetLogger:
             **kwargs: Keyword arguments to log in a formatted table.
 
         Example:
-            >>> __call__('This is a log message.')
+            >>> logger = PetLogger()
+            >>> logger('This is a log message.')
             2024-06-01│12:00:00 :  This is a log message.
             >>> 
-            >>> __call__(iteration=1, fun=0.5, step_size=0.1)
+            >>> logger(iteration=1, fun=0.5, step_size=0.1)
             2024-06-01│12:00:00 :
             2024-06-01│12:00:00 : ┌────────────┬────────────┬────────────┐
             2024-06-01│12:00:00 : │ iteration  │    fun     │ step_size  │
