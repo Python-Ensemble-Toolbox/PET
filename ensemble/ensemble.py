@@ -405,7 +405,7 @@ class Ensemble:
         # Save in 'self'
         self.__dict__.update(tmp_load)
 
-    def calc_ml_prediction(self, input_state=None):
+    def calc_ml_prediction(self, enX=None):
         """
         Function for running the simulator over several levels. We assume that it is sufficient to provide the level
         integer to the setup of the forward run. This will initiate the correct simulator fidelity.
@@ -413,7 +413,7 @@ class Ensemble:
 
         Parameters
         ----------
-        input_state:
+        enX:
             If simulation is run stand-alone one can input any state.
         """
 
@@ -421,36 +421,37 @@ class Ensemble:
         ml_pred_data = []
 
         for level in tqdm(self.multilevel['levels'], desc='Fidelity level', position=1):
+
             # Setup forward simulator and redundant simulator at the correct fidelity
             if self.sim.redund_sim is not None:
-                self.sim.redund_sim.setup_fwd_run(level=level)
-            self.sim.setup_fwd_run(level=level)
+                if hasattr(self.sim.redund_sim, 'setup_fwd_run'):
+                    self.sim.redund_sim.setup_fwd_run(level=level)
+
+            # Run setup function for simulator
+            if hasattr(self.sim, 'setup_fwd_run'):
+                self.sim.setup_fwd_run(level=level)
+
             ml_ne = self.multilevel['ne'][level]
             if ml_ne:
-                # Ensure that we put all the states in a list
-                list_state = [deepcopy({}) for _ in ml_ne]
-                for i in ml_ne:
-                    if input_state is None:
-                        for key in self.state[level].keys():
-                            if self.state[level][key].ndim == 1:
-                                list_state[i][key] = deepcopy(self.state[level][key])
-                            elif self.state[level][key].ndim == 2:
-                                list_state[i][key] = deepcopy(self.state[level][key][:, i])
-                    else:
-                        for key in self.state.keys():
-                            if input_state[level][key].ndim == 1:
-                                list_state[i][key] = deepcopy(input_state[level][key])
-                            elif input_state[level][key].ndim == 2:
-                                list_state[i][key] = deepcopy(input_state[level][key][:, i])
-                    if self.aux_input is not None:  # several models are used
-                        list_state[i]['aux_input'] = self.aux_input[i]
+
+                level_enX = entools.matrix_to_list(enX[level], self.idX)
+                for n in range(ml_ne):
+                    if self.aux_input is not None:
+                        level_enX[n]['aux_input'] = self.aux_input[n]
+
 
                 # Index list of ensemble members
                 list_member_index = list(ml_ne)
 
                 # Run prediction in parallel using p_map
-                en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                                list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
+                en_pred = p_map(
+                    self.sim.run_fwd_sim, 
+                    level_enX,
+                    list_member_index, 
+                    num_cpus=no_tot_run, 
+                    disable=self.disable_tqdm,
+                    **progbar_settings,
+                )
 
                 # List successful runs and crashes
                 list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
@@ -481,15 +482,17 @@ class Ensemble:
                             list_success, size=len(list_crash), replace=True)
 
                     # Insert the replaced runs in prediction list
-                    for indx, el in enumerate(copy_member):
-                        print(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by ensemble member '
-                              f'{el}! ---\033[92m')
-                        self.logger(f'\033[92m--- Ensemble member {list_crash[indx]} failed, has been replaced by '
-                                         f'ensemble member {el}! ---\033[92m')
-                        for key in self.state[level].keys():
-                            self.state[level][key][:, list_crash[indx]] = deepcopy(
-                                self.state[level][key][:, el])
-                        en_pred[list_crash[indx]] = deepcopy(en_pred[el])
+                    for index, element in enumerate(copy_member):
+                        msg = (
+                        f"\033[92m--- Ensemble member {list_crash[index]} failed, "
+                        f"has been replaced by ensemble member {element}! ---\033[92m"
+                        )
+                        print(msg)
+                        self.logger(msg)
+                        if enX[level].shape[1] > 1:
+                            enX[level][:, list_crash[index]] = deepcopy(enX[level][:, element])
+                        
+                        en_pred[list_crash[index]] = deepcopy(en_pred[element])
 
                 # Convert ensemble specific result into pred_data, and filter for NONE data
                 ml_pred_data.append([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
