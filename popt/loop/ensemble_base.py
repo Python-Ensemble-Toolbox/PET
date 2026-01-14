@@ -141,13 +141,6 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
             self.enF = func_values 
         
         return func_values
-
-            # Add to covariance
-            self.cov = np.append(self.cov, var)
-            self.dim = self.cov.shape[0]
-
-        # Make cov full covariance matrix
-        self.cov = np.diag(self.cov)
     
     def get_state(self):
         """
