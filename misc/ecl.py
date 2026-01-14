@@ -426,8 +426,8 @@ class EclipseGrid (object):
             self.ni = grid_head[1]  # pylint: disable=invalid-name
             self.nj = grid_head[2]  # pylint: disable=invalid-name
             self.nk = grid_head[3]  # pylint: disable=invalid-name
-            log.info("Grid dimension is %d x %d x %d",
-                     self.ni, self.nj, self.nk)
+            #log.info("Grid dimension is %d x %d x %d",
+            #         self.ni, self.nj, self.nk)
 
             # also store a shape tuple which describes the grid cube
             self.shape = (self.nk, self.nj, self.ni)
@@ -460,7 +460,7 @@ class EclipseGrid (object):
             # restart properties are only saved for the active elements,
             # so we can cache this number to compare
             self.num_active = numpy.sum(self.actnum)
-            log.info("Grid has %d active cells", self.num_active)
+            #log.info("Grid has %d active cells", self.num_active)
 
     def grid(self):
         """
