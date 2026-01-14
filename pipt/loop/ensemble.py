@@ -1,7 +1,6 @@
 """Descriptive description."""
 
 # External import
-import logging
 import os.path
 
 import numpy
@@ -15,11 +14,15 @@ from geostat.decomp import Cholesky
 
 # Internal import
 from ensemble.ensemble import Ensemble as PETEnsemble
+from ensemble.logger import PetLogger
 import misc.read_input_csv as rcsv
 from pipt.misc_tools import wavelet_tools as wt
 from pipt.misc_tools.cov_regularization import localization, _calc_distance
+
+# Import internal tools
 import pipt.misc_tools.analysis_tools as at
 import pipt.misc_tools.extract_tools as extract
+import pipt.misc_tools.ensemble_tools as entools
 
 
 class Ensemble(PETEnsemble):
@@ -69,12 +72,9 @@ class Ensemble(PETEnsemble):
         # do the initiallization of the PETensemble
         super(Ensemble, self).__init__(keys_da|keys_en, sim)
 
-        # set logger
-        self.logger = logging.getLogger('PET.PIPT')
-
-        # write initial information
-        self.logger.info(f'Starting a {keys_da["daalg"][0]} run with the {keys_da["daalg"][1]} algorithm applying the '
-                         f'{keys_da["analysis"]} update scheme with {keys_da["energy"]} Energy.')
+        # Setup logger
+        self.logger = PetLogger(filename='assim.log')
+        self.logger(f'=========== Running Data Assimilation - {keys_da["daalg"][0].upper()} ===========')
 
         # Internalize PIPT dictionary
         if not hasattr(self, 'keys_da'):
@@ -99,19 +99,8 @@ class Ensemble(PETEnsemble):
             self._org_obs_data()
             self._org_data_var()
 
-            # define projection for centring and scaling
-            self.proj = (np.eye(self.ne) - (1 / self.ne) *
-                         np.ones((self.ne, self.ne))) / np.sqrt(self.ne - 1)
-
-            # If we have dynamic state variables, we allocate keys for them in 'state'. Since we do not know the size
-            # of the arrays of the dynamic variables, we only allocate an NE list to be filled in later (in
-            # calc_forecast)
-            if 'dynamicvar' in self.keys_da:
-                dyn_vars = self.keys_da['dynamicvar']
-                if not isinstance(dyn_vars, list):
-                    dyn_vars = [dyn_vars]
-                for name in dyn_vars:
-                    self.state[name] = [None] * self.ne
+            # Define projection operator for centring and scaling ensemble matrix
+            self.proj = (np.eye(self.ne) - np.ones((self.ne, self.ne))/self.ne) / np.sqrt(self.ne - 1)
 
             # Option to store the dictionaries containing observed data and data variance
             if 'obsvarsave' in self.keys_da and self.keys_da['obsvarsave'] == 'yes':
@@ -126,10 +115,10 @@ class Ensemble(PETEnsemble):
                     self.keys_da['staticvar'],
                     self.ne
                 )
-                
+
             # Initialize local analysis
             if 'localanalysis' in self.keys_da:
-                self.local_analysis = extract.extract_local_analysis_info(self.keys_da['localanalysis'], self.state.keys())
+                self.local_analysis = extract.extract_local_analysis_info(self.keys_da['localanalysis'], self.idX.keys())
 
             self.pred_data = [{k: np.zeros((1, self.ne), dtype='float32') for k in self.keys_da['datatype']}
                               for _ in self.obs_data]
@@ -174,7 +163,7 @@ class Ensemble(PETEnsemble):
     def _org_obs_data(self):
         """
         Organize the input true observed data. The obs_data will be a list of length equal length of "TRUEDATAINDEX",
-        and each entry in the list will be a dictionary with keys equal to the "DATATYPE".
+        and each entery in the list will be a dictionary with keys equal to the "DATATYPE".
         Also, the pred_data variable (predicted data or forward simulation) will be initialized here with the same
         structure as the obs_data variable.
 
@@ -500,150 +489,80 @@ class Ensemble(PETEnsemble):
                     self.datavar[i][datatype[j]] = est_noise  # override the given value
                     vintage = vintage + 1
 
-    def _ext_obs(self):
-        self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                       self.list_datatypes)
-        # Generate the data auto-covariance matrix
-        if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
-            if hasattr(self, 'cov_data'):  # cd matrix has been imported
-                tmp_E = np.dot(cholesky(self.cov_data).T,
-                               np.random.randn(self.cov_data.shape[0], self.ne))
-            else:
-                tmp_E = at.extract_tot_empirical_cov(
-                    self.datavar, self.assim_index, self.list_datatypes, self.ne)
-            # self.E = (tmp_E - tmp_E.mean(1)[:,np.newaxis])/np.sqrt(self.ne - 1)/
-            if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
-                tmp_E = at.screen_data(tmp_E, self.aug_pred_data,
-                                       self.obs_data_vector, self.iteration)
-            self.E = tmp_E
-            self.real_obs_data = self.obs_data_vector[:, np.newaxis] - tmp_E
 
-            self.cov_data = np.var(self.E, ddof=1,
-                                   axis=1)  # calculate the variance, to be used for e.g. data misfit calc
-            # self.cov_data = ((self.E * self.E)/(self.ne-1)).sum(axis=1) # calculate the variance, to be used for e.g. data misfit calc
+    def set_observations(self):
+        '''
+        Generate the perturbed observed data ensemble
+        '''
+        # Make observed data vector
+        vecObs, _ = at.aug_obs_pred_data(
+            self.obs_data, 
+            self.pred_data, 
+            self.assim_index,
+            self.list_datatypes
+        )
+        
+        # Generate ensemble of perturbed observed data
+        if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
+
+            if hasattr(self, 'cov_data'):  # cd matrix has been imported
+                # enObs: samples from N(0,Cd)
+                enObs = cholesky(self.cov_data).T @ np.random.randn(self.cov_data.shape[0], self.ne)
+            else:
+                enObs = at.extract_tot_empirical_cov(
+                    self.datavar, 
+                    self.assim_index, 
+                    self.list_datatypes, 
+                    self.ne
+                )
+
+            # Screen data if required
+            if ('screendata' in self.keys_da) and (self.keys_da['screendata'] == 'yes'):
+                enObs = at.screen_data(
+                    enObs, 
+                    self.enPred, 
+                    vecObs, 
+                    self.iteration
+                )
+            
+            # Center the ensemble of perturbed observed data
+            enObs = vecObs[:, np.newaxis] - enObs
+            self.cov_data = np.var(enObs, ddof=1, axis=1)
             self.scale_data = np.sqrt(self.cov_data)
+        
         else:
             if not hasattr(self, 'cov_data'):  # if cd is not loaded
                 self.cov_data = at.gen_covdata(
-                    self.datavar, self.assim_index, self.list_datatypes)
+                    datavar = self.datavar,
+                    assim_index = self.assim_index,
+                    list_data = self.list_datatypes,
+                )
             # data screening
-            if 'screendata' in self.keys_da and self.keys_da['screendata'] == 'yes':
+            if ('screendata' in self.keys_da) and (self.keys_da['screendata'] == 'yes'):
                 self.cov_data = at.screen_data(
-                    self.cov_data, self.aug_pred_data, self.obs_data_vector, self.iteration)
-
-            init_en = Cholesky()  # Initialize GeoStat class for generating realizations
-            self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector, self.cov_data, self.ne,
-                                                                   return_chol=True)
+                    data = self.cov_data, 
+                    aug_pred_data = self.enPred, 
+                    obs_data_vector = vecObs, 
+                    iteration = self.iteration
+                )
+            
+            generator = Cholesky()  # Initialize GeoStat class for generating realizations
+            enObs, self.scale_data = generator.gen_real(
+                mean = vecObs, 
+                var = self.cov_data, 
+                number = self.ne,
+                return_chol = True
+            )
+        
+        return vecObs, enObs
 
     def _ext_scaling(self):
         # get vector of scaling
         self.state_scaling = at.calc_scaling(
-            self.prior_state, self.list_states, self.prior_info)
+            self.prior_enX, self.idX, self.prior_info)
+        
+        self.Am = None
 
-        delta_scaled_prior = self.state_scaling[:, None] * \
-            np.dot(at.aug_state(self.prior_state, self.list_states), self.proj)
-
-        u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
-
-        # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
-        # zero. This part is a good place to include eventual additional truncation.
-        energy = 0
-        trunc_index = len(s_d) - 1  # inititallize
-        for c, elem in enumerate(s_d):
-            energy += elem
-            if energy / sum(s_d) >= self.trunc_energy:
-                trunc_index = c  # take the index where all energy is preserved
-                break
-        u_d, s_d, v_d = u_d[:, :trunc_index +
-                            1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
-        self.Am = np.dot(u_d, np.eye(trunc_index+1) *
-                         ((s_d**(-1))[:, None]))  # notation from paper
-
-    def save_temp_state_assim(self, ind_save):
-        """
-        Method to save the state variable during the assimilation. It is stored in a list with length = tot. no.
-        assim. steps + 1 (for the init. ensemble). The list of temporary states are also stored as a .npz file.
-
-        Parameters
-        ----------
-        ind_save : int
-            Assim. step to save (0 = prior)
-        """
-        # Init. temp. save
-        if ind_save == 0:
-            # +1 due to init. ensemble
-            self.temp_state = [None]*(len(self.get_list_assim_steps()) + 1)
-
-        # Save the state
-        self.temp_state[ind_save] = deepcopy(self.state)
-        np.savez('temp_state_assim', self.temp_state)
-
-    def save_temp_state_iter(self, ind_save, max_iter):
-        """
-        Save a snapshot of state at current iteration. It is stored in a list with length equal to max. iteration
-        length + 1 (due to prior state being 0). The list of temporary states are also stored as a .npz file.
-
-        !!! warning
-            Max. iterations must be defined before invoking this method.
-
-        Parameters
-        ----------
-        ind_save : int
-            Iteration step to save (0 = prior)
-        """
-        # Initial save
-        if ind_save == 0:
-            self.temp_state = [None] * (int(max_iter) + 1)  # +1 due to init. ensemble
-
-        # Save state
-        self.temp_state[ind_save] = deepcopy(self.state)
-        np.savez('temp_state_iter', self.temp_state)
-
-    def save_temp_state_mda(self, ind_save):
-        """
-        Save a snapshot of the state during a MDA loop. The temporary state will be stored as a list with length
-        equal to the tot. no. of assimilations + 1 (init. ensemble saved in 0 entry). The list of temporary states
-        are also stored as a .npz file.
-
-        !!! warning
-            Tot. no. of assimilations must be defined before invoking this method.
-
-        Parameter
-        ---------
-        ind_save : int
-            Assim. step to save (0 = prior)
-        """
-        # Initial save
-        if ind_save == 0:
-            # +1 due to init. ensemble
-            self.temp_state = [None] * (int(self.tot_assim) + 1)
-
-        # Save state
-        self.temp_state[ind_save] = deepcopy(self.state)
-        np.savez('temp_state_mda', self.temp_state)
-
-    def save_temp_state_ml(self, ind_save):
-        """
-        Save a snapshot of the state during a ML loop. The temporary state will be stored as a list with length
-        equal to the tot. no. of assimilations + 1 (init. ensemble saved in 0 entry). The list of temporary states
-        are also stored as a .npz file.
-
-        !!! warning
-            Tot. no. of assimilations must be defined before invoking this method.
-
-        Parameters
-        ----------
-        ind_save : int
-            Assim. step to save (0 = prior)
-        """
-        # Initial save
-        if ind_save == 0:
-            # +1 due to init. ensemble
-            self.temp_state = [None] * (int(self.tot_assim) + 1)
-
-        # Save state
-        self.temp_state[ind_save] = deepcopy(self.state)
-        np.savez('temp_state_ml', self.temp_state)
 
     def compress_manager(self, data=None, vintage=0, aug_coeff=None):
         """
@@ -753,41 +672,64 @@ class Ensemble(PETEnsemble):
         Function for updates that can be used by all algorithms. Do this once to avoid duplicate code for local
         analysis.
         '''
+        # Copy original info to restore after local updates
         orig_list_data = deepcopy(self.list_datatypes)
         orig_list_state = deepcopy(self.list_states)
         orig_cd = deepcopy(self.cov_data)
         orig_real_obs_data = deepcopy(self.real_obs_data)
         orig_data_vector = deepcopy(self.obs_data_vector)
+
         # loop over the states that we want to update. Assume that the state and data combinations have been
         # determined by the initialization.
         # TODO: augment parameters with identical mask.
+
+        # REGION PARAMETERS
+        ############################################################################################################
         for state in self.local_analysis['region_parameter']:
-            self.list_datatypes = [elem for elem in self.list_datatypes if
-                                   elem in self.local_analysis['update_mask'][state]]
+            self.list_datatypes = [
+                elem for elem in self.list_datatypes if
+                elem in self.local_analysis['update_mask'][state]
+            ]
             self.list_states = [deepcopy(state)]
+
             self._ext_scaling()  # scaling for this state
             if 'localization' in self.keys_da:
                 self.localization.loc_info['field'] = self.state_scaling.shape
             del self.cov_data
+
             # reset the random state for consistency
             np.random.set_state(self.data_random_state)
-            self._ext_obs()  # get the data that's in the list of data.
-            _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                         self.list_datatypes)
-            # Mean pred_data and perturbation matrix with scaling
-            if len(self.scale_data.shape) == 1:
-                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
-            else:
-                self.pert_preddata = solve(
-                    self.scale_data, np.dot(self.aug_pred_data, self.proj))
+            self.vecObs, self.enObs = self.set_observations()
+            _, self.enPred = at.aug_obs_pred_data(
+                self.obs_data, 
+                self.pred_data, 
+                self.assim_index,
+                self.list_datatypes
+            )
 
-            aug_state = at.aug_state(self.current_state, self.list_states)
-            self.update()
+            # Get state ensemble for list_states
+            enX = []
+            idX = {}
+            for idx in self.list_states:
+                start, end = self.idX[idx]
+                tempX = self.enX[start:end, :]
+                enX.append(tempX)
+                idX[idx] = (enX.shape[0] - tempX.shape[0], enX.shape[0])
+
+            # Compute the analysis update
+            self.update(
+                enX = np.vstack(enX),
+                enY = self.enPred,
+                enE = self.enObs,
+            )
+
+            # Update the state
             if hasattr(self, 'step'):
-                aug_state_upd = aug_state + self.step
-            self.state = at.update_state(aug_state_upd, self.state, self.list_states)
+                self.enX_temp = self.enX + self.step
+        ############################################################################################################
 
+        # VECTOR REGION PARAMETERS
+        ############################################################################################################
         for state in self.local_analysis['vector_region_parameter']:
             current_list_datatypes = deepcopy(self.list_datatypes)
             for state_indx in range(self.state[state].shape[0]): # loop over the elements in the region
@@ -819,6 +761,8 @@ class Ensemble(PETEnsemble):
                     self.state[state][state_indx,:] = aug_state_upd
 
                 self.list_datatypes = deepcopy(current_list_datatypes)
+        ############################################################################################################
+
 
         for state in self.local_analysis['cell_parameter']:
             self.list_states = [deepcopy(state)]

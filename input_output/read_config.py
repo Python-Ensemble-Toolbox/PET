@@ -9,6 +9,18 @@ from yaml.loader import FullLoader
 import numpy as np
 
 
+def read(filename: str):
+    ''' Read configuration file. Supported formats are toml, .yaml, .pipt and .popt.'''
+    if filename.endswith('.pipt') or filename.endswith('.popt'):
+        return read_txt(filename)
+    elif filename.endswith('.yaml'):
+        return read_yaml(filename)
+    elif filename.endswith('.toml'):
+        return read_toml(filename)
+    else:
+        raise ValueError('File format not supported. Supported formats are toml, .yaml, .pipt, .popt')
+
+
 def convert_txt_to_yaml(init_file):
     # Read .pipt or .popt file
     pr, fwd = read_txt(init_file)
@@ -46,30 +58,31 @@ def read_yaml(init_file):
     # Add constructor to yaml with tag !ndarray
     yaml.add_constructor('!ndarray', ndarray_constructor)
 
-    # Read
+    # Read yaml file
     with open(init_file, 'rb') as fid:
         y = yaml.load(fid, Loader=FullLoader)
 
-    # Check for dataassim and fwdsim
+    # Check for ensemble
     if 'ensemble' in y.keys():
         keys_en = y['ensemble']
         check_mand_keywords_en(keys_en)
     else:
         keys_en = {}
 
-    if 'optim' in y.keys():
-        keys_pr = y['optim']
-        check_mand_keywords_opt(keys_pr)
-    elif 'dataassim' in y.keys():
+    # Check for dataassim
+    if 'dataassim' in y.keys():
         keys_pr = y['dataassim']
         check_mand_keywords_da(keys_pr)
+    elif 'optim' in y.keys():
+        keys_pr = y['optim']
+        check_mand_keywords_opt(keys_pr)
     else:
-        raise KeyError
+        keys_pr = {}
     
     if 'fwdsim' in y.keys():
         keys_fwd = y['fwdsim']
     else:
-        raise KeyError
+        keys_fwd = {}
 
     # Organize keywords
     org = Organize_input(keys_pr, keys_fwd, keys_en)
@@ -379,7 +392,7 @@ def check_mand_keywords_en(keys_en):
 
     # Mandatory keywords in ENSEMBLE
     assert 'ne' in keys_en, 'NE not in ENSEMBLE!'
-    assert 'state' in keys_en, 'STATE not in ENSEMBLE!'
+    assert ('state' in keys_en) or ('controls' in keys_en), 'STATE or CONTROLS not in ENSEMBLE!'
     if 'importstaticvar' not in keys_en:
         assert filter(list(keys_en.keys()),
                       'prior_*') != [], 'No PRIOR_<STATICVAR> in DATAASSIM'

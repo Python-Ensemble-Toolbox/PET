@@ -32,8 +32,8 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
         super().__init__(options, simulator, objective)
 
         # construct corr matrix
-        std = np.sqrt(np.diag(self.cov))
-        self.corr = self.cov/np.outer(std, std)
+        std = np.sqrt(np.diag(self.covX))
+        self.corr = self.covX/np.outer(std, std)
         self.dim  = std.size
 
         # choose marginal
@@ -61,16 +61,16 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
                 
             elif marginal == 'Logistic':
                 self.margs = Logistic()
-                self.theta = options.get('theta', self.margs.var_to_scale(np.diag(self.cov)))
+                self.theta = options.get('theta', self.margs.var_to_scale(np.diag(self.covX)))
 
             elif marginal == 'TruncGaussian':
                 lb, ub = np.array(self.bounds).T
                 self.margs = TruncGaussian(lb,ub)
-                self.theta = options.get('theta', np.sqrt(np.diag(self.cov)))
+                self.theta = options.get('theta', np.sqrt(np.diag(self.covX)))
 
             elif marginal == 'Gaussian':
                 self.margs = Gaussian()
-                self.theta = options.get('theta', np.sqrt(np.diag(self.cov)))
+                self.theta = options.get('theta', np.sqrt(np.diag(self.covX)))
     
     def get_theta(self):
         return self.theta
@@ -90,15 +90,15 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
     
     def gradient(self, x, *args, **kwargs):
 
-        # Set the ensemble state equal to the input control vector x
-        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
+        # Update state vector
+        self.stateX = x
 
         if args:
             self.theta, self.corr = args
 
         self.enZ = kwargs.get('enZ', None)
         self.enX = kwargs.get('enX', None)
-        self.enJ = kwargs.get('enJ', None)
+        self.enF = kwargs.get('enF', None)
 
         ne  = self.num_samples
         nr  = self._aux_input()
@@ -109,15 +109,15 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
             self.enX, self.enZ = self.sample(size=ne)
         
         # Evaluate
-        if self.enJ is None:
-            self.enJ = self.function(self._trafo_ensemble(x).T)
+        if self.enF is None:
+            self.enF = self.function(self._trafo_ensemble(x).T)
 
         self.avg_hess = np.zeros((dim,dim))
         self.avg_grad = np.zeros(dim)
 
         H = np.linalg.inv(self.corr)-np.eye(dim)
         O = np.ones((dim,dim))-np.eye(dim)
-        enJ = self.enJ - np.array(np.repeat(self.state_func_values, nr))
+        enF = self.enF - np.repeat(self.stateF, nr)
 
         for n in range(self.ne):
 
@@ -138,8 +138,8 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
             # calc grad and hess
             grad_log_p = G + D
             hess_log_p = np.diag(K)+M
-            self.avg_grad += enJ[n]*grad_log_p
-            self.avg_hess += enJ[n]*(np.outer(grad_log_p, grad_log_p) + hess_log_p)
+            self.avg_grad += enF[n]*grad_log_p
+            self.avg_hess += enF[n]*(np.outer(grad_log_p, grad_log_p) + hess_log_p)
 
         self.avg_grad = -self.avg_grad*self.grad_scale/ne
         self.avg_hess = self.avg_hess*self.hess_scale/ne
@@ -148,8 +148,8 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
 
     def hessian(self, x, *args, **kwargs):
 
-        # Set the ensemble state equal to the input control vector x
-        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
+        # Update state vector
+        self.stateX = x
 
         if kwargs.get('sample', False): 
             self.gradient(x, *args, **kwargs)
@@ -165,7 +165,7 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
 
         self.enZ = kwargs.get('enZ', None)
         self.enX = kwargs.get('enX', None)
-        self.enJ = kwargs.get('enJ', None)
+        self.enF = kwargs.get('enF', None)
 
         ne  = self.num_samples
         nr  = self._aux_input()
@@ -176,10 +176,10 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
             self.enX, self.enZ = self.sample(size=ne)
         
         # Evaluate
-        if self.enJ is None:
-            self.enJ = self.function(self._trafo_ensemble(x).T)
+        if self.enF is None:
+            self.enF = self.function(self._trafo_ensemble(x).T)
 
-        enJ = self.enJ - np.array(np.repeat(self.state_func_values, nr))
+        enF = self.enF - np.repeat(self.stateF, nr)
 
         self.nat_grad = np.zeros(dim)
         self.nat_hess = np.zeros(dim)
@@ -189,8 +189,8 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
             dm_log_p = self.margs.grad_theta_log_pdf(X, self.theta, mean=x)
             hm_log_p = self.margs.hess_theta_log_pdf(X, self.theta, mean=x)
 
-            self.nat_grad += enJ[n]*dm_log_p
-            self.nat_hess += enJ[n]*(hm_log_p + dm_log_p**2)
+            self.nat_grad += enF[n]*dm_log_p
+            self.nat_hess += enF[n]*(hm_log_p + dm_log_p**2)
         
         # Fisher
         self.nat_grad = self.nat_grad/ne
@@ -199,8 +199,8 @@ class GeneralizedEnsemble(EnsembleOptimizationBaseClass):
 
     def mutation_hessian(self, x, *args, **kwargs):
 
-        # Set the ensemble state equal to the input control vector x
-        self.state = ot.update_optim_state(x, self.state, list(self.state.keys()))
+        # Update state vector
+        self.stateX = x
 
         if kwargs.get('sample', False): 
             self.gradient(x, *args, **kwargs)

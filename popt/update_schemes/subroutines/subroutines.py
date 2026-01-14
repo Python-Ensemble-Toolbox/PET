@@ -81,6 +81,9 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
     if logger is None:
         logger = print
 
+    logger('Performing line search..........')
+    logger('──────────────────────────────────────────────────')
+
     # assertions
     assert step_size <= amax, "Initial step size must be less than or equal to amax."
 
@@ -131,6 +134,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
         if (phi_i > phi_0 + c1*a[i]*dphi_0) or (phi_i >= phi(a[i-1]) and i>0):
             # Call zoom function
             step_size = zoom(a[i-1], a[i], phi, dphi, phi_0, dphi_0, maxiter+1-i, c1, c2) 
+            logger('──────────────────────────────────────────────────')
             return step_size, phi.fun_val, dphi.jac_val, ls_nfev, ls_njev
 
         # Evaluate dphi(ai)
@@ -139,19 +143,23 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
         # Check curvature condition
         if abs(dphi_i) <= -c2*dphi_0:
             step_size = a[i]
+            logger('──────────────────────────────────────────────────')
             return step_size, phi.fun_val, dphi.jac_val, ls_nfev, ls_njev
         
         # Check for posetive derivative
         if dphi_i >= 0:
             # Call zoom function
-            step_size = zoom(a[i], a[i-1], phi, dphi, phi_0, dphi_0, maxiter+1-i, c1, c2) 
+            step_size = zoom(a[i], a[i-1], phi, dphi, phi_0, dphi_0, maxiter+1-i, c1, c2)
+            logger('──────────────────────────────────────────────────')
             return step_size, phi.fun_val, dphi.jac_val, ls_nfev, ls_njev
         
         # Increase ai
         a.append(min(2*a[i], amax))
+        logger(f'    Step-size: {a[i]:.3e} ──> {a[i+1]:.3e}')
         
     # If we reached this point, the line search failed
-    logger('Line search failed to find a suitable step size \n')
+    logger('Line search failed to find a suitable step size')
+    logger('──────────────────────────────────────────────────')
     return None, None, None, ls_nfev, ls_njev
             
 
@@ -178,6 +186,9 @@ def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2):
         # Ensure aj is within bounds
         if (aj is None) or (aj <  alo + tol_quad) or (aj > ahi - tol_quad):
                 aj = alo + 0.5*(ahi - alo)
+
+        
+        logger(f'    New step-size ──> {aj:.3e}')
 
         # Evaluate phi(aj)
         phi_j = f(aj)
@@ -213,6 +224,8 @@ def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2):
             dphi_lo = dphi_j
 
     # If we reached this point, the line search failed
+    logger('Line search failed to find a suitable step size')
+    logger('──────────────────────────────────────────────────')
     return None
 
 
@@ -280,6 +293,15 @@ def line_search_backtracking(step_size, xk, pk, fun, jac, fk=None, jk=None, **kw
     maxiter = kwargs.get('maxiter', 10)
     c1 = kwargs.get('c1', 1e-4)
 
+    # check for logger in kwargs
+    global logger
+    logger = kwargs.get('logger', None)
+    if logger is None:
+        logger = print
+
+    logger('Performing backtracking line search..........')
+    logger('──────────────────────────────────────────────────')
+
     # Define phi and derivative of phi
     @lru_cache(maxsize=None)
     def phi(alpha):
@@ -298,6 +320,7 @@ def line_search_backtracking(step_size, xk, pk, fun, jac, fk=None, jk=None, **kw
 
     # run the backtracking line search loop
     for i in range(maxiter):
+        logger(f'iteration: {i}')
         # Evaluate phi(alpha)
         phi_i = phi(step_size)
 
@@ -305,12 +328,15 @@ def line_search_backtracking(step_size, xk, pk, fun, jac, fk=None, jk=None, **kw
         if (phi_i <= phi(0) + c1*step_size*np.dot(jk, pk)):
                 # Evaluate jac at new point
                 jac_new = jac(xk + step_size*pk)
+                logger('──────────────────────────────────────────────────')
                 return step_size, phi_i, jac_new, ls_nfev, ls_njev
         
         # Reduce step size
         step_size *= rho  
 
     # If we reached this point, the line search failed
+    logger('Backtracking failed to find a suitable step size')
+    logger('──────────────────────────────────────────────────')
     return None, None, None, ls_nfev, ls_njev  
 
 
@@ -347,6 +373,7 @@ def newton_cg(gk, Hk=None, maxiter=None, **kwargs):
     if logger is None:
         logger = print
     
+    logger('')
     logger('Running Newton-CG subroutine..........')
 
     if Hk is None:

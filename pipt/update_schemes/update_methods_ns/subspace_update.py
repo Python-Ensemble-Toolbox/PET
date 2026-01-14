@@ -1,10 +1,7 @@
 """Stochastic iterative ensemble smoother (IES, i.e. EnRML) with *subspace* implementation."""
 
 import numpy as np
-from copy import deepcopy
-import copy as cp
-from scipy.linalg import solve, solve_banded, cholesky, lu_solve, lu_factor, inv
-import pickle
+from scipy.linalg import solve, lu_solve, lu_factor
 import pipt.misc_tools.analysis_tools as at
 
 
@@ -18,58 +15,50 @@ class subspace_update():
     Frontiers in Applied Mathematics and Statistics, 5(October), 114. https://doi.org/10.3389/fams.2019.00047
     """
 
-    def update(self):
+    def update(self, enX, enY, enE, **kwargs):
+
         if self.iteration == 1:  # method requires some initiallization
             self.current_W = np.zeros((self.ne, self.ne))
-            self.E = np.dot(self.real_obs_data, self.proj)
-        Y = np.dot(self.aug_pred_data, self.proj)
-        # Y = self.pert_preddata
+            self.E = np.dot(enE, self.proj)
+        
+        # Center ensemble matrices
+        Y = np.dot(enY, self.proj)
 
         omega = np.eye(self.ne) + np.dot(self.current_W, self.proj)
-        LU = lu_factor(omega.T)
-        S = lu_solve(LU, Y.T).T
+        S = lu_solve(lu_factor(omega.T), Y.T).T
 
-        # scaled_misfit = (self.aug_pred_data - self.real_obs_data)
-        if len(self.scale_data.shape) == 1:
-            scaled_misfit = (self.scale_data ** (-1)
-                             )[:, None] * (self.aug_pred_data - self.real_obs_data)
+        # Compute scaled misfit (residual between predicted and observed data)
+        enRes = self.scale(enY - enE, self.scale_data)
+
+        # Truncate SVD of S
+        Us, Ss, VsT = at.truncSVD(S, energy=self.trunc_energy)
+        Sinv = np.diag(1/Ss)
+
+        # Compute update step
+        X = Sinv @ Us.T @ self.scale(self.E, self.scale_data)
+        eigval, eigvec = np.linalg.eig(X @ X.T)
+        X2 = Us @ Sinv.T @ eigvec
+        X3 = S.T @ X2
+
+        lam_term = np.eye(len(eigval)) + (1+self.lam) * np.diag(eigval)
+        deltaM = X3 @ solve(lam_term, X3.T @ self.current_W)
+        deltaD = X3 @ solve(lam_term, X2.T @ enRes)
+        self.w_step = -self.current_W/(1 + self.lam) - (deltaD - deltaM)/(1 + self.lam)
+        
+
+    def scale(self, data, scaling):
+        """
+        Scale the data perturbations by the data error standard deviation.
+
+        Args:
+            data (np.ndarray): data perturbations
+            scaling (np.ndarray): data error standard deviation
+
+        Returns:
+            np.ndarray: scaled data perturbations
+        """
+
+        if len(scaling.shape) == 1:
+            return (scaling ** (-1))[:, None] * data
         else:
-            scaled_misfit = solve(
-                self.scale_data, (self.aug_pred_data - self.real_obs_data))
-
-        u, s, v = np.linalg.svd(S, full_matrices=False)
-        if self.trunc_energy < 1:
-            ti = (np.cumsum(s) / sum(s)) <= self.trunc_energy
-            if sum(ti) == 0:
-                # the first singular value contains more than the prescibed trucation energy.
-                ti[0] = True
-            u, s, v = u[:, ti].copy(), s[ti].copy(), v[ti, :].copy()
-
-        ps_inv = np.diag([el_s ** (-1) for el_s in s])
-        # if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
-        X = np.dot(ps_inv, np.dot(u.T, self.E))
-        if len(self.scale_data.shape) == 1:
-            X = np.dot(ps_inv, np.dot(u.T, (self.scale_data ** (-1))[:, None]*self.E))
-        else:
-            X = np.dot(ps_inv, np.dot(u.T, solve(self.scale_data, self.E)))
-        Lam, z = np.linalg.eig(np.dot(X, X.T))
-        # else:
-        #     X =  np.dot(np.dot(ps_inv, np.dot(u.T, np.diag(self.cov_data))),np.dot(u,ps_inv))
-        #     Lam, z = np.linalg.eig(X)
-        # Lam = s**2
-        # z = np.eye(len(s))
-
-        X2 = np.dot(u, np.dot(ps_inv.T, z))
-        X3 = np.dot(S.T, X2)
-
-        # X3_old = np.dot(X2, np.linalg.solve(np.eye(len(Lam)) + np.diag(Lam), X2.T))
-        step_m = np.dot(X3, solve(np.eye(len(Lam)) + (1+self.lam) *
-                        np.diag(Lam), np.dot(X3.T, self.current_W)))
-
-        step_d = np.dot(X3, solve(np.eye(len(Lam)) + (1+self.lam) *
-                        np.diag(Lam), np.dot(X2.T, scaled_misfit)))
-
-        # step_d = np.dot(np.linalg.inv(omega).T, np.dot(np.dot(Y.T, X2),
-        #                                                solve((np.eye(len(Lam)) + (self.lam+1)*np.diag(Lam)),
-        #                                                       np.dot(X2.T, scaled_misfit))))
-        self.w_step = -self.current_W/(1+self.lam) - (step_d - step_m/(1+self.lam))
+            return solve(scaling, data)
