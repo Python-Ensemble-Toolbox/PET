@@ -79,7 +79,8 @@ class localization():
         # Check localization method/type
         try:
             if 'autoadaloc' in parsed_info:
-                init_local = {'autoadaloc': True, 'nstd': parsed_info['autoadaloc']}
+                init_local['autoadaloc'] = True
+                init_local['nstd'] = parsed_info['autoadaloc']
                 if 'type' in parsed_info:
                     init_local['type'] = parsed_info['type']
             elif 'localanalysis' in parsed_info:

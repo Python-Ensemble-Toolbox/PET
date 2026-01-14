@@ -43,6 +43,8 @@ setup(
         'tomli-w',
         'pyyaml',
         'libecalc==8.23.1', # pin version to avoid frequent modifications
-        'scikit-learn'
+        'scikit-learn',
+        'pylops'
+
     ] + EXTRAS['doc'],
 )

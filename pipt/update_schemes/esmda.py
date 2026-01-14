@@ -117,6 +117,7 @@ class esmdaMixIn(Ensemble):
             self.prior_data_misfit_std = np.std(data_misfit)
             self.data_misfit = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
+            self.ensemble_misfit = data_misfit
 
             self.logger.info(
                 f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')

@@ -29,6 +29,8 @@ class EnOpt(Optimize):
     References
     ----------
     Chen et al., 2009, 'Efficient Ensemble-Based Closed-Loop Production Optimization', SPE Journal, 14 (4): 634-645.
+
+    TODO: Implement getter for optimize_result
     """
 
     def __init__(self, fun, x, args, jac, hess, bounds=None, **options):
@@ -61,11 +63,11 @@ class EnOpt(Optimize):
             - restart: restart optimization from a restart file (default false)
             - restartsave: save a restart file after each successful iteration (defalut false)
             - tol: convergence tolerance for the objective function (default 1e-6)
-            - alpha: step size for the steepest decent method (default 0.1)
+            - alpha: step size for the steepest descent method (default 0.1)
             - beta: momentum coefficient for running accelerated optimization (default 0.0)
             - alpha_maxiter: maximum number of backtracing trials (default 5)
             - resample: number indicating how many times resampling is tried if no improvement is found
-            - optimizer: 'GA' (gradient accent) or Adam (default 'GA')
+            - optimizer: 'GD' (gradient descent) or Adam (default 'GD')
             - nesterov: use Nesterov acceleration if true (default false)
             - hessian: use Hessian approximation (if the algorithm permits use of Hessian) (default false)
             - normalize: normalize the gradient if true (default true)
@@ -86,7 +88,7 @@ class EnOpt(Optimize):
 
         # Set input as class variables
         self.options = options  # options
-        self.fun = fun  # objective function
+        self._fun = fun  # objective function
         self.cov = args[0]  # initial covariance
         self.jac = jac  # gradient function
         self.hess = hess  # hessian function
@@ -112,7 +114,7 @@ class EnOpt(Optimize):
         # Calculate objective function of startpoint
         if not self.restart:
             self.start_time = time.perf_counter()
-            self.obj_func_values = self.fun(self.mean_state, **self.epf)
+            self.obj_func_values = self.fun(self.mean_state, epf=self.epf)
             self.nfev += 1
             self.optimize_result = ot.get_optimize_result(self)
             ot.save_optimize_results(self.optimize_result)
@@ -126,9 +128,9 @@ class EnOpt(Optimize):
                 self.logger.info('       {:<21} {:<15.4e}'.format(self.iteration, np.mean(self.obj_func_values)))
 
         # Initialize optimizer
-        optimizer = __set__variable('optimizer', 'GA')
-        if optimizer == 'GA':
-            self.optimizer = opt.GradientAscent(self.alpha, self.beta)
+        optimizer = __set__variable('optimizer', 'GD')
+        if optimizer == 'GD':
+            self.optimizer = opt.GradientDescent(self.alpha, self.beta)
         elif optimizer == 'Adam':
             self.optimizer = opt.Adam(self.alpha, self.beta)
         elif optimizer == 'AdaMax':
@@ -136,10 +138,31 @@ class EnOpt(Optimize):
             self.optimizer = opt.AdaMax(self.alpha, self.beta)
         elif optimizer == 'Steihaug':
             self.optimizer = opt.Steihaug(delta0=3.0)
+        else:
+            raise ValueError(f'Optimizer {optimizer} not recognized for EnOpt!')
 
         # The EnOpt class self-ignites, and it is possible to send the EnOpt class as a callale method to scipy.minimize
         self.run_loop()  # run_loop resides in the Optimization class (super)
 
+    def fun(self, x, *args, **kwargs):
+        return self._fun(x, *args, **kwargs)
+
+    @property
+    def xk(self):
+        return self.mean_state
+
+    @property
+    def fk(self):
+        return self.obj_func_values
+
+    @property
+    def ftol(self):
+        return self.obj_func_tol
+
+    @ftol.setter
+    def ftol(self, value):
+        self.obj_func_tol = value
+        
     def calc_update(self):
         """
         Update using steepest descent method with ensemble gradients
@@ -149,18 +172,20 @@ class EnOpt(Optimize):
         improvement = False
         success = False
         resampling_iter = 0
+        self.optimizer.restore_parameters()
 
-        while improvement is False:  # resampling loop
+        while not improvement:  # resampling loop
 
-            # Shrink covariance each time we try resampling
+            # Shrink covariance and step size each time we try resampling
             shrink = self.cov_factor ** resampling_iter
+            self.optimizer.apply_backtracking(np.sqrt(self.cov_factor)** resampling_iter) 
 
             # Calculate gradient
             if self.nesterov:
                 gradient = self.jac(self.mean_state + self.beta*self.state_step,
-                                    shrink*(self.cov + self.beta*self.cov_step), **self.epf)
+                                    shrink*(self.cov + self.beta*self.cov_step), epf=self.epf)
             else:
-                gradient = self.jac(self.mean_state, shrink*self.cov, **self.epf)
+                gradient = self.jac(self.mean_state, shrink*self.cov, epf=self.epf)
             self.njev += 1
 
             # Compute the hessian
@@ -177,14 +202,14 @@ class EnOpt(Optimize):
             # Initialize for this step
             alpha_iter = 0
 
-            while improvement is False:  # backtracking loop
+            while not improvement:  # backtracking loop
 
                 new_state, new_step = self.optimizer.apply_update(self.mean_state, gradient,
                                                                   hessian=hessian, iter=self.iteration)
                 new_state = ot.clip_state(new_state, self.bounds)
 
                 # Calculate new objective function
-                new_func_values = self.fun(new_state, **self.epf)
+                new_func_values = self.fun(new_state, epf=self.epf)
                 self.nfev += 1
 
                 if np.mean(self.obj_func_values) - np.mean(new_func_values) > self.obj_func_tol:

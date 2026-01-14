@@ -15,6 +15,7 @@ import datetime as dt
 from tqdm.auto import tqdm
 from p_tqdm import p_map
 import logging
+from geostat.decomp import Cholesky  # Making realizations
 
 # Internal imports
 import pipt.misc_tools.analysis_tools as at
@@ -24,7 +25,6 @@ from pipt.misc_tools import cov_regularization
 from pipt.misc_tools import wavelet_tools as wt
 from misc import read_input_csv as rcsv
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
-
 
 
 class Ensemble:
@@ -139,15 +139,24 @@ class Ensemble:
                 # individually).
                 self.state = {key: val for key, val in tmp_load.items()}
 
-                # Find the number of ensemble members from state variable
+                # Find the number of ensemble members from loaded state variables
                 tmp_ne = []
                 for tmp_state in self.state.keys():
                     tmp_ne.extend([self.state[tmp_state].shape[1]])
-                if max(tmp_ne) != min(tmp_ne):
-                    print('\033[1;33mInput states have different ensemble size\033[1;m')
-                    sys.exit(1)
-                self.ne = min(tmp_ne)
-                
+
+                if 'ne' not in self.keys_en: # NE not specified in input file
+                    if max(tmp_ne) != min(tmp_ne): #Check loaded ensembles are the same size (if more than one state variable)
+                        print('\033[1;33mInput states have different ensemble size\033[1;m')
+                        sys.exit(1)
+                    self.ne = min(tmp_ne) # Use the number of ensemble members in loaded ensemble
+                else:
+                    # Use the number of ensemble members specified in input file (may be fewer than loaded)
+                    self.ne = int(self.keys_en['ne'])
+                    if self.ne <= min(tmp_ne):
+                        # pick correct number of ensemble members
+                        self.state = {key: val[:,:self.ne] for key, val in self.state.items()}
+                    else:
+                        print('\033[1;33mInput states are smaller than NE\033[1;m')
         if 'multilevel' in self.keys_en:
             ml_info = extract.extract_multilevel_info(self.keys_en)
             self.multilevel, self.tot_level, self.ml_ne, self.ML_error_corr, self.error_comp_scheme, self.ML_corr_done = ml_info
@@ -338,6 +347,20 @@ class Ensemble:
             # Index list of ensemble members
             list_member_index = list(range(self.ne))
 
+            # modified by xluo, for including the simulation of the mean reservoir model
+            # as used in the RLM-MAC algorithm
+            if 'daalg' in self.keys_en and self.keys_en['daalg'][1] == 'gies':
+                list_state.append({})
+                list_member_index.append(self.ne)
+
+                for key in self.state.keys():
+                    tmp_state = np.zeros(list_state[0][key].shape[0])
+
+                    for i in range(self.ne):
+                        tmp_state += list_state[i][key]
+
+                    list_state[self.ne][key] = tmp_state / self.ne
+
             if no_tot_run==1: # if not in parallel we use regular loop
                 en_pred = [self.sim.run_fwd_sim(state, member_index) for state, member_index in
                            tqdm(zip(list_state, list_member_index), total=len(list_state))]
@@ -392,6 +415,7 @@ class Ensemble:
             else: # Run prediction in parallel using p_map
                 en_pred = p_map(self.sim.run_fwd_sim, list_state,
                                 list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
+
             # List successful runs and crashes
             list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
             list_success = [indx for indx, el in enumerate(en_pred) if el is not False]
@@ -433,7 +457,7 @@ class Ensemble:
                     en_pred[list_crash[indx]] = deepcopy(en_pred[el])
  
             # Convert ensemble specific result into pred_data, and filter for NONE data
-            self.pred_data.extend([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
+            self.pred_data.extend([{typ: np.concatenate(tuple((np.atleast_2d(el[ind][typ]).T) for el in en_pred), axis=1)
                                     if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
                                     else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
 
@@ -486,7 +510,7 @@ class Ensemble:
         """
 
         no_tot_run = int(self.sim.input_dict['parallel'])
-        ml_pred_data = []
+        ml_pred_data = ml_pred_data = [[] for _ in range(max(self.multilevel['levels'])+1)] # Ensure that the list is long enough
 
         for level in tqdm(self.multilevel['levels'], desc='Fidelity level', position=1):
             # Setup forward simulator and redundant simulator at the correct fidelity
@@ -516,9 +540,60 @@ class Ensemble:
                 # Index list of ensemble members
                 list_member_index = list(ml_ne)
 
-                # Run prediction in parallel using p_map
-                en_pred = p_map(self.sim.run_fwd_sim, list_state,
-                                list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
+                if no_tot_run==1: # if not in parallel we use regular loop
+                    en_pred = [self.sim.run_fwd_sim(state, member_index) for state, member_index in
+                                tqdm(zip(list_state, list_member_index), total=len(list_state))]
+                elif self.sim.input_dict.get('hpc', False): # Run prediction in parallel on hpc
+                    batch_size = no_tot_run # If more than 500 ensemble members, we limit the runs to batches of 500
+                    # Split the ensemble into batches of 500
+                    if batch_size >= 1000:
+                        self.logger.info(f'Cannot run batch size of {no_tot_run}. Set to 1000')
+                        batch_size = 1000
+                    en_pred = []
+                    batch_en = [np.arange(start, start + batch_size) for start in
+                                np.arange(0, len(ml_ne) - batch_size, batch_size)]
+                    if len(batch_en): # if len(ml_ne) is less than batch_size
+                        batch_en.append(np.arange(batch_en[-1][-1]+1, len(ml_ne)))
+                    else:
+                        batch_en.append(np.arange(0, len(ml_ne)))
+                    for n_e in batch_en:
+                        _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
+                                zip([list_state[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]
+                        # Run call_sim on the hpc
+                        if self.sim.options['mpiarray']:
+                            job_id = self.sim.SLURM_ARRAY_HPC_run(
+                                                                n_e,
+                                                                venv=os.path.join(os.path.dirname(sys.executable), 'activate'),
+                                                                filename=self.sim.file,
+                                                                **self.sim.options
+                                                            )
+                        else:
+                            job_id=self.sim.SLURM_HPC_run(
+                                                        n_e, 
+                                                        venv=os.path.join(os.path.dirname(sys.executable),'activate'),
+                                                        filename=self.sim.file,
+                                                        **self.sim.options
+                                                        )
+                        
+                        # Wait for the simulations to finish
+                        if job_id:
+                            sim_status = self.sim.wait_for_jobs(job_id)
+                        else:
+                            print("Job submission failed. Exiting.")
+                            sim_status = [False]*len(n_e)
+                        # Extract the results. Need a local counter to check the results in the correct order
+                        for c_member, member_i in enumerate([list_member_index[curr_n] for curr_n in n_e]):
+                            if sim_status[c_member]:
+                                self.sim.extract_data(member_i)
+                                en_pred.append(deepcopy(self.sim.pred_data))
+                                if self.sim.saveinfo is not None:  # Try to save information
+                                    store_ensemble_sim_information(self.sim.saveinfo, member_i)
+                            else:
+                                en_pred.append(False)
+                            self.sim.remove_folder(member_i)
+                else: # Run prediction in parallel using p_map
+                    en_pred = p_map(self.sim.run_fwd_sim, list_state,
+                                    list_member_index, num_cpus=no_tot_run, disable=self.disable_tqdm)
 
                 # List successful runs and crashes
                 list_crash = [indx for indx, el in enumerate(en_pred) if el is False]
@@ -560,13 +635,34 @@ class Ensemble:
                         en_pred[list_crash[indx]] = deepcopy(en_pred[el])
 
                 # Convert ensemble specific result into pred_data, and filter for NONE data
-                ml_pred_data.append([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
-                                      if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
-                                      else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
+            ml_pred_data[level].extend([{typ: np.concatenate(tuple((np.atleast_2d(el[ind][typ]).T) for el in en_pred), axis=1)
+                                  if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
+                                  else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
 
+        empty_indices = [i for i, entry in enumerate(ml_pred_data) if not isinstance(entry, list) or not entry]
+        filled_idx = next(
+                        (i for i, entry in enumerate(ml_pred_data) if isinstance(entry, list) and entry),
+                        None
+                        )
+
+        if len(empty_indices):
+            # fill the emply list with correct structure
+            template = deepcopy(ml_pred_data[filled_idx])
+            empty_struct = [#{
+                            #key: None
+                            #for key, val in template_elem.items()
+                            #}
+                            None for template_elem in template]
+            for idx in empty_indices:
+                ml_pred_data[idx] = empty_struct
         # loop over time instance first, and the level instance.
         self.pred_data = np.array(ml_pred_data).T.tolist()
 
+        # Treat scaling
+        if 'scaling' in self.multilevel:
+            self.pred_data = self.treat_scaling(self.multilevel['scaling'],self.pred_data,self.multilevel['scaling_map'])
+            # this is for fidelity specific scaling of output
+            
         if hasattr(self,'treat_modeling_error'):
             self.treat_modeling_error()
 

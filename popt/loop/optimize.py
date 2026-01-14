@@ -4,6 +4,7 @@ import numpy as np
 import logging
 import time
 import pickle
+from abc import ABC, abstractmethod
 
 # Internal imports
 import popt.misc_tools.optim_tools as ot
@@ -20,7 +21,7 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 
-class Optimize:
+class Optimize(ABC):
     """
     Class for ensemble optimization algorithms. These are classified by calculating the sensitivity or gradient using
     ensemble instead of classical derivatives. The loop is else as a classic optimization loop: a state (or control
@@ -103,16 +104,34 @@ class Optimize:
 
         # Initialize variables (set in subclasses)
         self.options = None
-        self.mean_state = None
         self.obj_func_values = None
-        self.fun = None  # objective function
-        self.obj_func_tol = None  # objective tolerance limit
 
         # Initialize number of function and jacobi evaluations
         self.nfev = 0
         self.njev = 0
 
         self.msg = 'Convergence was met :)'
+
+    # Abstract function that subclasses are forced to define
+    @abstractmethod
+    def fun(self, x, *args, **kwargs):  # objective function
+        pass
+
+    # Abstract properties that subclasses are forced to define
+    @property
+    @abstractmethod
+    def xk(self):  # current state
+        pass
+
+    @property
+    @abstractmethod
+    def ftol(self):  # function tolerance
+        pass
+
+    @ftol.setter
+    @abstractmethod
+    def ftol(self, value):  # setter for function tolerance
+        pass
 
     def run_loop(self):
         """
@@ -137,7 +156,7 @@ class Optimize:
         epf_not_converged = True
         previous_state = None
         if self.epf:
-            previous_state = self.mean_state
+            previous_state = self.xk
             logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {self.epf["r"]} (outer iteration, penalty factor)')  # print epf info
 
         while epf_not_converged:  # outer loop using epf
@@ -177,15 +196,19 @@ class Optimize:
                 if self.epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
                     logger.info(f'       -----> EPF-EnOpt: maximum epf iterations reached')  # print epf info
                     break
-                p = np.abs(previous_state-self.mean_state) / (np.abs(previous_state) + 1.0e-9)
+                p = np.abs(previous_state-self.xk) / (np.abs(previous_state) + 1.0e-9)
                 conv_crit = self.epf['conv_crit']
                 if np.any(p > conv_crit):
                     epf_not_converged = True
-                    previous_state = self.mean_state
+                    previous_state = self.xk
                     self.epf['r'] *= self.epf['r_factor']  # increase penalty factor
-                    self.obj_func_tol *= self.epf['tol_factor']  # decrease tolerance
-                    self.obj_func_values = self.fun(self.mean_state, **self.epf)
+                    self.ftol *= self.epf['tol_factor']  # decrease tolerance
+                    self.obj_func_values = self.fun(self.xk, epf = self.epf)
                     self.iteration = 0
+                    info_str = '       {:<10} {:<10} {:<15} {:<15} {:<15} '.format('iter', 'alpha_iter',
+                                                                                   'obj_func', 'step-size', 'cov[0,0]')
+                    self.logger.info(info_str)
+                    self.logger.info('       {:<21} {:<15.4e}'.format(self.iteration, np.mean(self.obj_func_values)))
                     self.epf_iteration += 1
                     optimize_result = ot.get_optimize_result(self)
                     ot.save_optimize_results(optimize_result)
@@ -195,8 +218,9 @@ class Optimize:
                     logger.info(f'       -----> EPF-EnOpt: {self.epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
                 else:
                     logger.info(f'       -----> EPF-EnOpt: converged, no variables changed more than {conv_crit*100} %')  # print epf info
-                    final_obj_no_penalty = str(round(float(self.fun(self.mean_state)),4))
+                    final_obj_no_penalty = str(round(float(np.mean(self.fun(self.xk))),4))
                     logger.info(f'       -----> EPF-EnOpt: objective value without penalty = {final_obj_no_penalty}') # print epf info
+
 
     def save(self):
         """
@@ -217,6 +241,7 @@ class Optimize:
         # Save in 'self'
         self.__dict__.update(tmp_load)
 
+    @abstractmethod
     def calc_update(self):
         """
         This is an empty dummy function. Actual functionality must be defined by the subclasses.

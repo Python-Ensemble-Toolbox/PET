@@ -174,7 +174,7 @@ class Ensemble(PETEnsemble):
     def _org_obs_data(self):
         """
         Organize the input true observed data. The obs_data will be a list of length equal length of "TRUEDATAINDEX",
-        and each entery in the list will be a dictionary with keys equal to the "DATATYPE".
+        and each entry in the list will be a dictionary with keys equal to the "DATATYPE".
         Also, the pred_data variable (predicted data or forward simulation) will be initialized here with the same
         structure as the obs_data variable.
 
@@ -287,7 +287,7 @@ class Ensemble(PETEnsemble):
                     if self.sparse_info is not None and \
                             vintage < len(self.sparse_info['mask']) and \
                             len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
-                        data_array = self.compress(data_array, vintage, False)
+                        data_array = self.compress_manager(data_array, vintage, False)
                         vintage = vintage + 1
 
                     # Save array in obs_data. If it is an array with single value (not list), then we convert it to a
@@ -321,7 +321,7 @@ class Ensemble(PETEnsemble):
                         if self.sparse_info is not None and \
                                 vintage < len(self.sparse_info['mask']) and \
                                 len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
-                            data_array = self.compress(data_array, vintage, False)
+                            data_array = self.compress_manager(data_array, vintage, False)
                             vintage = vintage + 1
 
                         # Save array in obs_data. If it is an array with single value (not list), then we convert it to a
@@ -540,7 +540,24 @@ class Ensemble(PETEnsemble):
         self.state_scaling = at.calc_scaling(
             self.prior_state, self.list_states, self.prior_info)
 
-        self.Am = None
+        delta_scaled_prior = self.state_scaling[:, None] * \
+            np.dot(at.aug_state(self.prior_state, self.list_states), self.proj)
+
+        u_d, s_d, v_d = np.linalg.svd(delta_scaled_prior, full_matrices=False)
+
+        # remove the last singular value/vector. This is because numpy returns all ne values, while the last is actually
+        # zero. This part is a good place to include eventual additional truncation.
+        energy = 0
+        trunc_index = len(s_d) - 1  # inititallize
+        for c, elem in enumerate(s_d):
+            energy += elem
+            if energy / sum(s_d) >= self.trunc_energy:
+                trunc_index = c  # take the index where all energy is preserved
+                break
+        u_d, s_d, v_d = u_d[:, :trunc_index +
+                            1], s_d[:trunc_index + 1], v_d[:trunc_index + 1, :]
+        self.Am = np.dot(u_d, np.eye(trunc_index+1) *
+                         ((s_d**(-1))[:, None]))  # notation from paper
 
     def save_temp_state_assim(self, ind_save):
         """
@@ -628,7 +645,7 @@ class Ensemble(PETEnsemble):
         self.temp_state[ind_save] = deepcopy(self.state)
         np.savez('temp_state_ml', self.temp_state)
 
-    def compress(self, data=None, vintage=0, aug_coeff=None):
+    def compress_manager(self, data=None, vintage=0, aug_coeff=None):
         """
         Compress the input data using wavelets.
 
@@ -694,7 +711,7 @@ class Ensemble(PETEnsemble):
 
             data_array = None
 
-        elif aug_coeff is None:
+        elif aug_coeff is None: # compress predicted data
 
             data_array, wdec_rec = self.sparse_data[vintage].compress(data)
             rec = self.sparse_data[vintage].reconstruct(
@@ -703,7 +720,7 @@ class Ensemble(PETEnsemble):
                 self.data_rec.append([])
             self.data_rec[vintage].append(rec)
 
-        elif not aug_coeff:
+        elif not aug_coeff: # compress true data, aug_coeff = false
 
             options = copy(self.sparse_info)
             # find the correct mask for the vintage

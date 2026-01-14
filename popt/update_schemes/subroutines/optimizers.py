@@ -1,12 +1,12 @@
 """Gradient acceleration."""
 import numpy as np
 
-__all__ = ['GradientAscent', 'Adam', 'AdaMax', 'Steihaug', ]
+__all__ = ['GradientDescent', 'Adam', 'AdaMax', 'Steihaug', ]
 
 
-class GradientAscent:
+class GradientDescent:
     r"""
-    A class for performing gradient ascent optimization with momentum and backtracking.
+    A class for performing gradient descent optimization with momentum and backtracking.
     The gradient descent update equation with momentum is given by:
 
     $$ \begin{align}
@@ -52,7 +52,7 @@ class GradientAscent:
         Parameters
         ----------
         step_size : float
-            The step size (learning rate) for the gradient ascent.
+            The step size (learning rate) for the gradient descent.
 
         momentum : float
             The momentum factor to apply during updates.
@@ -72,7 +72,7 @@ class GradientAscent:
         Apply a gradient update to the control parameter.
 
         !!! note
-            This is the steepest decent update: x_new = x_old - x_step.
+            This is the steepest descent update: x_new = x_old - x_step.
 
         Parameters
         -------------------------------------------------------------------------------------
@@ -124,12 +124,12 @@ class GradientAscent:
         new_control = (1-alpha) * control + alpha * gradient
         return new_control
 
-    def apply_backtracking(self):
+    def apply_backtracking(self, shrink=0.5):
         """
         Apply backtracking by reducing step size and momentum temporarily.
         """
-        self._step_size = 0.5*self._step_size
-        self._momentum  = 0.5*self._momentum
+        self._step_size = shrink*self._step_size
+        self._momentum  = shrink*self._momentum
     
     def restore_parameters(self):
         """
@@ -240,7 +240,7 @@ class Adam:
         Apply a gradient update to the control parameter.
 
         !!! note
-            This is the steepest decent update: x_new = x_old - x_step.
+            This is the steepest descent update: x_new = x_old - x_step.
 
         Parameters
         -------------------------------------------------------------------------------------
@@ -269,7 +269,7 @@ class Adam:
         vel2_hat  = self.temp_vel2/(1-beta2**iter)
 
         step = alpha*vel1_hat/(np.sqrt(vel2_hat)+self.eps)
-        new_control = control - step  # steepest decent
+        new_control = control - step  # steepest descent
         return new_control, step
 
     def apply_backtracking(self):

@@ -60,7 +60,7 @@ def extract_prior_info(keys: dict) -> dict:
         # loop over keys in prior
         for key in prior.keys():
             # ensure that entry is a list
-            if (not isinstance(prior[key], list)) and (key != 'mean'):
+            if (not isinstance(prior[key], list)) and (key != 'mean') and (key != 'active'):
                 prior[key] = [prior[key]]
 
         # change the name of some keys
@@ -127,8 +127,9 @@ def extract_multilevel_info(keys: Union[dict, list]) -> dict:
     Extract the info needed for ML simulations. Note if the ML keyword is not in keys_en we initialize
     such that we only have one level -- the high fidelity one
     '''
-    if isinstance(keys, list):
-        ml_info = list_to_dict(keys)
+    ml_info = keys['multilevel']
+    if isinstance(ml_info, list):
+        ml_info = list_to_dict(ml_info)
     assert isinstance(ml_info, dict)
     
     # Set levels
@@ -143,6 +144,8 @@ def extract_multilevel_info(keys: Union[dict, list]) -> dict:
     # Set multi-level error
     if not 'ml_error_corr' in ml_info:
         ml_error_corr = 'none'
+        error_comp_scheme = 'none'
+        ml_corr_done = True
     else:
         ml_error_corr = ml_info['ml_error_corr'][0]
         ml_corr_done = False
@@ -238,7 +241,7 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
     info : dict or list
         Input configuration for sparse representation. If a list, it will be converted
         to a dictionary. Expected keys include:
-            - 'dim': list of 3 ints, the dimensions of the data grid.
+            - 'dim': list of ints, the dimensions of the data to be compressed
             - 'mask': list of filenames for mask arrays.
             - 'level', 'wname', 'threshold_rule', 'th_mult', 'order', 'min_noise',
               'colored_noise', 'use_hard_th', 'keep_ca', 'inactive_value', 'use_ensemble'.
@@ -257,19 +260,21 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
 
     # Redefine all 'yes' and 'no' values to bool
     for key, val in info.items():
-        if val == 'yes': info[key] == True
-        if val == 'no':  info[key] == False
+        if val == 'yes': info[key] = True
+        if val == 'no':  info[key] = False
 
     # Intial dict
     sparse = {}
 
-    # Flip dim to align with flow/eclipse
-    dim = [int(x) for x in info['dim']]
-    sparse['dim'] = [dim[2], dim[1], dim[0]]
+    sparse['dim']  = [int(x) for x in info['dim']]
 
     # Read mask_files
-    sparse['mask'] = [] 
-    for idx, filename in enumerate(info['mask'], start=1):
+    sparse['mask'] = []
+    m_info = info['mask']
+    # allow for one mask with filename given as string
+    if isinstance(m_info, str):
+        m_info = [m_info]
+    for idx, filename in enumerate(m_info, start=1):
         if not os.path.exists(filename):
             mask = np.ones(sparse['dim'], dtype=bool)
             np.savez(f'mask_{idx}.npz', mask=mask)
@@ -289,6 +294,7 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
     sparse['keep_ca'] = info.get('keep_ca', False)
     sparse['inactive_value'] = info['inactive_value']
     sparse['use_ensemble'] = info.get('use_ensemble', None)
+    if sparse['use_ensemble'] == False: sparse['use_ensemble'] = None
 
     return sparse
 

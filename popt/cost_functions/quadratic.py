@@ -4,7 +4,7 @@ import numpy as np
 from popt.cost_functions.epf import epf
 
 
-def quadratic(state, *args, **kwargs):
+def quadratic(x, *args, **kwargs):
 	r"""Quadratic objective function
 
 	$$ f(x) = ||x - b||^2_A $$
@@ -12,7 +12,7 @@ def quadratic(state, *args, **kwargs):
 
 	r = kwargs.get('r', -1)
 
-	x = state[0]['vector']
+	x = x[0]['vector']
 	dim, ne = x.shape
 	A = 0.5*np.diag(np.ones(dim))
 	b = 1.0*np.ones(dim)
