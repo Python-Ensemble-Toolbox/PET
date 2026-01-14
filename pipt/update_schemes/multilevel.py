@@ -160,7 +160,7 @@ class esmda_hybrid(multilevel,hybrid_update,esmdaMixIn):
 
             for l in range(self.tot_level):
                 self.ml_enObs[l], self.scale_data[l] = cholesky.gen_real(
-                    self.ml_enObs[l],
+                    self.vecObs,
                     self.alpha[self.iteration - 1] * self.cov_data,
                     self.ml_ne[l],
                     return_chol=True
@@ -192,7 +192,7 @@ class esmda_hybrid(multilevel,hybrid_update,esmdaMixIn):
         for l in range(self.tot_level):
             _, enPred_level = at.aug_obs_pred_data(
                 self.obs_data, 
-                [el[l] for el in self.enX_temp], 
+                [el[l] for el in self.pred_data], 
                 self.assim_index,
                 self.list_datatypes
             )

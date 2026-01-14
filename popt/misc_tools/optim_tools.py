@@ -120,28 +120,20 @@ def toggle_ml_state(state, ml_ne):
     """
 
     if not isinstance(state,list):
-        L = len(ml_ne)  # number of levels
 
         # initialize the state as an empty list of dictionaries with length equal self.tot_level
-        new_state = [{} for _ in range(L)]
+        new_state = []
 
         # distribute the initial ensemble of states to the levels according to the given ensemble size.
         start = 0 # initialize
-        for l in range(L):
+        for l in range(len(ml_ne)):
             stop = start + ml_ne[l]
-            for el in state.keys():
-                new_state[l][el] = state[el][:,start:stop]
+            new_state.append(state[:,start:stop])
             start = stop
 
         del state
     else:  # state is a list of levels
-        new_state = {}
-        for l in range(len(state)):
-            for el in state[l].keys():
-                if el in new_state:
-                    new_state[el] = np.hstack((new_state[el], state[l][el]))
-                else:
-                    new_state[el] = state[l][el]
+        new_state = np.hstack(state)
 
     return new_state
 

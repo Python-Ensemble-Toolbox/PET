@@ -113,18 +113,10 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
 
         # Run simulation
         x = self.invert_scale_state(x)
+        x = self._reorganize_multilevel_ensemble(x)
         run_success = self.calc_prediction(enX=x, save_prediction=self.save_prediction)
+        x = self._reorganize_multilevel_ensemble(x)
         x = self.scale_state(x).squeeze()
-
-        # convert x (nparray) to state (dict)
-        #self.state = self.vec_to_state(x)
-
-        # run the simulation
-        #self._invert_scale_state()  # ensure that state is in [lb,ub]
-        #self._set_multilevel_state(self.state, x)  # set multilevel state if applicable
-        #run_success = self.calc_prediction(save_prediction=self.save_prediction)  # calculate flow data
-        #self._set_multilevel_state(self.state, x) # For some reason this has to be done again after calc_prediction
-        #self._scale_state()  # scale back to [0, 1]
 
         # Evaluate the objective function
         if run_success:
@@ -254,11 +246,12 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
             np.savez_compressed(path + 'stateX.npz', **state_dict)
         elif filetype == 'npy':
             np.save(path + 'stateX.npy', stateX)
-
-    def _set_multilevel_state(self, state, x):
-        if 'multilevel' in self.keys_en.keys() and len(x.shape) > 1:  
-            en_size = ot.get_list_element(self.keys_en['multilevel'], 'en_size')
-            self.state = ot.toggle_ml_state(self.state, en_size)
+    
+    def _reorganize_multilevel_ensemble(self, x):
+        if ('multilevel' in self.keys_en) and (len(x.shape) > 1):  
+            ml_ne = self.keys_en['multilevel']['ml_ne']
+            x = ot.toggle_ml_state(x, ml_ne)
+            return x
 
 
     def _aux_input(self):
