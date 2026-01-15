@@ -3,33 +3,17 @@ Here we place the classes that are required to run the multilevel schemes develo
 inherit the ensemble class, hence the main loop is inherited. These classes will consider the analysis step.
 '''
 
-# local imports. Note, it is assumed that PET is installed and available in the path.
+#──────────────────────────────────────────────────────────────────────────────────────
 from pipt.loop.ensemble import Ensemble
-from pipt.update_schemes.esmda import esmda_approx
 from pipt.update_schemes.esmda import esmdaMixIn
 from pipt.misc_tools import analysis_tools as at
 import pipt.misc_tools.ensemble_tools as entools
 from geostat.decomp import Cholesky
-from misc import ecl
-
 from pipt.update_schemes.update_methods_ns.hybrid_update import hybrid_update
-# system imports
+
 import numpy as np
-from scipy.sparse import coo_matrix
-from scipy import linalg
-import time
-import shutil
-import pickle
-from scipy.linalg import solve      # For linear system solvers
-from scipy.stats import multivariate_normal
-from scipy import sparse
 from copy import deepcopy
-import random
-import os
-import sys
-from scipy.stats import ortho_group
-from shutil import copyfile
-import math
+#──────────────────────────────────────────────────────────────────────────────────────
 
 
 __all__ = ['multilevel', 'esmda_hybrid']
