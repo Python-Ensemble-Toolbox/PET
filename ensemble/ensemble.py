@@ -422,7 +422,7 @@ class Ensemble:
         no_tot_run = int(self.sim.input_dict['parallel'])
         ml_pred_data = []
 
-        for level in tqdm(self.multilevel['levels'], desc='Fidelity level', position=1):
+        for level in tqdm(self.multilevel['levels'], desc='Fidelity level', position=1, **progbar_settings):
 
             # Setup forward simulator and redundant simulator at the correct fidelity
             if self.sim.redund_sim is not None:
