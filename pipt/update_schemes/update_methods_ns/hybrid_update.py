@@ -59,7 +59,7 @@ class hybrid_update:
             else:
                 enXcentered.append(self.scale(np.dot(enX[l], self.proj[l]), self.state_scaling))
 
-            # Calculet truncated SVD of predicted data ensemble at level l 
+            # Calculate truncated SVD of predicted data ensemble at level l 
             enYcentered = self.scale(np.dot(enY[l], self.proj[l]), self.scale_data[l])
             Ud, Sd, VTd = at.truncSVD(enYcentered, energy=self.trunc_energy)
 
