@@ -62,8 +62,13 @@ class multilevel(Ensemble):
         self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
         self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
 
-        self.cov_data = at.gen_covdata(self.datavar, self.assim_index, self.list_datatypes)
-        self.vecObs, self.enObs = self.set_observations()
+        self.cov_data  = at.gen_covdata(self.datavar, self.assim_index, self.list_datatypes)
+        self.vecObs, _ = at.aug_obs_pred_data(
+            self.obs_data, 
+            self.pred_data, 
+            self.assim_index,
+            self.list_datatypes
+        )
 
     def _init_sim(self):
         """
@@ -122,7 +127,7 @@ class esmda_hybrid(multilevel,hybrid_update,esmdaMixIn):
 
             # Note, evaluate for high fidelity model
             data_misfit = at.calc_objectivefun(
-                self.enObs, 
+                self.enObs_conv, 
                 np.concatenate(self.enPred,axis=1), # Is this correct, given the comment above??????
                 self.cov_data
             )
@@ -199,7 +204,7 @@ class esmda_hybrid(multilevel,hybrid_update,esmdaMixIn):
             enPred.append(enPred_level)
 
         data_misfit = at.calc_objectivefun(
-            self.enObs, 
+            self.enObs_conv, 
             np.concatenate(enPred,axis=1), 
             self.cov_data
         )
