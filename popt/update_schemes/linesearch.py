@@ -199,7 +199,7 @@ class LineSearchClass(Optimize):
         else:
             self.callback = None
 
-        # Remove 'datatype' form options if present (This is a temporary bugfix)
+        # Remove 'datatype' from options if present (This is a temporary bugfix)
         self.options.pop('datatype', None)
 
         # Custom convergence criteria (callable)
