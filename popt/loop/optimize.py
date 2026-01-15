@@ -3,13 +3,14 @@ import os
 import numpy as np
 import time
 import pickle
+from abc import ABC, abstractmethod
 
 # Internal imports
 import popt.misc_tools.optim_tools as ot
 from ensemble.logger import PetLogger
 
 
-class Optimize:
+class Optimize(ABC):
     """
     Class for ensemble optimization algorithms. These are classified by calculating the sensitivity or gradient using
     ensemble instead of classical derivatives. The loop is else as a classic optimization loop: a state (or control
@@ -94,7 +95,6 @@ class Optimize:
         self.options = None
         self.mean_state = None
         self.obj_func_values = None
-        self.fun = None  # objective function
         self.obj_func_tol = None  # objective tolerance limit
 
         # Initialize number of function and jacobi evaluations

@@ -233,7 +233,7 @@ class Ensemble:
             # Run setup function for simulator
             if hasattr(self.sim, 'setup_fwd_run'):
                 self.sim.setup_fwd_run(redund_sim=self.sim.redund_sim)
-        
+                
             # Convert ensemble matrix to list of dictionaries
             enX = entools.matrix_to_list(enX, self.idX)
 

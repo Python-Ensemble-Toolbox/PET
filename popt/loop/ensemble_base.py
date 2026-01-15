@@ -258,6 +258,8 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
             ml_ne = self.keys_en['multilevel']['ml_ne']
             x = ot.toggle_ml_state(x, ml_ne)
             return x
+        else:
+            return x
 
 
     def _aux_input(self):
