@@ -98,7 +98,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
             else:
                 phi.fun_val = fk
         else:
-            logger('    Evaluating Armijo condition')
+            #logger('    Evaluating Armijo condition')
             phi.fun_val = fun(xk + alpha*pk)
             ls_nfev += 1
         return phi.fun_val
@@ -113,7 +113,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
             else:
                 dphi.jac_val = jk
         else:
-            logger('    Evaluating curvature condition')
+            #logger('    Evaluating curvature condition')
             dphi.jac_val = jac(xk + alpha*pk)
             ls_njev += 1
         return np.dot(dphi.jac_val, pk)
@@ -125,31 +125,37 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
     # Start loop
     a = [0, step_size]
     for i in range(1, maxiter+1):
-        logger(f'Line search iteration: {i-1}')
+        logger(f'iteration: {i-1}')
 
         # Evaluate phi(ai)
         phi_i = phi(a[i])
 
         # Check for sufficient decrease
         if (phi_i > phi_0 + c1*a[i]*dphi_0) or (phi_i >= phi(a[i-1]) and i>0):
+            logger('    Armijo condition: not satisfied')
             # Call zoom function
-            step_size = zoom(a[i-1], a[i], phi, dphi, phi_0, dphi_0, maxiter+1-i, c1, c2) 
+            step_size = zoom(a[i-1], a[i], phi, dphi, phi_0, dphi_0, maxiter+1-i, c1, c2, iter_id=i) 
             logger('──────────────────────────────────────────────────')
             return step_size, phi.fun_val, dphi.jac_val, ls_nfev, ls_njev
+        
+        logger('    Armijo condition: satisfied')
 
         # Evaluate dphi(ai)
         dphi_i = dphi(a[i])
 
         # Check curvature condition
         if abs(dphi_i) <= -c2*dphi_0:
+            logger('    Curvature condition: satisfied')
             step_size = a[i]
             logger('──────────────────────────────────────────────────')
             return step_size, phi.fun_val, dphi.jac_val, ls_nfev, ls_njev
+
+        logger('    Curvature condition: not satisfied')
         
         # Check for posetive derivative
         if dphi_i >= 0:
             # Call zoom function
-            step_size = zoom(a[i], a[i-1], phi, dphi, phi_0, dphi_0, maxiter+1-i, c1, c2)
+            step_size = zoom(a[i], a[i-1], phi, dphi, phi_0, dphi_0, maxiter+1-i, c1, c2, iter_id=i)
             logger('──────────────────────────────────────────────────')
             return step_size, phi.fun_val, dphi.jac_val, ls_nfev, ls_njev
         
@@ -163,7 +169,7 @@ def line_search(step_size, xk, pk, fun, jac, fk=None, jk=None, **kwargs):
     return None, None, None, ls_nfev, ls_njev
             
 
-def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2):
+def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2, iter_id=0):
     '''Zoom function for line search algorithm. (This is the same as for scipy)'''
 
     phi_lo = f(alo)
@@ -171,7 +177,7 @@ def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2):
     dphi_lo = df(alo)
 
     for j in range(maxiter):
-        logger(f'Line search iteration: {j+1}')
+        logger(f'iteration: {iter_id+j+1}')
 
         tol_cubic = 0.2*(ahi-alo)
         tol_quad  = 0.1*(ahi-alo)
@@ -195,6 +201,7 @@ def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2):
 
         # Check for sufficient decrease
         if (phi_j > f0 + c1*aj*df0) or (phi_j >= phi_lo):
+            logger('    Armijo condition: not satisfied')
             # store old values
             aold = ahi
             phi_old = phi_hi
@@ -202,11 +209,14 @@ def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2):
             ahi = aj
             phi_hi = phi_j
         else:
+            logger('    Armijo condition: satisfied')
             # check curvature condition
             dphi_j = df(aj)
             if abs(dphi_j) <= -c2*df0:
+                logger('    Curvature condition: satisfied')
                 return aj
             
+            logger('    Curvature condition: not satisfied')
             if dphi_j*(ahi-alo) >= 0:
                 # store old values
                 aold = ahi

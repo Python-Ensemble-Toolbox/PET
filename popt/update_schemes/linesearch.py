@@ -258,9 +258,9 @@ class LineSearchClass(Optimize):
 
             # Check for initial inverse hessian for the BFGS method
             if self.method == 'BFGS':
-                self.Hk_inv = options.get('hess0_inv', np.eye(x.size))
+                self._Hk_inv = options.get('hess0_inv', np.eye(x.size))
             else:
-                self.Hk_inv = None
+                self._Hk_inv = None
 
             # Initialize some variables
             self.f_old = None
@@ -276,8 +276,8 @@ class LineSearchClass(Optimize):
                 self.logger(f'\n \nUSER-SPECIFIED OPTIONS:\n{pprint.pformat(OptimizeResult(self.options))}\n')
                 self.logger(**{
                     'iter.': 0,
-                    fun_xk_symbol: self.fk,
-                    jac_inf_symbol: la.norm(self.jk, np.inf),
+                    fun_xk_symbol: self._fk,
+                    jac_inf_symbol: la.norm(self._jk, np.inf),
                     'step-size': self.step_size
                 })
 
@@ -358,9 +358,9 @@ class LineSearchClass(Optimize):
         if self.method == 'GD':
             pk = - self._jk
         if self.method == 'BFGS':
-            pk = - np.matmul(self.Hk_inv, self._jk)
+            pk = - np.matmul(self._Hk_inv, self._jk)
         if self.method == 'Newton-CG':
-            pk = newton_cg(self.jk, Hk=self.Hk, xk=self.xk, jac=self._jac, logger=self.logger)
+            pk = newton_cg(self._jk, Hk=self._Hk, xk=self._xk, jac=self._jk, logger=self.logger)
 
         # porject search direction onto the feasible set
         if self.bounds is not None:
@@ -426,7 +426,7 @@ class LineSearchClass(Optimize):
             if self.method == 'BFGS':
                 yk = j_new - j_old
                 if self.iteration == 1: self._Hk_inv = np.dot(yk,sk)/np.dot(yk,yk) * np.eye(sk.size)
-                self.Hk_inv = bfgs_update(self.Hk_inv, sk, yk)
+                self._Hk_inv = bfgs_update(self._Hk_inv, sk, yk)
 
             # Update status
             success = True
@@ -440,8 +440,8 @@ class LineSearchClass(Optimize):
             if self.logger is not None:
                 self.logger(**{
                     'iter.': self.iteration,
-                    fun_xk_symbol: self.fk,
-                    jac_inf_symbol: la.norm(self.jk, np.inf),
+                    fun_xk_symbol: self._fk,
+                    jac_inf_symbol: la.norm(self._jk, np.inf),
                     'step-size': step_size
                 })
             
@@ -538,9 +538,9 @@ class LineSearchClass(Optimize):
                 alpha = self.step_size
 
         else:
-            if (self.step_size_adapt == 1) and (np.dot(pk, self.jk) != 0):
-                alpha = 2*(self.fk - self.f_old)/np.dot(pk, self.jk)
-            elif (self.step_size_adapt == 2) and (np.dot(pk, self.jk) != 0):
+            if (self.step_size_adapt == 1) and (np.dot(pk, self._jk) != 0):
+                alpha = 2*(self._fk - self.f_old)/np.dot(pk, self._jk)
+            elif (self.step_size_adapt == 2) and (np.dot(pk, self._jk) != 0):
                 slope_old = np.dot(self.p_old, self.j_old)
                 slope_new = np.dot(pk, self._jk)
                 alpha = self.step_size*slope_old/slope_new

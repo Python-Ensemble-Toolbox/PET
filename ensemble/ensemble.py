@@ -209,6 +209,8 @@ class Ensemble:
             containing the responses at each time step given in PREDICTION.
 
         """
+        one_state = False
+
         # Use input state if given
         if enX is None: 
             use_input_ensemble = False
@@ -233,10 +235,20 @@ class Ensemble:
             # Run setup function for simulator
             if hasattr(self.sim, 'setup_fwd_run'):
                 self.sim.setup_fwd_run(redund_sim=self.sim.redund_sim)
-                
+
+            if enX.ndim == 1:
+                one_state = True
+                enX = enX[:, np.newaxis]
+            elif enX.shape[1] == 1:
+                one_state = True
+
+            # If we have several models (num_models) but only one state input
+            if one_state and self.ne > 1:
+                enX = np.tile(enX, (1, self.ne))
+            
             # Convert ensemble matrix to list of dictionaries
             enX = entools.matrix_to_list(enX, self.idX)
-
+                
             if not (self.aux_input is None): 
                 for n in range(self.ne):
                     enX[n]['aux_input'] = self.aux_input[n]
@@ -268,6 +280,10 @@ class Ensemble:
             # Convert state enemble back to matrix form
             enX = entools.list_to_matrix(enX, self.idX)
 
+            # If only one state was inputted, keep only that state
+            if one_state and self.ne > 1:
+                enX = enX[:,0][:,np.newaxis]
+            
             # restore state ensemble if it was not inputted
             if not use_input_ensemble:
                 self.enX = enX
