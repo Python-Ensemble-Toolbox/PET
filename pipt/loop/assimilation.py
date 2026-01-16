@@ -20,7 +20,9 @@ from pipt.misc_tools.qaqc_tools import QAQC
 from pipt.loop.ensemble import Ensemble
 from misc.system_tools.environ_var import OpenBlasSingleThread
 from pipt.misc_tools import analysis_tools as at
+
 import pipt.misc_tools.extract_tools as extract
+import pipt.misc_tools.ensemble_tools as entools
 
 
 class Assimilate:
@@ -45,6 +47,12 @@ class Assimilate:
         """
         # Internalize ensemble and simulator class instances
         self.ensemble = ensemble
+
+        # Save folder
+        if 'nosave' not in self.ensemble.keys_da:
+            self.save_folder = self.ensemble.keys_da.get('savefolder', 'SaveOutputs')
+            if not os.path.exists(self.save_folder):
+                os.makedirs(self.save_folder)
 
         if self.ensemble.restart is False:
             # Default max. iter if not defined in the ensemble
@@ -84,7 +92,7 @@ class Assimilate:
         success_iter = True
 
         # Initiallize progressbar
-        pbar_out = tqdm(total=self.max_iter, desc='Iterations (Obj. func. val: )', position=0)
+        #pbar_out = tqdm(total=self.max_iter, desc='Iterations (Obj. func. val: )', position=0)
 
         # Check if we want to perform a Quality Assurance of the forecast
         qaqc = None
@@ -96,12 +104,13 @@ class Assimilate:
                 self.ensemble.logger,
                 self.ensemble.prior_info, 
                 self.ensemble.sim, 
-                self.ensemble.prior_state
+                entools.matrix_to_dict(self.ensemble.prior_enX, self.ensemble.idX)
             )
 
         # Run a while loop until max. iterations or convergence is reached
-        while self.ensemble.iteration < self.max_iter and conv is False:
+        while (self.ensemble.iteration < self.max_iter) and (conv is False):
             # Add a check to see if this is the prior model
+            
             if self.ensemble.iteration == 0:
                 # Calc forecast for prior model
                 # Inset 0 as input to forecast all data
@@ -113,7 +122,12 @@ class Assimilate:
 
                 if 'qa' in self.ensemble.keys_da:  # Check if we want to perform a Quality Assurance of the forecast
                     # set updated prediction, state and lam
-                    qaqc.set(self.ensemble.pred_data, self.ensemble.state, self.ensemble.lam)
+                    qaqc.set(
+                        self.ensemble.pred_data, 
+                        entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX), 
+                        self.ensemble.lam
+                    )
+
                     # Level 1,2 all data, and subspace
                     qaqc.calc_mahalanobis((1, 'time', 2, 'time', 1, None, 2, None))
                     qaqc.calc_coverage()  # Compute data coverage
@@ -123,7 +137,7 @@ class Assimilate:
 
                 # always store prior forcast, unless specifically told not to
                 if 'nosave' not in self.ensemble.keys_da:
-                    np.savez('prior_forecast.npz', pred_data=self.ensemble.pred_data)
+                    np.savez(f'{self.save_folder}/prior_forecast.npz', pred_data=self.ensemble.pred_data)
 
             # For the remaining iterations we start by applying the analysis and finish by running the forecast
             else:
@@ -159,20 +173,23 @@ class Assimilate:
                     #
                     self._save_iteration_information()
                 if self.ensemble.iteration > 0:
-                    # Temporary save state if options in TEMPSAVE have been given and the option is not 'no'
-                    if 'tempsave' in self.ensemble.keys_da and self.ensemble.keys_da['tempsave'] != 'no':
-                        self._save_during_iteration(self.ensemble.keys_da['tempsave'])
                     if 'analysisdebug' in self.ensemble.keys_da:
                         self._save_analysis_debug()
                     if 'qc' in self.ensemble.keys_da:  # Check if we want to perform a Quality Control of the updated state
                         # set updated prediction, state and lam
-                        qaqc.set(self.ensemble.pred_data,
-                                 self.ensemble.state, self.ensemble.lam)
+                        qaqc.set(
+                            self.ensemble.pred_data,
+                            entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX), 
+                            self.ensemble.lam
+                        )
                         qaqc.calc_da_stat()  # Compute statistics for updated parameters
                     if 'qa' in self.ensemble.keys_da:  # Check if we want to perform a Quality Assurance of the forecast
                         # set updated prediction, state and lam
-                        qaqc.set(self.ensemble.pred_data,
-                                 self.ensemble.state, self.ensemble.lam)
+                        qaqc.set(
+                            self.ensemble.pred_data,
+                            entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX), 
+                            self.ensemble.lam
+                        )
                         qaqc.calc_mahalanobis(
                             (1, 'time', 2, 'time', 1, None, 2, None))  # Level 1,2 all data, and subspace
                         #  qaqc.calc_coverage()  # Compute data coverage
@@ -182,16 +199,16 @@ class Assimilate:
             if self.ensemble.iteration >= 0 and success_iter is True:
                 if self.ensemble.iteration == 0:
                     self.ensemble.iteration += 1
-                    pbar_out.update(1)
+                    #pbar_out.update(1)
                     # pbar_out.set_description(f'Iterations (Obj. func. val:{self.data_misfit:.1f})')
                     # self.prior_data_misfit = self.data_misfit
                     # self.pbar_out.refresh()
                 else:
                     self.ensemble.iteration += 1
-                    pbar_out.update(1)
-                    pbar_out.set_description(
-                        f'Iterations (Obj. func. val:{self.ensemble.data_misfit:.1f}'
-                        f' Reduced: {100 * (1 - (self.ensemble.data_misfit / self.ensemble.prev_data_misfit)):.0f} %)')
+                    #pbar_out.update(1)
+                    #pbar_out.set_description(
+                    #    f'Iterations (Obj. func. val:{self.ensemble.data_misfit:.1f}'
+                    #    f' Reduced: {100 * (1 - (self.ensemble.data_misfit / self.ensemble.prev_data_misfit)):.0f} %)')
                     # self.pbar_out.refresh()
 
             if 'restartsave' in self.ensemble.keys_da and self.ensemble.keys_da['restartsave'] == 'yes':
@@ -200,12 +217,12 @@ class Assimilate:
         # always store posterior forcast and state, unless specifically told not to
         if 'nosave' not in self.ensemble.keys_da:
             try: # first try to save as npz file
-                np.savez('posterior_state_estimate.npz', **self.ensemble.state)
-                np.savez('posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
+                np.savez(f'{self.save_folder}/posterior_state_estimate.npz', **self.ensemble.enX)
+                np.savez(f'{self.save_folder}/posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
             except: # If this fails, store as pickle
-                with open('posterior_state_estimate.p', 'wb') as file:
-                    pickle.dump(self.ensemble.state, file)
-                with open('posterior_forecast.p', 'wb') as file:
+                with open(f'{self.save_folder}/posterior_state_estimate.p', 'wb') as file:
+                    pickle.dump(self.ensemble.enX, file)
+                with open(f'{self.save_folder}/posterior_forecast.p', 'wb') as file:
                     pickle.dump(self.ensemble.pred_data, file)
 
         # If none of the convergence criteria were met, max. iteration was the reason iterations stopped.
@@ -221,17 +238,17 @@ class Assimilate:
         why = self.why_stop
         if why is not None:
             why['conv_string'] = reason
-        with open('why_iter_loop_stopped.p', 'wb') as f:
+        with open(f'{self.save_folder}/why_iter_loop_stopped.p', 'wb') as f:
             pickle.dump(why, f, protocol=4)
         # pbar.close()
-        pbar_out.close()
+        #pbar_out.close()
         if self.ensemble.prev_data_misfit is not None:
             out_str = 'Convergence was met.'
             if self.ensemble.prior_data_misfit > self.ensemble.data_misfit:
                 out_str += f' Obj. function reduced from {self.ensemble.prior_data_misfit:0.1f} ' \
                            f'to {self.ensemble.data_misfit:0.1f}'
-            tqdm.write(out_str)
-            self.ensemble.logger.info(out_str)
+            #tqdm.write(out_str)
+            self.ensemble.logger(out_str)
 
     def remove_outliers(self):
 
@@ -266,9 +283,11 @@ class Assimilate:
             new_index = np.random.choice(members)
 
             # replace state
-            for el in self.ensemble.state.keys():
-                self.ensemble.state[el][:, index] = deepcopy(
-                    self.ensemble.state[el][:, new_index])
+            if self.ensemble.enX_temp is not None:
+                self.ensemble.enX[:, index] = deepcopy(self.ensemble.enX[:, new_index])
+            else:
+                self.ensemble.enX_temp[:, index] = deepcopy(self.ensemble.enX_temp[:, new_index])
+                
 
             # replace the failed forecast
             for i, data_ind in enumerate(self.ensemble.pred_data):
@@ -306,35 +325,6 @@ class Assimilate:
                 # Note: the function must be named main, and we pass the full current instance of the object.
                 iter_info_func.main(self)
 
-    def _save_during_iteration(self, tempsave):
-        """
-        Save during an iteration. How often is determined by the `TEMPSAVE` keyword; confer the manual for all the
-        different options.
-
-        Parameters
-        ----------
-        tempsave : list
-            Info. from the TEMPSAVE keyword
-        """
-        self.ensemble.logger.info(
-            'The TEMPSAVE feature is no longer supported. Please you debug_analyses, or iterinfo.')
-        # Save at specific points
-        # if isinstance(tempsave, list):
-        #     # Save at regular intervals
-        #     if tempsave[0] == 'each' or tempsave[0] == 'every' and self.ensemble.iteration % tempsave[1] == 0:
-        #         self.ensemble.save_temp_state_iter(self.ensemble.iteration + 1, self.max_iter)
-        #
-        #     # Save at points given by input
-        #     elif tempsave[0] == 'list' or tempsave[0] == 'at':
-        #         # Check if one or more save points have been given, and save if we are at that point
-        #         savepoint = tempsave[1] if isinstance(tempsave[1], list) else [tempsave[1]]
-        #         if self.ensemble.iteration in savepoint:
-        #             self.ensemble.save_temp_state_iter(self.ensemble.iteration + 1, self.max_iter)
-        #
-        # # Save at all assimilation steps
-        # elif tempsave == 'yes' or tempsave == 'all':
-        #     self.ensemble.save_temp_state_iter(self.ensemble.iteration + 1, self.max_iter)
-
     def _save_analysis_debug(self):
         """
         Moved Old analysis debug here to retain consistency.
@@ -351,6 +341,10 @@ class Assimilate:
         else:
             analysisdebug = [self.ensemble.keys_da['analysisdebug']]
 
+        if 'state' in analysisdebug:
+            analysisdebug.remove('state')
+            analysisdebug.append('enX')
+
         # Loop over variables to store in save list
         for save_typ in analysisdebug:
             if hasattr(self, save_typ):
@@ -360,6 +354,8 @@ class Assimilate:
             # Save with key equal variable name and the actual variable
             else:
                 print(f'Cannot save {save_typ}, because it is a local variable!\n\n')
+
+        save_dict['savefolder'] = self.save_folder
 
         # Save the variables
         at.save_analysisdebug(self.ensemble.iteration, **save_dict)
@@ -440,7 +436,10 @@ class Assimilate:
             l_prim = [int(assim_ind[1])]
 
         # Run forecast. Predicted data solved in self.ensemble.pred_data
-        self.ensemble.calc_prediction()
+        if self.ensemble.enX_temp is None:
+            self.ensemble.calc_prediction()
+        else:
+            self.ensemble.calc_prediction(enX=self.ensemble.enX_temp)
 
         # Filter pred. data needed at current assimilation step. This essentially means deleting pred. data not
         # contained in the assim. indices for current assim. step or does not have obs. data at this index
@@ -458,16 +457,9 @@ class Assimilate:
         if 'post_process_forecast' in self.ensemble.keys_da and self.ensemble.keys_da['post_process_forecast'] == 'yes':
             self.post_process_forecast()
 
-        # If we have dynamic variables, and we are in the first assimilation step, we must convert lists to (2D)
-        # numpy arrays
-        if 'dynamicvar' in self.ensemble.keys_da and assim_step == 0:
-            for dyn_state in self.ensemble.keys_da['dynamicvar']:
-                self.ensemble.state[dyn_state] = np.array(
-                    self.ensemble.state[dyn_state]).T
-
         # Extra option debug
         if 'saveforecast' in self.ensemble.sim.input_dict:
-            with open('sim_results.p', 'wb') as f:
+            with open(f'{self.save_folder}/sim_results.p', 'wb') as f:
                 pickle.dump(self.ensemble.pred_data, f)
 
     def post_process_forecast(self):

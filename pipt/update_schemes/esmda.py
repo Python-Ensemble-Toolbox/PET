@@ -11,6 +11,7 @@ from geostat.decomp import Cholesky
 # Internal imports
 from pipt.loop.ensemble import Ensemble
 import pipt.misc_tools.analysis_tools as at
+import pipt.misc_tools.ensemble_tools as entools
 
 # import update schemes
 from pipt.update_schemes.update_methods_ns.approx_update import approx_update
@@ -45,19 +46,20 @@ class esmdaMixIn(Ensemble):
         self.prev_data_misfit = None
 
         if self.restart is False:
-            self.prior_state = deepcopy(self.state)
-            self.list_states = list(self.state.keys())
+            self.prior_enX = deepcopy(self.enX)
+            self.list_states = list(self.idX.keys())
+
             # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
             # are given as in the Simultaneous loop.
             self.check_assimindex_simultaneous()
             self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(
-                self.obs_data, self.assim_index)
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
 
             # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
             # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
             self.max_iter = len(self._ext_assim_steps())+1
             self.iteration = 0
+
             self.lam = 0  # set LM lamda to zero as we are doing one full update.
             if 'energy' in self.keys_da:
                 # initial energy (Remember to extract this)
@@ -66,12 +68,14 @@ class esmdaMixIn(Ensemble):
                     self.trunc_energy /= 100.
             else:
                 self.trunc_energy = 0.98
+
             # Get the perturbed observations and observation scaling
-            self._ext_obs()
-            self.real_obs_data_conv = deepcopy(self.real_obs_data)
+            self.vecObs, self.enObs = self.set_observations()
+            self.enObs_conv = deepcopy(self.enObs)
+
             # Get state scaling and svd of scaled prior
             self._ext_scaling()
-            self.current_state = deepcopy(self.state)
+
         # Extract the inflation parameter from MDA keyword
         self.alpha = self._ext_inflation_param()
 
@@ -102,15 +106,25 @@ class esmdaMixIn(Ensemble):
 
         where $N_a$ being the total number of assimilation steps.
         """
-        # Get assimilation order as a list
-        # reformat predicted data
-        _, self.aug_pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                     self.list_datatypes)
+        # Get Ensemble of predicted data
+        _, self.enPred = at.aug_obs_pred_data(
+            self.obs_data,
+            self.pred_data,
+            self.assim_index,
+            self.list_datatypes
+        )
 
-        init_en = Cholesky()  # Initialize GeoStat class for generating realizations
+        # Initialize GeoStat class for generating realizations
+        generator = Cholesky() 
+
         if self.iteration == 1:  # first iteration
+
+            # Calculate the prior data misfit
             data_misfit = at.calc_objectivefun(
-                self.real_obs_data_conv, self.aug_pred_data, self.cov_data)
+                pert_obs=self.enObs,
+                pred_data=self.enPred,
+                Cd=self.cov_data
+            )
 
             # Store the (mean) data misfit (also for conv. check)
             self.prior_data_misfit = np.mean(data_misfit)
@@ -119,49 +133,50 @@ class esmdaMixIn(Ensemble):
             self.data_misfit_std = np.std(data_misfit)
             self.ensemble_misfit = data_misfit
 
-            self.logger.info(
-                f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
+            # Log initial data misfit
+            self.log_update(prior_run=True)
             self.data_random_state = deepcopy(np.random.get_state())
-            self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
-                                                                   self.alpha[self.iteration-1] *
-                                                                   self.cov_data, self.ne,
-                                                                   return_chol=True)
-            self.E = np.dot(self.real_obs_data, self.proj)
+            
+            self.enObs, self.scale_data = generator.gen_real(
+                self.vecObs,
+                self.alpha[self.iteration - 1] * self.cov_data,
+                self.ne,
+                return_chol=True
+            )
+            self.E = np.dot(self.enObs, self.proj)
+
         else:
             self.data_random_state = deepcopy(np.random.get_state())
-            self.obs_data_vector, _ = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                           self.list_datatypes)
-            self.real_obs_data, self.scale_data = init_en.gen_real(self.obs_data_vector,
-                                                                   self.alpha[self.iteration -
-                                                                              1] * self.cov_data,
-                                                                   self.ne,
-                                                                   return_chol=True)
-            self.E = np.dot(self.real_obs_data, self.proj)
+            self.enObs, self.scale_data = generator.gen_real(
+                self.vecObs,
+                self.alpha[self.iteration - 1] * self.cov_data,
+                self.ne,
+                return_chol=True
+            )
+            self.E = np.dot(self.enObs, self.proj)
 
         if 'localanalysis' in self.keys_da:
             self.local_analysis_update()
         else:
-            if len(self.scale_data.shape) == 1:
-                self.pert_preddata = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1),
-                                            np.ones((1, self.ne))) * np.dot(self.aug_pred_data, self.proj)
-            else:
-                self.pert_preddata = scilinalg.solve(
-                    self.scale_data, np.dot(self.aug_pred_data, self.proj))
+            # Perform the update
+            self.update(
+                enX = self.enX, 
+                enY = self.enPred, 
+                enE = self.enObs, 
+                prior = self.prior_enX
+            )
 
-            aug_state = at.aug_state(self.current_state, self.list_states)
-
-            self.update()
+            # Update the state ensemble and weights
             if hasattr(self, 'step'):
-                aug_state_upd = aug_state + self.step
+                self.enX_temp = self.enX + self.step
             if hasattr(self, 'w_step'):
                 self.W = self.current_W + self.w_step
-                aug_prior_state = at.aug_state(self.prior_state, self.list_states)
-                aug_state_upd = np.dot(aug_prior_state, (np.eye(
-                    self.ne) + self.W / np.sqrt(self.ne - 1)))
+                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W/np.sqrt(self.ne - 1)))
 
-            # Extract updated state variables from aug_update
-            self.state = at.update_state(aug_state_upd, self.state, self.list_states)
-            self.state = at.limits(self.state, self.prior_info)
+
+            # Ensure limits are respected
+            limits = {key: self.prior_info[key].get('limits', (None, None)) for key in self.idX.keys()}
+            self.enX_temp = entools.clip_matrix(self.enX_temp, limits, self.idX)
 
     def check_convergence(self):
         """
@@ -180,12 +195,15 @@ class esmdaMixIn(Ensemble):
         self.prev_data_misfit = self.data_misfit
         self.prev_data_misfit_std = self.data_misfit_std
 
-        # Prelude to calc. conv. check (everything done below is from calc_analysis)
-        obs_data_vector, pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, self.assim_index,
-                                                          self.list_datatypes)
+        # Get Ensemble of predicted data
+        _, enPred = at.aug_obs_pred_data(
+            self.obs_data,
+            self.pred_data,
+            self.assim_index,
+            self.list_datatypes
+        )
 
-        data_misfit = at.calc_objectivefun(
-            self.real_obs_data_conv, pred_data, self.cov_data)
+        data_misfit = at.calc_objectivefun(self.enObs_conv, enPred, self.cov_data)
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
 
@@ -194,19 +212,41 @@ class esmdaMixIn(Ensemble):
                     'data_misfit': self.data_misfit,
                     'prev_data_misfit': self.prev_data_misfit}
 
-        if self.data_misfit < self.prev_data_misfit:
-            self.logger.info(
-                f'MDA iteration number {self.iteration}! Objective function reduced from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
-        else:
-            self.logger.info(
-                f'MDA iteration number {self.iteration}! Objective function increased from {self.prev_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
+        # Log update results
+        success = self.data_misfit < self.prev_data_misfit
+        self.log_update(success=success)
+        
         # Return conv = False, why_stop var.
-        self.current_state = deepcopy(self.state)
+        # Update state ensemble
+        self.enX = deepcopy(self.enX_temp)
+        self.enX_temp = None
         if hasattr(self, 'W'):
             self.current_W = deepcopy(self.W)
 
         return False, True, why_stop
 
+    def log_update(self, success=None, prior_run=False):
+        '''
+        Log the update results in a formatted table.
+        '''
+        iteration_str = f'{0 if prior_run else self.iteration}/{self.max_iter}'
+        
+        log_data = {
+            "Iteration": iteration_str,
+            "Status": "Success" if (prior_run or success) else "Failed",
+            "Data Misfit": self.data_misfit
+        }
+        
+        if not prior_run:
+            if success:
+                log_data["Reduction (%)"] = 100 * (1 - self.data_misfit / self.prev_data_misfit)
+            else:
+                log_data["Increase (%)"] = 100 * (self.data_misfit / self.prev_data_misfit - 1)
+        else:
+            log_data["Reduction (%)"] = 'N/A'
+        
+        self.logger(**log_data)
+            
     def _ext_inflation_param(self):
         r"""
         Extract the data covariance inflation parameter from the MDA keyword in DATAASSIM part. Also, we check that

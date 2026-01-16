@@ -6,6 +6,13 @@ be used by several update/analysis schemes. If some method is only applicable to
 implementing, leave it in that class.
 """
 
+__all__ = [
+    'parallel_upd',
+    'calc_autocov',
+    'calc_crosscov',
+    'calc_objectivefun'
+]
+
 # External imports
 import numpy as np          # Numerical tools
 from scipy import linalg    # Linear algebra tools
@@ -655,10 +662,11 @@ def save_analysisdebug(ind_save, **kwargs):
     is passed to np.savez (kwargs) the variable will be stored with their original name.
     """
     # Save input variables
+    folder = kwargs.pop('savefolder')
     try:
-        np.savez('debug_analysis_step_{0}'.format(str(ind_save)), **kwargs)
+        np.savez(f'{folder}/debug_analysis_step_{ind_save}', **kwargs)
     except: # if npz save fails dump to a pickle file
-        with open(f'debug_analysis_step_{ind_save}.p', 'wb') as file:
+        with open(f'{folder}/debug_analysis_step_{ind_save}.p', 'wb') as file:
             pickle.dump(kwargs, file)
 
 
@@ -940,6 +948,7 @@ def aug_obs_pred_data(obs_data, pred_data, assim_index, list_data):
 
     tot_pred = tuple(pred_data[el][dat] for el in l_prim if pred_data[el]
                      is not None for dat in list_data if obs_data[el][dat] is not None)
+    
     if len(tot_pred):  # if this is done during the initiallization tot_pred contains nothing
         pred = np.concatenate(tot_pred)
     else:
@@ -1226,7 +1235,7 @@ def aug_state(state, list_state, cell_index=None):
     return aug
 
 
-def calc_scaling(state, list_state, prior_info):
+def calc_scaling(enX, idX, prior_info):
     """
     Form the scaling to be used in svd related algoritms. Scaling consist of standard deviation for each `STATICVAR`
     It is important that this is formed in the same manner as the augmentet state vector is formed. Hence, with the same
@@ -1248,7 +1257,7 @@ def calc_scaling(state, list_state, prior_info):
     """
 
     scaling = []
-    for elem in list_state:
+    for elem in idX.keys():
         # more than single value. This is for multiple layers. Assume all values are active
         if len(prior_info[elem]['variance']) > 1:
             scaling.append(np.concatenate(tuple(np.sqrt(prior_info[elem]['variance'][z]) *
@@ -1257,7 +1266,7 @@ def calc_scaling(state, list_state, prior_info):
                                                 for z in range(prior_info[elem]['nz']))))
         else:
             scaling.append(tuple(np.sqrt(prior_info[elem]['variance']) *
-                                 np.ones(state[elem].shape[0])))
+                                 np.ones(enX[idX[elem][0]:idX[elem][1]].shape[0])))
 
     return np.concatenate(scaling)
 
@@ -1474,91 +1483,63 @@ def subsample_state(index, aug_state, pert_state):
     return new_state
 
 
-def init_local_analysis(init, state):
-    """Initialize local analysis.
+def get_obs_size(obs_data, time_index, datatypes):
+    """Return a 2D list of sizes for each observation array."""
+    return [
+        [
+            obs_data[int(time)][data].size if obs_data[int(time)][data] is not None else 0
+            for data in datatypes
+        ]
+        for time in time_index
+    ]
 
-    Initialize the local analysis by reading the input variables, defining the parameter classes and search ranges. Build
-    the map of data/parameter positions.
+def truncSVD(matrix, r=None, energy=None, full_matrices=False):
+    '''
+    Perform truncated SVD on input matrix.
 
-    Args
-    ----
-    init : dictionary containing the parsed information form the input file.
-    state : list of states that will be updated
+    Parameters
+    ----------
+    matrix : ndarray, shape (m, n)
+        Input matrix to perform SVD on.
 
+    r : int, optional
+        Rank to truncate the SVD to. If None, energy must be specified.
+
+    energy : float, optional
+        Percentage of energy to retain in the truncated SVD. If None, r must be specified.
+
+    full_matrices : bool, optional
+        Whether to compute full or reduced SVD. Default is False.
+    
     Returns
     -------
-    local : dictionary of initialized values.
-    """
+    U : ndarray, shape (m, r)
+        Left singular vectors.
+    
+    S : ndarray, shape (r,)
+        Singular values.
+    
+    VT : ndarray, shape (r, n)
+        Right singular vectors transposed.
+    '''
+    # Perform SVD on input matrix
+    U, S, VT = np.linalg.svd(matrix, full_matrices=full_matrices)
 
-    local = {}
-    local['cell_parameter'] = []
-    local['region_parameter'] = []
-    local['vector_region_parameter'] = []
-    local['unique'] = True
-
-    for i, opt in enumerate(list(zip(*init))[0]):
-        if opt.lower() == 'region_parameter':  # define scalar parameters valid in a region
-            local['region_parameter'] = [
-                elem for elem in init[i][1].split(' ') if elem in state]
-        if opt.lower() == 'vector_region_parameter': # Sometimes it useful to define the same parameter for multiple
-                                                    # regions as a vector.
-            local['vector_region_parameter'] = [
-                elem for elem in init[i][1].split(' ') if elem in state]
-        if opt.lower() == 'cell_parameter':  # define cell specific vector parameters
-            local['cell_parameter'] = [
-                elem for elem in init[i][1].split(' ') if elem in state]
-        if opt.lower() == 'search_range':
-            local['search_range'] = int(init[i][1])
-        if opt.lower() == 'column_update':
-            local['column_update'] = [elem for elem in init[i][1].split(',')]
-        if opt.lower() == 'parameter_position_file':  # assume pickled format
-            with open(init[i][1], 'rb') as file:
-                local['parameter_position'] = pickle.load(file)
-        if opt.lower() == 'data_position_file':  # assume pickled format
-            with open(init[i][1], 'rb') as file:
-                local['data_position'] = pickle.load(file)
-        if opt.lower() == 'update_mask_file':
-            with open(init[i][1], 'rb') as file:
-                local['update_mask'] = pickle.load(file)
-
-    if 'update_mask' in local:
-        return local
-    else:
-        assert 'parameter_position' in local, 'A pickle file containing the binary map of the parameters is MANDATORY'
-        assert 'data_position' in local, 'A pickle file containing the position of the data is MANDATORY'
-
-        data_name = [elem for elem in local['data_position'].keys()]
-        if type(local['data_position'][data_name[0]][0]) == list:  # assim index has spesific position
-            local['unique'] = False
-            data_pos = [elem for data in data_name for assim_elem in local['data_position'][data]
-                        for elem in assim_elem]
-            data_ind = [f'{data}_{assim_indx}' for data in data_name for assim_indx, assim_elem in enumerate(local['data_position'][data])
-                        for _ in assim_elem]
+    # If not specified rank, energy must be given
+    if r is None:
+        if energy is not None:
+            # If energy is less than 100 we truncate the SVD matrices
+            if energy < 1:
+                r = np.sum((np.cumsum(S) / sum(S)) <= energy)
+            else:
+                r = np.sum((np.cumsum(S) / sum(S)) <= energy/100)
         else:
-            data_pos = [elem for data in data_name for elem in local['data_position'][data]]
-            # store the name for easy index
-            data_ind = [data for data in data_name for _ in local['data_position'][data]]
-        kde_search = cKDTree(data=data_pos)
+            raise ValueError("Either rank 'r' or 'energy' must be specified for truncSVD.")
+    
+    if r == 0:
+        r = 1  # Ensure at least one singular value is retained
+    if r > len(S):
+        print("Warning: Specified rank exceeds number of singular values. Using maximum available rank.")
+        r = len(S)
 
-        local['update_mask'] = {}
-        for param in local['cell_parameter']:  # find data in a distance from the parameter
-            field_size = local['parameter_position'][param].shape
-            local['update_mask'][param] = [[[[] for _ in range(field_size[2])] for _ in range(field_size[1])] for _
-                                           in range(field_size[0])]
-            for k in range(field_size[0]):
-                for j in range(field_size[1]):
-                    new_iter = [elem for elem, val in enumerate(
-                        local['parameter_position'][param][k, j, :]) if val]
-                    if len(new_iter):
-                        for i in new_iter:
-                            local['update_mask'][param][k][j][i] = set(
-                                [data_ind[elem] for elem in kde_search.query_ball_point(x=(k, j, i),
-                                                                                        r=local['search_range'], workers=-1)])
-
-        # see if data is inside the region. Note parameter_position is boolean map
-        for param in local['region_parameter']:
-            in_region = [local['parameter_position'][param][elem] for elem in data_pos]
-            local['update_mask'][param] = set(
-                [data_ind[count] for count, val in enumerate(in_region) if val])
-
-        return local
+    return U[:,:r], S[:r], VT[:r,:]

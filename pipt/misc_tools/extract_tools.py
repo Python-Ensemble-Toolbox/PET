@@ -1,6 +1,8 @@
-# This module inlcudes fucntions for extracting information from input dicts
+# This module includes functions for extracting information from input dicts
+
 __all__ = [
     'extract_prior_info',
+    'extract_initial_controls',
     'extract_multilevel_info',
     'extract_local_analysis_info',
     'extract_maxiter',
@@ -9,12 +11,16 @@ __all__ = [
 ]
 
 # Imports 
-import numpy as np
+import numpy  as np
+import pandas as pd
 import pickle
 import os
 
 from scipy.spatial import cKDTree
 from typing import Union
+
+# Internal imports
+import pipt.misc_tools.analysis_tools as at
 
 
 def extract_prior_info(keys: dict) -> dict:
@@ -122,39 +128,194 @@ def extract_prior_info(keys: dict) -> dict:
     return prior_info
 
 
+def extract_initial_controls(keys: dict) -> dict:
+    """
+    Extract and process control variable information from configuration dictionary.
+
+    This function parses control variable specifications from the input configuration,
+    handling various formats for initial values, bounds, and variance.
+    It supports loading data from files (.npy, .npz, .csv).
+
+    Parameters
+    ----------
+    keys : dict
+        Configuration dictionary containing a 'controls' key. Each control variable
+        should be a nested dictionary with the name of the control variable as the key.
+        The dictionary for each control variable should contain the following possible keys:
+        
+        - 'initial' or 'mean' : Initial value or mean of control variable
+            Can be scalar, list, numpy array, or filename (.npy, .npz, .csv).
+            If .npz or .csv, the variable name should match the control variable name.
+            Multiple variables can be specified in the same file.
+
+        - 'limits' : tuple or list, optional
+            (lower_bound, upper_bound) for the control variable
+
+        - 'var' or 'variance' : float, list, or array, optional
+            Variance of the control variable
+            
+        - 'std' : float, list, array, or str, optional
+            Standard deviation. If string ending with '%', interpreted as percentage
+            of the bound range (requires 'limits' to be specified). Only if 'var'/'variance'
+            is not provided.
+
+    Returns
+    -------
+    control_info : dict
+        Dictionary with control variable names as keys. Each value is a dict containing:
+        
+        - 'mean' : numpy.ndarray
+            Initial/mean values for the control variable
+        - 'limits' : list
+            [lower_bound, upper_bound], or [None, None] if not specified
+        - 'variance' : float, numpy.ndarray, or None
+            Variance of the control variable (if provided)
+
+    Raises
+    ------
+    AssertionError
+        If neither 'initial' nor 'mean' is provided for a control variable
+        If attempting to use percentage-based 'std' without specifying 'limits'
+        If loading from file fails (e.g., variable name not found in file)
+
+    Examples
+    --------
+    >>> keys = {
+    ...     'controls': {
+    ...         'pressure': {
+    ...             'initial': 100.0,
+    ...             'limits': [50.0, 150.0],
+    ...             'std': '10%'
+    ...         },
+    ...         'rate': {
+    ...             'mean': [10, 20, 30],
+    ...             'variance': 2.5
+    ...         }
+    ...     }
+    ... }
+    >>> control_info = extract_initial_controls(keys)
+    >>> control_info['pressure']['mean']
+    array([100.])
+    >>> control_info['pressure']['variance']
+    100.0  # (10% of range [50, 150])^2
+    """
+    control_info = {}
+
+    # Loop over names
+    for name in keys['controls'].keys():
+        info = keys['controls'][name]
+
+        # Assert that initial or mean is there
+        assert ('initial' in info) or ('mean' in info), f'INITIAL or MEAN missing in CONTROLS for {name}!'
+
+        # Rename to mean if initial is there
+        if 'initial' in info: 
+            info['mean'] = info.pop('initial', None)
+
+        # Mean
+        ############################################################################################################
+        if isinstance(info['mean'], str):
+            # Check if NPZ file
+            if info['mean'].endswith('.npz'):
+                file = np.load(info['mean'], allow_pickle=True)
+                if not (name in file.files):
+                    # Assume only one variable in file
+                    msg = f'Variable {name} not in {info["mean"]} and more than one variable located in the file!'
+                    assert len(file.files) == 1, msg
+                    info['mean'] = file[file.files[0]]
+                else:
+                    info['mean'] = file[name]
+
+            # Check for NPY file
+            elif info['mean'].endswith('.npy'):
+                info['mean'] = np.load(info['mean'])
+
+            # Check for CSV file
+            elif info['mean'].endswith('.csv'):
+                df = pd.read_csv(info['mean'])
+                assert name in df.columns, f'Column {name} not in {info["mean"]}!'
+                info['mean'] = df[name].to_numpy() 
+
+        elif isinstance(info['mean'], (int, float)):
+            info['mean'] = np.array([info['mean']])
+        else:
+            info['mean'] = np.asarray(info['mean'])
+        ############################################################################################################
+
+        # Limits
+        info['limits'] = info.get('limits', [None, None])
+
+        # Clip mean to limits if limits are given
+        if info['limits'][0] is not None:
+            info['mean'] = np.maximum(info['mean'], info['limits'][0])
+        if info['limits'][1] is not None:
+            info['mean'] = np.minimum(info['mean'], info['limits'][1])
+        
+
+        # Check for var VAR or STD
+        ############################################################################################################
+        if ('var' in info) or ('variance' in info):
+            if 'var' in info:
+                info['variance'] = info.pop('var', None)
+
+        elif 'std' in info:
+            std = info.pop('std', None)
+            
+            # Standard deviation can be given as percentage of bound range
+            if isinstance(std, str) and (info['limits'][0] is not None) and (info['limits'][1] is not None):
+                if std.endswith('%'):
+                    std, _ = std.split('%')
+                    std = float(std)/100.0 * (info['limits'][1] - info['limits'][0])
+                else:
+                    raise AssertionError(f'If STD for {name} does not end with %')
+
+            info['variance'] = np.square(std)
+        ############################################################################################################
+
+        # Add control_info
+        control_info[name] = info
+
+    return control_info
+            
+        
+
+
+
+    
+
 def extract_multilevel_info(keys: Union[dict, list]) -> dict:
     '''
     Extract the info needed for ML simulations. Note if the ML keyword is not in keys_en we initialize
     such that we only have one level -- the high fidelity one
     '''
-    ml_info = keys['multilevel']
-    if isinstance(ml_info, list):
-        ml_info = list_to_dict(ml_info)
-    assert isinstance(ml_info, dict)
+    keys_ml = keys
+    if isinstance(keys, list):
+        keys_ml = list_to_dict(keys)
+    assert isinstance(keys_ml, dict)
     
     # Set levels
-    levels = int(ml_info['levels'])
-    ml_info['levels'] = [elem for elem in range(levels)]
+    assert 'levels' in keys_ml, 'LEVELS keyword missing in MULTILEVEL!'
+    levels = int(keys_ml['levels'])
+    keys_ml['levels'] = [elem for elem in range(levels)]
 
     # Set multi-level ensemble size
-    en_size = ml_info.pop('en_size')
-    ml_info['ne'] = [range(int(elem)) for elem in en_size]
-    ml_ne = [int(elem) for elem in en_size]
+    assert 'en_size' in keys_ml, 'EN_SIZE keyword missing in MULTILEVEL!'
+    en_size = keys_ml.pop('en_size')
+    keys_ml['ne'] = [range(int(elem)) for elem in en_size]
+    keys_ml['ml_ne'] = [int(elem) for elem in en_size]
+    assert len(keys_ml['ml_ne']) == levels, 'The Ensemble Size must be specified for all levels!'
+
+    # Set weights
+    assert 'ml_weights' in keys_ml or 'cov_wgt' in keys_ml, 'ML_WEIGHTS (or COV_WGT) keyword missing in MULTILEVEL!'
+    if 'cov_wgt' in keys_ml:
+        keys_ml['ml_weights'] = keys_ml.pop('cov_wgt')
+    if not np.sum(keys_ml['ml_weights']) == 1.0:
+        keys_ml['ml_weights'] = keys_ml['ml_weights']/np.sum(keys_ml['ml_weights'])
 
     # Set multi-level error
-    if not 'ml_error_corr' in ml_info:
-        ml_error_corr = 'none'
-        error_comp_scheme = 'none'
-        ml_corr_done = True
-    else:
-        ml_error_corr = ml_info['ml_error_corr'][0]
-        ml_corr_done = False
-
-    if not ml_error_corr == 'none':
-        error_comp_scheme = ml_info['ml_error_corr'][1]
-
-    # set attribute
-    return ml_info, levels, ml_ne, ml_error_corr, error_comp_scheme, ml_corr_done 
+    keys_ml['ml_error_corr'] = keys_ml.get('ml_error_corr', None)
+    
+    return keys_ml
 
 
 def extract_local_analysis_info(keys: Union[dict, list], state: list) -> dict:
