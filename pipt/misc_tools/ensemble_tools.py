@@ -236,7 +236,7 @@ def clip_matrix(matrix: np.ndarray, limits: dict|tuple|list, indecies: dict|None
         if not (lb is None and ub is None):
             matrix = np.clip(matrix, lb, ub)
 
-    elif isinstance(limits, dict) and isinstance(limits, dict):
+    elif isinstance(limits, dict) and isinstance(indecies, dict):
         if indecies is None:
             raise ValueError("When limits is a dictionary, indecies must also be provided.")
         
