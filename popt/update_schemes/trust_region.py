@@ -10,10 +10,13 @@ from scipy.optimize import OptimizeResult
 # Internal imports
 from popt.misc_tools import optim_tools as ot
 from popt.loop.optimize import Optimize
+from popt.update_schemes.subroutines.subroutines import solve_trust_region_subproblem
 
-# Impors from scipy
-from scipy.optimize._trustregion_ncg import CGSteihaugSubproblem
-from scipy.optimize._trustregion_exact import IterativeSubproblem
+# Some symbols for logger
+subk = '\u2096'
+fun_xk_symbol  = f'fun(x{subk})'
+delta_k_symbol = f'\u0394{subk}'
+rho_symbol     = '\u03C1'
 
 
 def TrustRegion(fun, x, jac, hess, method='iterative', args=(), bounds=None, callback=None, **options):
@@ -141,7 +144,7 @@ class TrustRegionClass(Optimize):
 
         # Set class attributes
         self.function = fun
-        self._xk       = x
+        self._xk      = x
         self.jacobian = jac
         self.hessian  = hess
         self.method   = method
@@ -158,32 +161,43 @@ class TrustRegionClass(Optimize):
         # Custom convergence criteria (callable)
         convergence_criteria = options.get('convergence_criteria', None)
         if callable(convergence_criteria):
-            self.convergence_criteria = self.convergence_criteria
+            self.convergence_criteria = convergence_criteria
         else:
             self.convergence_criteria = None
 
         # Set options for trust-region radius       
         self.trust_radius      = options.get('trust_radius', 1.0) 
-        self.trust_radius_max  = options.get('trust_radius_max', 10*self.trust_radius)
-        self.trust_radius_min  = options.get('trust_radius_min', self.trust_radius/100)
+        self.trust_radius_max  = options.get('trust_radius_max', 100*self.trust_radius)
+        self.trust_radius_min  = options.get('trust_radius_min', self.trust_radius/1000)
         self.trust_radius_cuts = options.get('trust_radius_cuts', 4)
 
         # Set other options
         self.resample = options.get('resample', False)
         self.saveit   = options.get('saveit', True)
         self.rho_tol  = options.get('rho_tol', 1e-6)
-        self.eta1 = options.get('eta1', 0.1) # reduce raduis if rho < 10%
+        self.eta1 = options.get('eta1', 0.1)  # reduce raduis if rho < 10%
         self.eta2 = options.get('eta2', 0.5)  # increase radius if rho > 50% 
         self.gam1 = options.get('gam1', 0.5)  # reduce by 50%
         self.gam2 = options.get('gam2', 1.5)  # increase by 50%
         self.rho  = 0.0
 
+        # set tolerance for convergence
+        self._xtol = options.get('xtol', 1e-8) # tolerance for control vector
+        self._ftol = options.get('ftol', 1e-4) # relative tolerance for function value
+        self._gtol = options.get('gtol', 1e-5) # tolerance for inf-norm of jacobian
+
         # Check if method is valid
-        if self.method not in ['iterative', 'CG-Steihaug']:
+        if callable(self.method):
+            self.logger(f'Method is a callable!. Using custom subproblem solver.')
+        elif isinstance(self.method, str):
+            if self.method not in ['iterative', 'CG-Steihaug']:
+                self.method = 'iterative'
+                self.logger(f'Method {self.method} is not valid!. Method is set to "iterative"')
+        else:
+            self.logger(f'Method is a string or callable!. Method is set to "iterative"')
             self.method = 'iterative'
-            raise ValueError(f'Method {self.method} is not valid!. Method is set to "iterative"')
+
     
-            
         if not self.restart:
             self.start_time = time.perf_counter()
 
@@ -192,27 +206,46 @@ class TrustRegionClass(Optimize):
             self._jk = options.get('jac0', None)
             self._Hk = options.get('hess0', None)
 
+            if self.hessian == 'BFGS':
+                self.hessian = None
+                self.quasi_newton = True
+                self.logger('Hessian approximation set to BFGS.')
+            else:
+                self.quasi_newton = False
+
             if self._fk is None: self._fk = self.fun(self._xk)
             if self._jk is None: self._jk = self.jac(self._xk)
             if self._Hk is None: self._Hk = self.hess(self._xk)
 
+            if self.logger is not None:
+                self.logger('================= Running Optimization - Trust Region =================')
+                self.logger(f'\n \nUSER-SPECIFIED OPTIONS:\n{pprint.pformat(OptimizeResult(self.options))}\n')
+                info = {
+                    'Iter.': self.iteration,
+                    fun_xk_symbol: self._fk,
+                    f'{delta_k_symbol}': self.trust_radius,
+                    f'{rho_symbol}': self.rho,
+                    f'|p{subk}| = {delta_k_symbol}': 'N/A',
+                }
+                self.logger(**info)
+            
+
             # Initial results
-            self.optimize_result = self.get_optimize_result(self)
+            self.optimize_result = self.get_intermediate_results()
             if self.saveit:
                 ot.save_optimize_results(self.optimize_result)
 
-            self._log(f'       ====== Running optimization - Trust Region ======')
-            self._log('\n'+pprint.pformat(OptimizeResult(self.options)))
-            self._log(f'       {"iter.":<10} {"fun":<15} {"tr-radius":<15} {"rho":<15}')
-            self._log(f'       {self.iteration:<10} {self._fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
-            self._log('')
-        
         # Run the optimization
         self.run_loop()
 
     def fun(self, x, *args, **kwargs):
         self.nfev += 1
-        x = ot.clip_state(x, self.bounds)  # ensure bounds are respected
+
+        if self.bounds is not None:
+            lb = np.array(self.bounds)[:, 0]
+            ub = np.array(self.bounds)[:, 1]
+            x = np.clip(x, lb, ub)  # ensure bounds are respected
+            
         if self.args is None:
             f = np.mean(self.function(x, epf=self.epf))
         else:
@@ -237,7 +270,12 @@ class TrustRegionClass(Optimize):
 
     def jac(self, x):
         self.njev += 1
-        x = ot.clip_state(x, self.bounds) # ensure bounds are respected
+        
+        if self.bounds is not None:
+            lb = np.array(self.bounds)[:, 0]
+            ub = np.array(self.bounds)[:, 1]
+            x = np.clip(x, lb, ub)  # ensure bounds are respected
+            
         if self.args is None:
             g = self.jacobian(x, epf=self.epf)
         else:
@@ -247,86 +285,85 @@ class TrustRegionClass(Optimize):
     def hess(self, x):
         if self.hessian is None:
             return None
-    
-        x = ot.clip_state(x, self.bounds) # ensure bounds are respected
+        
+        if self.bounds is not None:
+            lb = np.array(self.bounds)[:, 0]
+            ub = np.array(self.bounds)[:, 1]
+            x = np.clip(x, lb, ub)  # ensure bounds are respected
+
         if self.args is None:
             h = self.hessian(x)
         else:
             h = self.hessian(x, *self.args)
         return h
 
-    def solve_subproblem(self, g, B, delta):
-        """
-        Solve the trust region subproblem using the iterative method.
-        (A big thanks to copilot for the help with this implementation)
-
-        Parameters:
-        g (numpy.ndarray): Gradient vector at the current point.
-        B (numpy.ndarray): Hessian matrix at the current point.
-        delta (float): Trust region radius.
-
-        Returns:
-        pk (numpy.ndarray): Step direction.
-        pk_hits_boundary (bool): True if the step hits the boundary of the trust region.
-        """
-
-        # Define quadratic model
-        quad = lambda p: self._fk + np.dot(g,p) + np.dot(p,np.dot(B,p))/2
-
-
-        if self.method == 'iterative':
-            subproblem = IterativeSubproblem(
-                x=self._xk,
-                fun=quad, 
-                jac=lambda _: g, 
-                hess=lambda _: B,
-            )
-            pk, pk_hits_boundary = subproblem.solve(tr_radius=delta)
-        
-        elif self.method == 'CG-Steihaug':
-            subproblem = CGSteihaugSubproblem(
-                x=self._xk,
-                fun=quad, 
-                jac=lambda _: g, 
-                hess=lambda _: B,
-            )
-            pk, pk_hits_boundary = subproblem.solve(trust_radius=delta)
-
-        else:
-            raise ValueError(f"Method {self.method} is not valid!")
-
-        return pk, pk_hits_boundary
-
-
     def calc_update(self, inner_iter=0):
 
         # Initialize variables for this step
         success = True
 
-        # Solve subproblem
-        self._log('Solving trust region subproblem')
-        sk, hits_boundary = self.solve_subproblem(self._jk, self._Hk, self.trust_radius)
+        #print(self.quasi_newton, self._Hk is None, self.iteration)
+        if self.quasi_newton and (self._Hk is None) and (self.iteration == 1):
+            sk = - self._jk
+            sk = sk / la.norm(sk, np.inf) * self.trust_radius
+            hits_boundary = True
+            if la.norm(sk) > self.trust_radius:
+                sk = sk / la.norm(sk) * self.trust_radius
+                hits_boundary = True
 
-        # truncate sk to respect bounds
+        else:
+            # Solve subproblem
+            self.logger(f'Solving subproblem ...................')
+            if callable(self.method):
+                sk, hits_boundary = self.method(
+                    self._xk, 
+                    self._fk, 
+                    self._jk, 
+                    self._Hk, 
+                    self.trust_radius, 
+                    **self.options
+                )
+            else:
+                sk, hits_boundary = solve_trust_region_subproblem(
+                    self._xk, 
+                    self._fk, 
+                    self._jk, 
+                    self._Hk, 
+                    self.trust_radius,
+                    method=self.method, 
+                    **self.options
+                )
+
+        # Truncate sk to respect bounds
         if self.bounds is not None:
             lb = np.array(self.bounds)[:, 0]
             ub = np.array(self.bounds)[:, 1]
             sk = np.clip(sk, lb - self._xk, ub - self._xk)
 
         # Calculate the actual function value
-        xk_new  = self._xk + sk
-        fun_new = self.fun(xk_new)
-
-        # Calculate rho
-        actual_reduction    = self._fk - fun_new
-        predicted_reduction = - np.dot(self._jk, sk) - np.dot(sk, np.dot(self._Hk, sk))/2
-        self.rho = actual_reduction/predicted_reduction
-
+        xk_new = self._xk + sk
+        fk_new = self.fun(xk_new)
+        print(self._fk, fk_new)
+        # Calculate rho (actual / predicted reduction)
+        df = self._fk - fk_new
+        if self.iteration == 1 and self.quasi_newton:
+            dm = - np.dot(self._jk, sk)
+        else:
+            dm = - np.dot(self._jk, sk) - np.dot(sk, np.dot(self._Hk, sk))/2
+        print(df, dm)
+        self.rho = df/(dm + 1e-16)  # add small number to avoid division by zero
+        
         if self.rho > self.rho_tol:
             
+            # Save old values
+            x_old = self._xk
+            f_old = self._fk
+            j_old = self._jk
+            h_old = self._Hk
+
             # Update the control
             self._xk = xk_new
-            self._fk = fun_new
+            self._fk = fk_new
 
             # Save Results
             self.optimize_result = ot.get_optimize_result(self)
@@ -334,18 +371,41 @@ class TrustRegionClass(Optimize):
                 ot.save_optimize_results(self.optimize_result)
 
             # Write logging info
-            self._log('')
-            self._log(f'       {"iter.":<10} {"fun":<15} {"tr-radius":<15} {"rho":<15}')
-            self._log(f'       {self.iteration:<10} {self._fk:<15.4e} {self.trust_radius:<15.4e}  {self.rho:<15.4e}')
-            self._log('')
+            info = {
+                'Iter.': self.iteration,
+                f'{fun_xk_symbol}': self._fk,
+                f'{delta_k_symbol}': self.trust_radius,
+                f'{rho_symbol}': self.rho,
+                f'|p{subk}| = {delta_k_symbol}': 'True' if hits_boundary else 'False',
+            }
+            self.logger(**info)
 
             # Call the callback function
             if callable(self.callback):
                 self.callback(self)
 
-            # update the trust region radius
+            # Check for convergence
+            if (la.norm(sk, np.inf) < self._xtol):
+                self.msg = 'Convergence criteria met: |dx| < xtol'
+                self.logger.info(self.msg)
+                success = False
+                return success
+            if (np.abs(self._fk - f_old) < self._ftol * np.abs(f_old)):
+                self.msg = 'Convergence criteria met: |f(x+dx) - f(x)| < ftol * |f(x)|'
+                self.logger.info(self.msg)
+                success = False
+                return success
+
+            # Check for custom convergence
+            if callable(self.convergence_criteria):
+                if self.convergence_criteria(self):
+                    self.logger('Custom convergence criteria met. Stopping optimization.')
+                    success = False
+                    return success
+
+            # Update the trust region radius
             delta_old = self.trust_radius
-            if (self.rho >= self.eta2) and hits_boundary:
+            if (self.rho >= self.eta2) and hits_boundary: 
                 delta_new = min(self.gam2*delta_old, self.trust_radius_max)
             elif self.eta1 <= self.rho < self.eta2:
                 delta_new = delta_old
@@ -355,22 +415,26 @@ class TrustRegionClass(Optimize):
             # Log new trust-radius
             self.trust_radius = np.clip(delta_new, self.trust_radius_min, self.trust_radius_max)
             if not (delta_old == delta_new):
-                self._log(f'Trust-radius updated: {delta_old:<10.4e} --> {delta_new:<10.4e}')
-
-            # Check for custom convergence
-            if callable(self.convergence_criteria):
-                if self.convergence_criteria(self):
-                    self._log('Custom convergence criteria met. Stopping optimization.')
-                    success = False
-                    return success
-
+                self.logger(f'Tr-radius {delta_k_symbol} updated: {delta_old:<10.4e} ───> {delta_new:<10.4e}')
+ 
             # check for convergence
-            if self.iteration==self.max_iter:
+            if self.iteration == self.max_iter:
                 success = False
             else:
                 # Calculate the jacobian and hessian
-                self._jk = self.jak(self._xk)
-                self._Hk = self.hess(self._xk)
+                self._jk = self.jac(self._xk)
+
+                if self.quasi_newton:
+                    yk = self._jk - j_old
+                    if self.iteration==1 and self._Hk is None:
+                        self._Hk = np.dot(yk, yk) / np.dot(yk, sk) * np.eye(self._xk.size) 
+
+                    self._Hk = self.bfgs_update(
+                        Bk = self._Hk, 
+                        sk = sk, 
+                        yk = yk)
+                else:
+                    self._Hk = self.hess(self._xk)
             
             # Update iteration
             self.iteration += 1
@@ -379,22 +443,25 @@ class TrustRegionClass(Optimize):
             if inner_iter < self.trust_radius_cuts:
                 
                 # Log the failure
-                self._log(f'Step not successful: rho < {self.rho_tol:<10.4e}')
+                self.logger(f'Step not successful: {rho_symbol} = {self.rho:<10.4e} < {self.rho_tol:<10.4e}')
                 
                 # Reduce trust region radius to 75% of current value
-                self._log('Reducing trust-radius by 75%')
+                self.logger(f'Reducing {delta_k_symbol} by 75%: {self.trust_radius:<10.4e} ───> {0.25*self.trust_radius:<10.4e}')
                 self.trust_radius = 0.25*self.trust_radius
 
                 if self.trust_radius < self.trust_radius_min:
-                    self._log(f'Trust radius {self.trust_radius} is below minimum {self.trust_radius_min}. Stopping optimization.')
+                    self.msg = f'Tr-radius {delta_k_symbol} <= minimum {delta_k_symbol}'
+                    self.logger(f'Trust radius {self.trust_radius:<10.4e} is below minimum {self.trust_radius_min:<10.4e}. Stopping optimization.')
                     success = False
                     return success
 
                 # Check for resampling of Jac and Hess
                 if self.resample:
-                    self._log('Resampling gradient and hessian')
-                    self._jk = self.jak(self._xk)
-                    self._Hk = self.hess(self._xk)
+                    self.logger('Resampling gradient and hessian')
+                    self._jk = self.jac(self._xk)
+
+                    if not self.quasi_newton:
+                        self._Hk = self.hess(self._xk)
 
                 # Recursivly call function
                 success = self.calc_update(inner_iter=inner_iter+1)
@@ -404,21 +471,26 @@ class TrustRegionClass(Optimize):
 
         return success
     
-    def update_results(self):
-        res = {
+    def bfgs_update(self, Bk, sk, yk):
+        sk = sk.reshape(-1, 1)
+        yk = yk.reshape(-1, 1)
+        term1 = (yk @ yk.T) / (yk.T @ sk)
+        term2 = (Bk @ sk @ sk.T @ Bk) / (sk.T @ Bk @ sk)
+        Bk_new = Bk + term1 - term2
+        return Bk_new
+
+    def get_intermediate_results(self):
+        # Define default results
+        results = {
             'fun': self._fk,
-            'x': self._xk,
+            'x': self._xk, 
             'jac': self._jk,
-            'hess': self._Hk,
             'nfev': self.nfev,
             'njev': self.njev,
             'nit': self.iteration,
-            'trust_radius': self.trust_radius,
+            'method': self.method,
             'save_folder': self.options.get('save_folder', './')
         }
-        
-        for a, arg in enumerate(self.args):
-            res[f'args[{a}]'] = arg
 
         if 'savedata' in self.options:
             # Make sure "SAVEDATA" gives a list
@@ -427,20 +499,21 @@ class TrustRegionClass(Optimize):
             else:
                 savedata = [self.options['savedata']]
 
+            if 'args' in savedata:
+                for a, arg in enumerate(self.args):
+                    results[f'args[{a}]'] = arg
+
             # Loop over variables to store in save list
-            for save_typ in savedata:
-                if save_typ in locals():
-                    res[save_typ] = eval('{}'.format(save_typ))
-                elif hasattr(self, save_typ):
-                    res[save_typ] = eval(' self.{}'.format(save_typ))
+            for variable in savedata:
+                if variable in locals():
+                    results[variable] = eval('{}'.format(variable))
+                elif hasattr(self, variable):
+                    results[variable] = eval('self.{}'.format(variable))
                 else:
-                    print(f'Cannot save {save_typ}!\n\n')
+                    print(f'Cannot save {variable}!\n\n')
 
-        return OptimizeResult(res)
+        return OptimizeResult(results)
 
-    def _log(self, msg):
-        if self.logger is not None:
-            self.logger.info(msg)
 
                 
 

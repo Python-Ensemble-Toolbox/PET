@@ -2,13 +2,16 @@ import numpy as np
 import numpy.linalg as la
 from functools import lru_cache
 from scipy.optimize._linesearch import _quadmin, _cubicmin
+from scipy.optimize._trustregion_ncg import CGSteihaugSubproblem
+from scipy.optimize._trustregion_exact import IterativeSubproblem
 
 __all__ = [
     'line_search', 
     'zoom', 
     'line_search_backtracking', 
     'bfgs_update', 
-    'newton_cg'
+    'newton_cg',
+    'solve_trust_region_subproblem'
 ] 
 
 
@@ -432,3 +435,62 @@ def newton_cg(gk, Hk=None, maxiter=None, **kwargs):
 
         b = np.dot(r, r)/np.dot(rold, rold)
         d = -r + b*d
+
+
+def solve_trust_region_subproblem(xk, fk, gk, Hk, radius, method='iterative', **kwargs):
+    '''
+    Solve the trust-region subproblem.
+
+    Parameters
+    ----------
+    xk : ndarray
+        Current point in the optimization process.
+    fk : float
+        Function value at xk.
+    gk : ndarray
+        Gradient at xk.
+    Hk : ndarray
+        Hessian at xk.
+    radius : float
+        Trust-region radius.
+    method : str, optional
+        Method to solve the trust-region subproblem. Options are 'iterative' or 'CG-Steihaug'. Default is 'iterative'.
+        If a callable is provided, it will be used as the solver with the signature:
+        method(xk, fk, gk, Hk, radius, **kwargs)
+
+    **kwargs : dict
+        Additional parameters for the solver.
+    
+    Returns
+    -------
+    pk : ndarray
+        Solution to the trust-region subproblem.
+    hits_boundary : bool
+        Indicates whether the solution lies on the boundary of the trust region.
+    '''
+    # Make quadratic model
+    model = lambda p: fk + np.dot(gk, p) + 0.5*np.dot(p, np.matmul(Hk, p))
+
+    # Solve the trust-region subproblem
+    if method == 'iterative':
+        subproblem = IterativeSubproblem(
+                xk,
+                model, 
+                lambda _: gk, 
+                lambda _: Hk,
+            )
+        pk, hits_boundary = subproblem.solve(radius)
+
+    elif method == 'CG-Steihaug':
+        subproblem = CGSteihaugSubproblem(
+                xk,
+                model, 
+                lambda _: gk, 
+                lambda _: Hk,
+            )
+        pk, hits_boundary = subproblem.solve(radius)
+    
+    else:
+        raise ValueError("Invalid method for solving trust-region subproblem. Choose 'iterative' or 'CG-Steihaug'.")
+
+    return pk, hits_boundary
