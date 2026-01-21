@@ -304,12 +304,10 @@ class TrustRegionClass(Optimize):
 
         #print(self.quasi_newton, self._Hk is None, self.iteration)
         if self.quasi_newton and (self._Hk is None) and (self.iteration == 1):
+            # First iteration with BFGS and no initial Hessian: use steepest descent
             sk = - self._jk
             sk = sk / la.norm(sk, np.inf) * self.trust_radius
             hits_boundary = True
-            if la.norm(sk) > self.trust_radius:
-                sk = sk / la.norm(sk) * self.trust_radius
-                hits_boundary = True
 
         else:
             # Solve subproblem
@@ -343,14 +341,14 @@ class TrustRegionClass(Optimize):
         # Calculate the actual function value
         xk_new = self._xk + sk
         fk_new = self.fun(xk_new)
-        print(self._fk, fk_new)
+
         # Calculate rho (actual / predicted reduction)
         df = self._fk - fk_new
         if self.iteration == 1 and self.quasi_newton:
             dm = - np.dot(self._jk, sk)
         else:
             dm = - np.dot(self._jk, sk) - np.dot(sk, np.dot(self._Hk, sk))/2
-        print(df, dm)
+
         self.rho = df/(dm + 1e-16)  # add small number to avoid division by zero
         
         if self.rho > self.rho_tol:

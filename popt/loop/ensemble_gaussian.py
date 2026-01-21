@@ -95,7 +95,7 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
 
         # Evaluate objective function for ensemble
         self.enF = self.function(self.enX, *args, **kwargs)
-
+    
         # Make function ensemble to a list (for Multilevel) 
         if not isinstance(self.enF, list):
             self.enF = [self.enF]
