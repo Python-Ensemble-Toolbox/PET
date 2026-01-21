@@ -360,7 +360,7 @@ class LineSearchClass(Optimize):
         if self.method == 'BFGS':
             pk = - np.matmul(self._Hk_inv, self._jk)
         if self.method == 'Newton-CG':
-            pk = newton_cg(self._jk, Hk=self._Hk, xk=self._xk, jac=self._jk, logger=self.logger)
+            pk = newton_cg(self._jk, Hk=self._Hk, xk=self._xk, jac=self.jac, logger=self.logger)
 
         # porject search direction onto the feasible set
         if self.bounds is not None:
