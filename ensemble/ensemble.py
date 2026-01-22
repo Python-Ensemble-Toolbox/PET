@@ -20,6 +20,7 @@ import logging
 import pipt.misc_tools.analysis_tools as at
 import pipt.misc_tools.extract_tools as extract
 import pipt.misc_tools.ensemble_tools as entools
+import pipt.misc_tools.data_tools as dtools
 from misc.system_tools.environ_var import OpenBlasSingleThread  # Single threaded OpenBLAS runs
 
 # Settings
@@ -326,11 +327,8 @@ class Ensemble:
                     if enX.shape[1] > 1:
                         enX[:, list_crash[index]] = deepcopy(self.enX[:, element])
                     en_pred[list_crash[index]] = deepcopy(en_pred[element])
- 
-            # Convert ensemble specific result into pred_data, and filter for NONE data
-            self.pred_data.extend([{typ: np.concatenate(tuple((el[ind][typ][:, np.newaxis]) for el in en_pred), axis=1)
-                                    if any(elem is not None for elem in tuple((el[ind][typ]) for el in en_pred))
-                                    else None for typ in en_pred[0][0].keys()} for ind in range(len(en_pred[0]))])
+            
+            self.pred_data = dtools.en_pred_to_pred_data(en_pred)
 
         # some predicted data might need to be adjusted (e.g. scaled or compressed if it is 4D seis data). Do not
         # include this here.
