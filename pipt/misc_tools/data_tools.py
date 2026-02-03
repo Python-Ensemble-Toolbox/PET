@@ -157,7 +157,7 @@ def melt_adjoint_to_sensitivity(adjoint: pd.DataFrame, datatype: list, idX: dict
     return sens
 
 
-def combine_adjoint_ensemble(en_adj, datatype: list, idX=test_idX):
+def combine_adjoint_ensemble(en_adj, datatype: list, idX: dict):
     
     adjoints = [melt_adjoint_to_sensitivity(adj, datatype, idX) for adj in en_adj]
 
