@@ -122,6 +122,68 @@ def en_pred_to_pred_data(en_pred):
     
     return pred_data
 
+def melt_adjoint_to_sensitivity(adjoint: pd.DataFrame, datatype: list, idX: dict):
+    
+    adj_datatype = adjoint.columns.levels[0]
+    adj_params = adjoint.columns.levels[1]
+
+    adj_datatype = sorted(adj_datatype, key=lambda x: datatype.index(x))
+    adj_params = sorted(adj_params, key=lambda x: list(idX.keys()).index(x))
+
+    sens = pd.DataFrame(columns=adj_datatype, index=adjoint.index)
+    for idx in sens.index:
+        for dkey in adj_datatype:
+            arr = np.array([])
+            for param in adj_params:
+                
+                if not isinstance(adjoint.at[idx, (dkey, param)], np.ndarray):
+                    if np.isnan(adjoint.at[idx, (dkey, param)]):
+                        dim = idX[param]
+                        dim = dim[1] - dim[0]
+                        arr = np.append(arr, np.zeros(dim))
+                    else:
+                        arr = np.append(arr, np.array([adjoint.at[idx, (dkey, param)]]))
+                    
+                else:
+                    a = adjoint.at[idx, (dkey, param)]
+                    a = np.where(np.isnan(a), 0, a)
+                    arr = np.append(arr, a)
+
+            sens.at[idx, dkey] = arr
+    
+    # Melt
+    sens = sens.melt(ignore_index=False)
+    sens.rename(columns={'variable': 'datatype', 'value': 'adjoint'}, inplace=True)
+    return sens
+
+
+def combine_adjoint_ensemble(en_adj, datatype: list, idX=test_idX):
+    
+    adjoints = [melt_adjoint_to_sensitivity(adj, datatype, idX) for adj in en_adj]
+
+    index = adjoints[0].index
+    index_name = adjoints[0].index.name
+    keys = adjoints[0]['datatype'].values
+    keys = sorted(keys, key=lambda x: datatype.index(x))
+
+    #df = pd.DataFrame(columns=['datatype', 'adjoint'], index=index, dtype=object)
+
+    data = {'datatype': [], 'adjoint': []}
+    for i, idx in enumerate(index):
+        data['datatype'].append(keys[i])
+        matrix = []    
+        for adj in adjoints:
+            matrix.append(adj.iloc[i]['adjoint'])
+        data['adjoint'].append(np.array(matrix).T) # Transpose to get correct shape (n_param, n_ensembles)
+
+    df = pd.DataFrame(data, index=index)
+    df.index.name = index_name
+    return df               
+            
+
+
+
+
             
         
             
