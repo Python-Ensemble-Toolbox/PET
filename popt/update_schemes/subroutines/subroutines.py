@@ -180,7 +180,7 @@ def zoom(alo, ahi, f, df, f0, df0, maxiter, c1, c2, iter_id=0):
     dphi_lo = df(alo)
 
     for j in range(maxiter):
-        logger(f'iteration: {iter_id+j+1}')
+        logger(f'iteration: {iter_id+j}')
 
         tol_cubic = 0.2*(ahi-alo)
         tol_quad  = 0.1*(ahi-alo)
