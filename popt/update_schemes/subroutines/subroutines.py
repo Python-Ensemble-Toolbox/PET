@@ -343,11 +343,14 @@ def line_search_backtracking(step_size, xk, pk, fun, jac, fk=None, jk=None, **kw
 
         # Check for sufficient decrease
         if (phi_i <= phi(0) + c1*step_size*np.dot(jk, pk)):
+                logger(f'    Sufficient decrease: {check}')
                 # Evaluate jac at new point
                 jac_new = jac(xk + step_size*pk)
                 logger('──────────────────────────────────────────────────')
+
                 return step_size, phi_i, jac_new, ls_nfev, ls_njev
         
+        logger(f'    Sufficient decrease: {cross}')
         # Reduce step size
         step_size *= rho  
 
