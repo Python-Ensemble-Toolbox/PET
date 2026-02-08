@@ -240,9 +240,12 @@ class Ensemble(PETEnsemble):
 
         # Check if a csv file has been included in TRUEDATA. If so, we read it and make a 2D list, which we can use
         # in the below when assigning data to obs_data dictionary
-        if isinstance(self.keys_da['truedata'], str) and self.keys_da['truedata'].endswith('.csv'):
-            truedata = rcsv.read_data_csv(
-                self.keys_da['truedata'], self.keys_da['datatype'], self.keys_da['truedataindex'])
+        if isinstance(self.keys_da['truedata'], str) and (self.keys_da['truedata'].endswith('.csv') or self.keys_da['truedata'].endswith('.pkl')):
+            self.obs_data, self.keys_da['datatype'], self.truedataindex = rcsv.read_data_df(self.keys_da['truedata'],outtype='list')
+            self.keys_da['truedataindex'] = self.truedataindex
+
+            # This does not need any more adjustment
+            return
 
         # # Check if assimindex is given as a csv file. If so, we read and make a potential 2D list (if sequential).
         # if isinstance(self.keys_da['assimindex'], str) and self.keys_da['assimindex'].endswith('.csv'):
@@ -421,9 +424,38 @@ class Ensemble(PETEnsemble):
         #  extracted from the csv file
         if isinstance(self.keys_da['datavar'], str) and self.keys_da['datavar'].endswith('.csv'):
             datavar = rcsv.read_var_csv(self.keys_da['datavar'], datatype, true_prim)
+        
+        if isinstance(self.keys_da['datavar'], str) and self.keys_da['datavar'].endswith('.pkl'):
+            datavar = rcsv.read_var_df(self.keys_da['datavar'], datatype=self.keys_da['datatype'],
+                                       truedataindex=self.keys_da['truedataindex'])
 
-        # Initialize datavar output
-        self.datavar = [None] * len(true_prim)
+
+            # Initialize datavar output
+            self.datavar = [None] * len(true_prim)
+            for i in range(len(self.obs_data)):  # TRUEDATAINDEX
+            # Init. dict. with datatypes (do inside loop to avoid copy of same entry)
+                self.datavar[i] = {}
+                for j in range(len(datatype)):  # DATATYPE
+                    if self.obs_data[i][datatype[j]] is not None:
+                        self.datavar[i][datatype[j]] = []
+                        for c,el in enumerate(self.obs_data[i][datatype[j]]):
+                            if datavar[i][datatype[j]][0].lower() == 'rel':
+                                self.datavar[i][datatype[j]].append((datavar[i][datatype[j]][1]*(el*0.01))**2)
+                            elif datavar[i][datatype[j]][0].lower() == 'abs':
+                                # Check if datavar[i][datatype[j]][1] is iterable
+                                var_value = datavar[i][datatype[j]][1]
+                                if hasattr(var_value, '__iter__') and not isinstance(var_value, str):
+                                    self.datavar[i][datatype[j]].append(var_value[c])
+                                else:
+                                    self.datavar[i][datatype[j]].append(var_value)
+                            else:
+                                print('\n\033[1;31mERROR: Cannot read data variance from pkl file! The first entry in the pkl file must be either "rel" or "abs"!\033[1;m')
+                                sys.exit()
+                        self.datavar[i][datatype[j]] = np.array(self.datavar[i][datatype[j]])
+                    else:
+                        self.datavar[i][datatype[j]] = None
+
+            return
 
         # Loop over all entries in datavar and fill in values from "DATAVAR" (use obs_data values in the REL variance
         #  cases)
