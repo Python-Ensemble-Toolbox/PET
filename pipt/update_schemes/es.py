@@ -52,7 +52,7 @@ class esMixIn():
                                                               list_datatypes)
 
             data_misfit = at.calc_objectivefun(
-                self.full_real_obs_data, pred_data, self.full_cov_data)
+                self.enObs, pred_data, self.scale_data)
             self.data_misfit = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
 

@@ -40,7 +40,11 @@ class enkfMixIn(Ensemble):
 
             # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
             # are given as in the Simultaneous loop.
-            self.check_assimindex_sequential()
+            self.check_assimindex_simultaneous()
+
+            self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
+            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
+
 
             # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
             # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
@@ -56,11 +60,11 @@ class enkfMixIn(Ensemble):
             else:
                 self.trunc_energy = 0.98
 
-            self.state_scaling = at.calc_scaling(
-                self.prior_enX, 
-                self.list_states, 
-                self.prior_info
-            )
+            # Get the perturbed observations and observation scaling
+            self.vecObs, self.enObs = self.set_observations()
+            self.enObs_conv = deepcopy(self.enObs)
+
+            self._ext_scaling()
 
     def calc_analysis(self):
         """
@@ -74,32 +78,32 @@ class enkfMixIn(Ensemble):
                 np.concatenate(self.keys_da['assimindex']))]
             list_datatypes, list_active_dataypes = at.get_list_data_types(
                 self.obs_data, assim_index)
-            if not hasattr(self, 'cov_data'):
-                self.full_cov_data = at.gen_covdata(
-                    self.datavar, assim_index, list_datatypes)
-            else:
-                self.full_cov_data = self.cov_data
+            # if not hasattr(self, 'cov_data'):
+            #     self.full_cov_data = at.gen_covdata(
+            #         self.datavar, assim_index, list_datatypes)
+            # else:
+            #     self.full_cov_data = self.cov_data
 
-            #obs_data_vector, pred_data = at.aug_obs_pred_data(
-            #    self.obs_data, self.pred_data, assim_index, list_datatypes)
+            # #obs_data_vector, pred_data = at.aug_obs_pred_data(
+            # #    self.obs_data, self.pred_data, assim_index, list_datatypes)
             
-            vecObs, enPred = at.aug_obs_pred_data(
+            _, enPred = at.aug_obs_pred_data(
                 self.obs_data, 
                 self.pred_data, 
                 assim_index, 
                 list_datatypes
             )
 
-            # Generate realizations of the observed data
-            generator = Cholesky()  # Initialize GeoStat class for generating realizations
-            self.enObs = generator.gen_real(
-                vecObs, 
-                self.full_cov_data, 
-                self.ne
-            )
+            # # Generate realizations of the observed data
+            # generator = Cholesky()  # Initialize GeoStat class for generating realizations
+            # self.enObs = generator.gen_real(
+            #     vecObs, 
+            #     self.full_cov_data, 
+            #     self.ne
+            # )
 
             # Calc. misfit for the initial iteration
-            data_misfit = at.calc_objectivefun(self.enObs, enPred, self.full_cov_data)
+            data_misfit = at.calc_objectivefun(self.enObs, enPred, self.scale_data)
 
             # Store the (mean) data misfit (also for conv. check)
             self.data_misfit = np.mean(data_misfit)
@@ -119,27 +123,36 @@ class enkfMixIn(Ensemble):
             self.obs_data, self.assim_index)
 
         # Augment observed and predicted data
-        self.vecObs, self.enPred = at.aug_obs_pred_data(
-            self.obs_data, 
-            self.pred_data, 
-            self.assim_index,
-            self.list_datatypes
-        )
-        
-        self.cov_data = at.gen_covdata(
-            self.datavar, 
-            self.assim_index, 
-            self.list_datatypes
-        )
+        if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
+            _, self.enPred = at.aug_obs_pred_data(
+                self.obs_data, 
+                self.pred_data, 
+                self.assim_index,
+                self.list_datatypes
+            )
+        else:
+            self.vecObs, self.enPred = at.aug_obs_pred_data(
+                self.obs_data, 
+                self.pred_data, 
+                self.assim_index,
+                self.list_datatypes
+            )
+            
+            self.cov_data = at.gen_covdata(
+                self.datavar, 
+                self.assim_index, 
+                self.list_datatypes
+            )
 
-        generator = Cholesky()  # Initialize GeoStat class for generating realizations
-        self.data_random_state = deepcopy(np.random.get_state())
-        self.enObs, self.scale_data = generator.gen_real(
-            self.vecObs, 
-            self.cov_data, 
-            self.ne,
-            return_chol=True
-        )
+            generator = Cholesky()  # Initialize GeoStat class for generating realizations
+            self.data_random_state = deepcopy(np.random.get_state())
+            self.enObs, self.scale_data = generator.gen_real(
+                self.vecObs, 
+                self.cov_data, 
+                self.ne,
+                return_chol=True
+            )
+
         self.E = np.dot(self.enObs, self.proj)
 
         if 'localanalysis' in self.keys_da:

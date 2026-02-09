@@ -448,6 +448,8 @@ class Ensemble(PETEnsemble):
                                     self.datavar[i][datatype[j]].append(var_value[c])
                                 else:
                                     self.datavar[i][datatype[j]].append(var_value)
+                            elif datavar[i][datatype[j]][0].lower() == 'emp':
+                                self.datavar[i][datatype[j]].append(datavar[i][datatype[j]][1])
                             else:
                                 print('\n\033[1;31mERROR: Cannot read data variance from pkl file! The first entry in the pkl file must be either "rel" or "abs"!\033[1;m')
                                 sys.exit()
@@ -541,12 +543,17 @@ class Ensemble(PETEnsemble):
                 # enObs: samples from N(0,Cd)
                 enObs = cholesky(self.cov_data).T @ np.random.randn(self.cov_data.shape[0], self.ne)
             else:
-                enObs = at.extract_tot_empirical_cov(
-                    self.datavar, 
-                    self.assim_index, 
-                    self.list_datatypes, 
-                    self.ne
-                )
+                # Extract assim indices
+                if isinstance(self.assim_index[1], list):
+                    l_prim = [int(x) for x in self.assim_index[1]]
+                else:
+                    l_prim = [int(self.assim_index[1])]
+                
+                # Concatenate datavar in the same manner as aug_obs_pred_data
+                enObs = np.concatenate(tuple(
+                    self.datavar[el][dat] for el in l_prim for dat in self.list_datatypes 
+                    if self.datavar[el][dat] is not None
+                ))
 
             # Screen data if required
             if ('screendata' in self.keys_da) and (self.keys_da['screendata'] == 'yes'):
@@ -558,7 +565,7 @@ class Ensemble(PETEnsemble):
                 )
             
             # Center the ensemble of perturbed observed data
-            enObs = vecObs[:, np.newaxis] - enObs
+            # enObs = vecObs[:, np.newaxis] - enObs
             self.cov_data = np.var(enObs, ddof=1, axis=1)
             self.scale_data = np.sqrt(self.cov_data)
         

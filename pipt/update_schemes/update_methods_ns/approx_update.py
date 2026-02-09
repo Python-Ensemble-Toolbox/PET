@@ -189,34 +189,34 @@ class approx_update():
 
         else:
 
-            if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
+            # if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
                 
-                # Scale and center the ensemble matrecies: enX and enE
-                enXcentered = self.scale(enX - np.mean(enX, 1)[:,None], self.state_scaling)
-                enEcentered = self.scale(enE - np.mean(enE, 1)[:,None], self.scale_data)
+            #     # Scale and center the ensemble matrecies: enX and enE
+            #     enXcentered = self.scale(enX - np.mean(enX, 1)[:,None], self.state_scaling)
+            #     enEcentered = self.scale(enE - np.mean(enE, 1)[:,None], self.scale_data)
 
-                Sinv = np.diag(1/Sd)
-                X0 = Sinv @ Ud.T @ enEcentered
-                eigval, eigvec = np.linalg.eig(X0 @ X0.T)
+            #     Sinv = np.diag(1/Sd)
+            #     X0 = Sinv @ Ud.T @ enEcentered
+            #     eigval, eigvec = np.linalg.eig(X0 @ X0.T)
 
-                # Calculate and scale difference between observations and predictions (residuals)
-                enRes = self.scale(enE - enY, self.scale_data)
+            #     # Calculate and scale difference between observations and predictions (residuals)
+            #     enRes = self.scale(enE - enY, self.scale_data)
 
-                # Compute the update step
-                X1 = (Ud @ Sinv @ eigvec).T @ enRes
-                X2 = solve((self.lam + 1) * np.diag(eigval) + np.eye(len(eigval)), X1)
-                X3 = np.dot(VTd.T, eigvec) @ X2
-                self.step = np.dot(self.state_scaling[:, None]*enXcentered, X3)
+            #     # Compute the update step
+            #     X1 = (Ud @ Sinv @ eigvec).T @ enRes
+            #     X2 = solve((self.lam + 1) * np.diag(eigval) + np.eye(len(eigval)), X1)
+            #     X3 = np.dot(VTd.T, eigvec) @ X2
+            #     self.step = np.dot(self.state_scaling[:, None]*enXcentered, X3)
  
-            else:
-                enXcentered = self.scale(np.dot(enX, self.proj), self.state_scaling)
-                enRes = self.scale(enE - enY, self.scale_data)
-                
-                # Compute the update step
-                X1 = Ud.T @ enRes
-                X2 = solve((self.lam + 1)*np.eye(Sd.size) + np.diag(Sd**2), X1)
-                X3 = VTd.T @ np.diag(Sd) @ X2
-                self.step = np.dot(self.state_scaling[:, None] * enXcentered, X3)
+            # else:
+            enXcentered = self.scale(np.dot(enX, self.proj), self.state_scaling)
+            enRes = self.scale(enE - enY, self.scale_data)
+            
+            # Compute the update step
+            X1 = Ud.T @ enRes
+            X2 = solve((self.lam + 1)*np.eye(Sd.size) + np.diag(Sd**2), X1)
+            X3 = VTd.T @ np.diag(Sd) @ X2
+            self.step = np.dot(self.state_scaling[:, None] * enXcentered, X3)
 
 
     def scale(self, data, scaling):
