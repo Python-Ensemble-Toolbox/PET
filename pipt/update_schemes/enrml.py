@@ -248,6 +248,7 @@ class lmenrmlMixIn(Ensemble):
                 # Reduce damping parameter (divide calculations for ANALYSISDEBUG purpose)
                 if self.lam > self.lam_min:
                     self.lam = self.lam / self.gamma
+                    self.logger(f'λ reduced: {self.lam * self.gamma} ──> {self.lam}')
                 success = True
 
                 # Update state ensemble
@@ -274,6 +275,7 @@ class lmenrmlMixIn(Ensemble):
             else:  # Reject iteration, and increase lam
                 # Increase damping parameter (divide calculations for ANALYSISDEBUG purpose)
                 self.lam = self.lam * self.gamma
+                self.logger(f'Data misfit increased! λ increased: {self.lam / self.gamma} ──> {self.lam}')
                 success = False
 
             # Log update results

@@ -334,7 +334,6 @@ class Ensemble:
                 #self.enGrad = dtools.combine_adjoint_ensemble(en_adj, self.sim.datatype, self.idX)
                 print(self.enGrad)
 
-
             self.pred_data = dtools.en_pred_to_pred_data(en_pred)
 
         # some predicted data might need to be adjusted (e.g. scaled or compressed if it is 4D seis data). Do not
