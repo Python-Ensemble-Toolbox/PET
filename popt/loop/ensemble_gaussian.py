@@ -84,17 +84,21 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
         # Generate state ensemble
         self.ne = self.num_samples
         nr = self._aux_input()   
-        self.enX = np.random.multivariate_normal(self.stateX, self.covX, self.ne).T
+        enX = np.random.multivariate_normal(self.stateX, self.covX, self.ne).T
 
         # Shift ensemble to have correct mean
-        self.enX = self.enX - self.enX.mean(axis=1, keepdims=True) + self.stateX[:,None]
+        self.enX = enX - enX.mean(axis=1, keepdims=True) + self.stateX[:,None]
 
         # Truncate to bounds
         if (self.lb is not None) and (self.ub is not None):
-            self.enX = np.clip(self.enX, self.lb[:, None], self.ub[:, None])
+            enX = np.clip(enX, self.lb[:, None], self.ub[:, None])
 
         # Evaluate objective function for ensemble
-        self.enF = self.function(self.enX, *args, **kwargs)
+        enF = self.function(enX, *args, **kwargs)
+
+        # Store ensembles
+        self.enX = enX
+        self.enF = enF
     
         # Make function ensemble to a list (for Multilevel) 
         if not isinstance(self.enF, list):

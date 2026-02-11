@@ -130,7 +130,7 @@ def read_toml(init_file):
         keys_pr = t['dataassim']
         check_mand_keywords_da(keys_pr)
     else:
-        raise KeyError
+        keys_pr = {}
     if 'fwdsim' in t.keys():
         keys_fwd = t['fwdsim']
     else:

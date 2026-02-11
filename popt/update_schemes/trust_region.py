@@ -16,8 +16,10 @@ from popt.update_schemes.subroutines.subroutines import solve_trust_region_subpr
 subk = '\u2096'
 fun_xk_symbol  = f'fun(x{subk})'
 delta_k_symbol = f'\u0394{subk}'
-rho_symbol     = '\u03C1'
+rho_symbol     = f'\u03C1{subk}'
 
+check_symbol = '\u2713'
+cross_symbol = '\u2717'
 
 def TrustRegion(fun, x, jac, hess, method='iterative', args=(), bounds=None, callback=None, **options):
     '''
@@ -175,7 +177,7 @@ class TrustRegionClass(Optimize):
         self.resample = options.get('resample', False)
         self.saveit   = options.get('saveit', True)
         self.rho_tol  = options.get('rho_tol', 1e-6)
-        self.eta1 = options.get('eta1', 0.1)  # reduce raduis if rho < 10%
+        self.eta1 = options.get('eta1', 0.05) # reduce raduis if rho < 5%
         self.eta2 = options.get('eta2', 0.5)  # increase radius if rho > 50% 
         self.gam1 = options.get('gam1', 0.5)  # reduce by 50%
         self.gam2 = options.get('gam2', 1.5)  # increase by 50%
@@ -302,6 +304,10 @@ class TrustRegionClass(Optimize):
         # Initialize variables for this step
         success = True
 
+        # Project the jacobian to respect bounds
+        if self.bounds is not None:
+            self._jk = self._project_jac(self._jk, self._xk)
+
         #print(self.quasi_newton, self._Hk is None, self.iteration)
         if self.quasi_newton and (self._Hk is None) and (self.iteration == 1):
             # First iteration with BFGS and no initial Hessian: use steepest descent
@@ -349,9 +355,9 @@ class TrustRegionClass(Optimize):
         else:
             dm = - np.dot(self._jk, sk) - np.dot(sk, np.dot(self._Hk, sk))/2
 
-        self.rho = df/(dm + 1e-16)  # add small number to avoid division by zero
+        self.rho = df/dm
         
-        if self.rho > self.rho_tol:
+        if (self.rho > self.rho_tol) and (fk_new < self._fk):
             
             # Save old values
             x_old = self._xk
@@ -374,7 +380,7 @@ class TrustRegionClass(Optimize):
                 f'{fun_xk_symbol}': self._fk,
                 f'{delta_k_symbol}': self.trust_radius,
                 f'{rho_symbol}': self.rho,
-                f'|p{subk}| = {delta_k_symbol}': 'True' if hits_boundary else 'False',
+                f'|p{subk}| = {delta_k_symbol}': 'yes' if hits_boundary else 'no',
             }
             self.logger(**info)
 
@@ -405,15 +411,18 @@ class TrustRegionClass(Optimize):
             delta_old = self.trust_radius
             if (self.rho >= self.eta2) and hits_boundary: 
                 delta_new = min(self.gam2*delta_old, self.trust_radius_max)
-            elif self.eta1 <= self.rho < self.eta2:
-                delta_new = delta_old
-            else:
+            elif self.rho < self.eta1:
                 delta_new = self.gam1*delta_old
+            else:
+                delta_new = delta_old
             
             # Log new trust-radius
             self.trust_radius = np.clip(delta_new, self.trust_radius_min, self.trust_radius_max)
             if not (delta_old == delta_new):
-                self.logger(f'Tr-radius {delta_k_symbol} updated: {delta_old:<10.4e} ───> {delta_new:<10.4e}')
+                d_delta = (delta_new - delta_old)/delta_old * 100
+                self.logger(
+                    f'Tr-radius {delta_k_symbol} updated: {delta_old:<10.4e} ───> {delta_new:<10.4e} ({d_delta:<.2f}%)'
+                )
  
             # check for convergence
             if self.iteration == self.max_iter:
@@ -440,8 +449,11 @@ class TrustRegionClass(Optimize):
         else:
             if inner_iter < self.trust_radius_cuts:
                 
-                # Log the failure
-                self.logger(f'Step not successful: {rho_symbol} = {self.rho:<10.4e} < {self.rho_tol:<10.4e}')
+                if not (fk_new < self._fk):
+                    self.logger(f'Function value not reduced: {fun_xk_symbol} = {fk_new:<10.4e} >= {self._fk:<10.4e}')
+                else:
+                    # Log the failure
+                    self.logger(f'Step not successful: {rho_symbol} = {self.rho:<10.4e} < {self.rho_tol:<10.4e}')
                 
                 # Reduce trust region radius to 75% of current value
                 self.logger(f'Reducing {delta_k_symbol} by 75%: {self.trust_radius:<10.4e} ───> {0.25*self.trust_radius:<10.4e}')
@@ -511,8 +523,15 @@ class TrustRegionClass(Optimize):
                     print(f'Cannot save {variable}!\n\n')
 
         return OptimizeResult(results)
-
-
+    
+    def _project_jac(self, jk, xk):
+        ''' Projects the jacobian onto the feasible set defined by bounds '''
+        lb = np.array(self.bounds)[:, 0]
+        ub = np.array(self.bounds)[:, 1]
+        for i, jk_val in enumerate(jk):
+            if (xk[i] <= lb[i] and jk_val > 0) or (xk[i] >= ub[i] and jk_val < 0):
+                jk[i] = 0
+        return jk
                 
 
                     

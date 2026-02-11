@@ -5,6 +5,7 @@ EnRML type schemes
 import pipt.misc_tools.analysis_tools as at
 import pipt.misc_tools.extract_tools as extract
 import pipt.misc_tools.ensemble_tools as entools
+import pipt.misc_tools.data_tools as dtools
 
 from geostat.decomp import Cholesky
 from pipt.loop.ensemble import Ensemble
@@ -145,12 +146,22 @@ class lmenrmlMixIn(Ensemble):
         if 'localanalysis' in self.keys_da:
             self.local_analysis_update()
         else:
+
+            # Check for adjoint
+            if hasattr(self, 'adjoints'):
+                enAdj = dtools.combine_ensemble_dataframes(self.adjoints)
+                enAdj = dtools.dataframe_to_matrix(enAdj) # Shape (nd, ne, nx)
+            else:
+                enAdj = None
+
             # Perform the update
             self.update(
                 enX = self.enX, 
                 enY = self.enPred, 
                 enE = self.enObs, 
-                prior = self.prior_enX
+                # kwargs
+                prior = self.prior_enX,
+                enAdj = enAdj
             )
 
             # Update the state ensemble and weights
@@ -178,7 +189,6 @@ class lmenrmlMixIn(Ensemble):
             Dict. with keys corresponding to conv. criteria, with logical variable telling which of them that has been
             met
         """
-
         # Get Ensemble of predicted data
         _, enPred = at.aug_obs_pred_data(
             self.obs_data,
@@ -248,6 +258,7 @@ class lmenrmlMixIn(Ensemble):
                 # Reduce damping parameter (divide calculations for ANALYSISDEBUG purpose)
                 if self.lam > self.lam_min:
                     self.lam = self.lam / self.gamma
+                    self.logger(f'λ reduced: {self.lam * self.gamma} ──> {self.lam}')
                 success = True
 
                 # Update state ensemble
@@ -274,6 +285,7 @@ class lmenrmlMixIn(Ensemble):
             else:  # Reject iteration, and increase lam
                 # Increase damping parameter (divide calculations for ANALYSISDEBUG purpose)
                 self.lam = self.lam * self.gamma
+                self.logger(f'Data misfit increased! λ increased: {self.lam / self.gamma} ──> {self.lam}')
                 success = False
 
             # Log update results
