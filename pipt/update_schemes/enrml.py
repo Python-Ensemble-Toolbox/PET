@@ -189,7 +189,6 @@ class lmenrmlMixIn(Ensemble):
             Dict. with keys corresponding to conv. criteria, with logical variable telling which of them that has been
             met
         """
-
         # Get Ensemble of predicted data
         _, enPred = at.aug_obs_pred_data(
             self.obs_data,
