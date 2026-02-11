@@ -328,12 +328,14 @@ class Ensemble:
                         enX[:, list_crash[index]] = deepcopy(self.enX[:, element])
                     en_pred[list_crash[index]] = deepcopy(en_pred[element])
             
-            if hasattr(self.sim, 'compute_adjoints') and self.sim.compute_adjoints:
+            if getattr(self.sim, 'compute_adjoints', False):
                 en_pred, en_adj = zip(*en_pred)
-                self.enGrad = [dtools.melt_adjoint_to_sensitivity(adj, self.sim.datatype) for adj in en_adj]
-                #self.enGrad = dtools.combine_adjoint_ensemble(en_adj, self.sim.datatype, self.idX)
-                print(self.enGrad)
+                
+                # Each adjoint in en_adj is a DataFram with mulit-index columns (data type, param)
+                self.adjoints = [dtools.multilevel_to_singlelevel_columns(a) for a in en_adj]
 
+            # Combine ensemble predictions into pred_data structure  
+            # TODO: In the long run, pred_data should also be made into a DataFrame!
             self.pred_data = dtools.en_pred_to_pred_data(en_pred)
 
         # some predicted data might need to be adjusted (e.g. scaled or compressed if it is 4D seis data). Do not
