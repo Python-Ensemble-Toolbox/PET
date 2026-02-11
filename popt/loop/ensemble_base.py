@@ -124,6 +124,9 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         x = self._reorganize_multilevel_ensemble(x)
         x = self.scale_state(x).squeeze()
 
+        if self.enX is not None:
+            self.enX = self.scale_state(self.enX)
+
         # Evaluate the objective function
         if run_success:
             func_values = self.obj_func(
