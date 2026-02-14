@@ -217,11 +217,11 @@ class Assimilate:
         # always store posterior forcast and state, unless specifically told not to
         if 'nosave' not in self.ensemble.keys_da:
             try: # first try to save as npz file
-                np.savez(f'{self.save_folder}/posterior_state_estimate.npz', **self.ensemble.enX)
+                np.savez(f'{self.save_folder}/posterior_state_estimate.npz', **entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX))
                 np.savez(f'{self.save_folder}/posterior_forecast.npz', **{'pred_data': self.ensemble.pred_data})
             except: # If this fails, store as pickle
                 with open(f'{self.save_folder}/posterior_state_estimate.p', 'wb') as file:
-                    pickle.dump(self.ensemble.enX, file)
+                    pickle.dump(entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX), file)
                 with open(f'{self.save_folder}/posterior_forecast.p', 'wb') as file:
                     pickle.dump(self.ensemble.pred_data, file)
 
