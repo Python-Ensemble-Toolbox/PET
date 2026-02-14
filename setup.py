@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 EXTRAS = {
     "doc": [
@@ -17,7 +17,7 @@ EXTRAS = {
 setup(
     name='PET',
     version='1.0',
-    packages=['pipt', 'popt', 'ensemble', 'simulator', 'input_output', 'misc'],
+    packages=find_packages(), #['pipt', 'popt', 'ensemble', 'simulator', 'input_output', 'misc'],
     url='https://github.com/Python-Ensemble-Toolbox/PET',
     license_files=('LICENSE.txt',),
     author='',
