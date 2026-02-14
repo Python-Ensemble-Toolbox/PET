@@ -260,7 +260,7 @@ class Ensemble:
                 en_pred = []
                 pbar = tqdm(enumerate(enX), total=self.ne, **progbar_settings)
                 for member_index, state in pbar:
-                    en_pred.append(self.sim.run_fwd_sim(state, member_index))
+                    en_pred.append(deepcopy(self.sim.run_fwd_sim(state, member_index)))
             
             # Parallelization on HPC using SLURM
             elif self.sim.input_dict.get('hpc', False): # Run prediction in parallel on hpc
