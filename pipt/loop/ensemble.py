@@ -240,12 +240,15 @@ class Ensemble(PETEnsemble):
 
         # Check if a csv file has been included in TRUEDATA. If so, we read it and make a 2D list, which we can use
         # in the below when assigning data to obs_data dictionary
-        if isinstance(self.keys_da['truedata'], str) and (self.keys_da['truedata'].endswith('.csv') or self.keys_da['truedata'].endswith('.pkl')):
+        if isinstance(self.keys_da['truedata'], str) and self.keys_da['truedata'].endswith('.pkl'):
             self.obs_data, self.keys_da['datatype'], self.truedataindex = rcsv.read_data_df(self.keys_da['truedata'],outtype='list')
             self.keys_da['truedataindex'] = self.truedataindex
 
             # This does not need any more adjustment
             return
+        if isinstance(self.keys_da['truedata'], str) and self.keys_da['truedata'].endswith('.csv'):
+            truedata = rcsv.read_data_csv(
+                self.keys_da['truedata'], self.keys_da['datatype'], self.keys_da['truedataindex'])
 
         # # Check if assimindex is given as a csv file. If so, we read and make a potential 2D list (if sequential).
         # if isinstance(self.keys_da['assimindex'], str) and self.keys_da['assimindex'].endswith('.csv'):
