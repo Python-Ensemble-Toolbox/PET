@@ -464,6 +464,8 @@ class Ensemble(PETEnsemble):
 
         # Loop over all entries in datavar and fill in values from "DATAVAR" (use obs_data values in the REL variance
         #  cases)
+        # Initialize datavar output
+        self.datavar = [None] * len(true_prim)
         # TODO: Implement loading of data variance from .npz file
         vintage = 0
         for i in range(len(self.obs_data)):  # TRUEDATAINDEX
