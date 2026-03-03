@@ -250,6 +250,9 @@ class lmenrmlMixIn(Ensemble):
                         'lambda': self.lam,
                         'lambda_stop': self.lam >= self.lam_max}
 
+            # Log step
+            self.log_update(success=success)
+
             ###############################################
             ##### update Lambda step-size values ##########
             ###############################################
@@ -287,9 +290,6 @@ class lmenrmlMixIn(Ensemble):
                 self.lam = self.lam * self.gamma
                 self.logger(f'Data misfit increased! λ increased: {self.lam / self.gamma} ──> {self.lam}')
                 success = False
-
-            # Log update results
-            self.log_update(success=success)
 
             if not success:
                 # Reset the objective function after report
