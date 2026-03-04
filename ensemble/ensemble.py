@@ -128,10 +128,15 @@ class Ensemble:
             elif 'controls' in self.keys_en:
                 self.prior_info = extract.extract_initial_controls(self.keys_en)
 
+            
+            # Ensemble size
+            self.ne = self.keys_en.get('ne', None)
+
             # Calculate initial ensemble if IMPORTSTATICVAR has not been given in init. file.
             # Prior info. on state variables must be given by PRIOR_<STATICVAR-name> keyword.
             if 'importstaticvar' not in self.keys_en:
-                self.ne = int(self.keys_en['ne'])
+                if self.ne is None:
+                    self.ne = 100
 
                 # Generate prior ensemble
                 self.enX, self.idX, self.cov_prior = entools.generate_prior_ensemble(
@@ -144,15 +149,16 @@ class Ensemble:
                 # State variable imported as a Numpy save file
                 tmp_load = np.load(self.keys_en['importstaticvar'], allow_pickle=True)
 
+                if self.ne is None:
+                    self.ne = tmp_load[key].shape[1]
+
                 # We assume that the user has saved the state dict. as **state (effectively saved all keys in state
                 # individually).
                 for key in self.keys_en['staticvar']:
                     if self.enX is None:
-                        self.enX = tmp_load[key]
-                        self.ne = self.enX.shape[1]
+                        self.enX = tmp_load[key][:,:self.ne]
                     else:
-                        assert self.ne == tmp_load[key].shape[1], 'Ensemble size of imported state variables do not match!'
-                        self.enX = np.vstack((self.enX, tmp_load[key]))
+                        self.enX = np.vstack((self.enX, tmp_load[key][:,:self.ne]))
 
                     # fill in indices
                     self.idX[key] = (self.enX.shape[0] - tmp_load[key].shape[0], self.enX.shape[0])
