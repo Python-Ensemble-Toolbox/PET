@@ -137,6 +137,8 @@ class Ensemble:
             if 'importstaticvar' not in self.keys_en:
                 if self.ne is None:
                     self.ne = 100
+                else:
+                    self.ne = int(self.ne)
 
                 # Generate prior ensemble
                 self.enX, self.idX, self.cov_prior = entools.generate_prior_ensemble(
@@ -151,6 +153,8 @@ class Ensemble:
 
                 if self.ne is None:
                     self.ne = tmp_load[key].shape[1]
+                else:
+                    self.ne = int(self.ne)
 
                 # We assume that the user has saved the state dict. as **state (effectively saved all keys in state
                 # individually).
