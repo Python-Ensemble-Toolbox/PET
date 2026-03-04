@@ -265,6 +265,12 @@ class Ensemble:
             # Parallelization on HPC using SLURM
             elif self.sim.input_dict.get('hpc', False): # Run prediction in parallel on hpc
                 en_pred = self.run_on_HPC(enX, batch_size=nparallel)
+            
+            # Parallellization internal to the simulator (e.g. batch processing on GPU )
+            elif self.sim.input_dict.get('parallel_internal', False):
+                # make a single matrix for each state
+                batch_enX = {key: np.array([d[key] for d in enX]) for key in enX[0].keys()} # key: (b, state)
+                en_pred = self.sim.run_fwd_sim(batch_enX, member_i=None)
 
             # Parallelization on local machine using p_map      
             else:
