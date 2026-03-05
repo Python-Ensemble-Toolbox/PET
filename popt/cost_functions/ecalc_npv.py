@@ -45,6 +45,10 @@ def ecalc_npv(pred_data, **kwargs):
 
     # Economic values
     npv_const = dict(keys_opt['npv_const'])
+    if 'wem' not in npv_const:
+        npv_const['wem'] = 0
+    if 'wel' not in npv_const:
+        npv_const['wel'] = 0
 
     # Collect production data
     Qop = []
@@ -96,6 +100,7 @@ def ecalc_npv(pred_data, **kwargs):
         NT = Qop[l].shape[1]
         values = []
         em_values = []
+        el_values = []
         for n in range(N):
             with open('ecalc_input.csv', 'w') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',')
@@ -113,18 +118,18 @@ def ecalc_npv(pred_data, **kwargs):
                 resource_service=resource_service,
                 output_frequency=Frequency.NONE,
             )
-            # comps = {c.name: id_hash for (id_hash, c) in yaml_model.graph.components.items()}
 
             # Compute energy, emissions
-            #model = EnergyCalculator(energy_model=yaml_model, expression_evaluator=yaml_model.variables)
-            #consumer_results = model.evaluate_energy_usage()
-            #emission_results = model.evaluate_emissions()
             model = EnergyCalculator(graph=yaml_model.get_graph())
             consumer_results = model.evaluate_energy_usage(yaml_model.variables)
             emission_results = model.evaluate_emissions(yaml_model.variables, consumer_results)
 
             # Extract
-            # energy = results_as_df(yaml_model, consumer_results, lambda r: r.component_result.energy_usage)
+            energy = results_as_df(yaml_model, consumer_results, lambda r: r.component_result.energy_usage)
+            energy_total = energy.sum(1).rename("emissions_total")
+            energy_total.to_csv(HERE / "energy.csv")
+            Qel = energy_total.values * Dd  # total number of MWd (energy usage in MW * number of days)
+            el_values.append(Qel)
             emissions = results_as_df(yaml_model, emission_results, lambda r: r['co2_fuel_gas'].rate)
             emissions_total = emissions.sum(1).rename("emissions_total")
             emissions_total.to_csv(HERE / "emissions.csv")
@@ -132,12 +137,13 @@ def ecalc_npv(pred_data, **kwargs):
             em_values.append(Qem)
 
             value = (Qop[l][n, :] * npv_const['wop'] + Qgp[l][n, :] * npv_const['wgp'] - Qwp[l][n, :] * npv_const['wwp'] -
-                     Qwi[l][n, :] * npv_const['wwi'] - Qem * npv_const['wem']) / (
+                     Qwi[l][n, :] * npv_const['wwi'] - Qem * npv_const['wem'] - Qel * npv_const['wel']) / (
                 (1 + npv_const['disc']) ** (T / 365))
             objective[l].append(np.sum(value))
 
-        # Save emissions for later inspection
+        # Save emissions and electrisity usage for later inspection
         np.savez(f'em_values_level{l}.npz', em_values=np.array([em_values]))
+        np.savez(f'el_values_level{l}.npz', em_values=np.array([el_values]))
 
         objective[l] = np.array(objective[l]) / npv_const.get('obj_scaling', 1)
 
