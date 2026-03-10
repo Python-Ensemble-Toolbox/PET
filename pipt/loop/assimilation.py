@@ -341,10 +341,6 @@ class Assimilate:
         else:
             analysisdebug = [self.ensemble.keys_da['analysisdebug']]
 
-        if 'state' in analysisdebug:
-            analysisdebug.remove('state')
-            analysisdebug.append('enX')
-
         # Loop over variables to store in save list
         for save_typ in analysisdebug:
             if hasattr(self, save_typ):
@@ -352,6 +348,8 @@ class Assimilate:
             elif hasattr(self.ensemble, save_typ):
                 save_dict[save_typ] = eval('self.ensemble.{}'.format(save_typ))
             # Save with key equal variable name and the actual variable
+            elif save_typ == 'state':
+                save_dict['state'] = entools.matrix_to_dict(self.ensemble.enX, self.ensemble.idX)
             else:
                 print(f'Cannot save {save_typ}, because it is a local variable!\n\n')
 
