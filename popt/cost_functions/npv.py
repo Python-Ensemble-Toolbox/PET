@@ -42,10 +42,10 @@ def npv(pred_data, **kwargs):
 
     values = []
     for i in np.arange(1, len(pred_data)):
-        Qop = np.squeeze(pred_data[i]['fopt']) - np.squeeze(pred_data[i - 1]['fopt'])
-        Qgp = np.squeeze(pred_data[i]['fgpt']) - np.squeeze(pred_data[i - 1]['fgpt'])
-        Qwp = np.squeeze(pred_data[i]['fwpt']) - np.squeeze(pred_data[i - 1]['fwpt'])
-        Qwi = np.squeeze(pred_data[i]['fwit']) - np.squeeze(pred_data[i - 1]['fwit'])
+        Qop = np.squeeze(pred_data[i]['FOPT']) - np.squeeze(pred_data[i - 1]['FOPT'])
+        Qgp = np.squeeze(pred_data[i]['FGPT']) - np.squeeze(pred_data[i - 1]['FGPT'])
+        Qwp = np.squeeze(pred_data[i]['FWPT']) - np.squeeze(pred_data[i - 1]['FWPT'])
+        Qwi = np.squeeze(pred_data[i]['FWIT']) - np.squeeze(pred_data[i - 1]['FWIT'])
         delta_days = (report[1][i] - report[1][0]).days
 
         val = (Qop * npv_const['wop'] + Qgp * npv_const['wgp'] - Qwp * npv_const['wwp'] - Qwi * npv_const['wwi']) / (
