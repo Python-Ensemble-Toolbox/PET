@@ -124,7 +124,10 @@ def en_pred_to_pred_data(en_pred):
             if has_data:
                 member_list = []
                 for el in en_pred:
-                    member_data = el[ind][typ][:, np.newaxis]
+                    if not isinstance(el[ind][typ],np.ndarray):
+                        member_data = np.array([el[ind][typ]])[:, np.newaxis]
+                    else:
+                        member_data = el[ind][typ][:, np.newaxis]
                     member_list.append(member_data)
                 
                 data_type_dict[typ] = np.concatenate(tuple(member_list), axis=1)
