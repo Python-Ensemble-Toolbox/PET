@@ -81,20 +81,23 @@ class Ensemble:
         # Save name for (potential) pickle dump/load
         self.pickle_restart_file = 'emergency_dump'
 
-        # initiallize the restart. Standard is no restart
+        # Initiallize the restart. Standard is no restart
         self.restart = False
+
+        # Get the active logger
+        self.logger = logging.getLogger(__name__)
 
         # If it is a restart run, we do not need to initialize anything, only load the self info. that exists in the
         # pickle save file. If it is not a restart run, we initialize everything below.
         if ('restart' in self.keys_en) and (self.keys_en['restart'] == 'yes'):
             # Initiate a restart run
-            self.logger('\033[92m--- Restart run initiated! ---\033[92m')
+            self.logger.info('\033[92m--- Restart run initiated! ---\033[92m')
             # Check if the pickle save file exists in folder
             try:
                 assert (self.pickle_restart_file in [
                         f for f in os.listdir('.') if os.path.isfile(f)])
             except AssertionError as err:
-                self.logger('The restart file "{0}" does not exist in folder. Cannot restart!'.format(
+                self.logger.info('The restart file "{0}" does not exist in folder. Cannot restart!'.format(
                     self.pickle_restart_file))
                 raise err
 
@@ -312,7 +315,7 @@ class Ensemble:
                 if len(list_crash) > 1:
                     print(
                         '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-                    self.logger(
+                    self.logger.info(
                         '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
                     sys.exit(1)
                 return success
@@ -333,7 +336,7 @@ class Ensemble:
                         f"has been replaced by ensemble member {element}! ---\033[92m"
                     )
                     print(msg)
-                    self.logger(msg)
+                    self.logger.info(msg)
                     if enX.shape[1] > 1:
                         enX[:, list_crash[index]] = deepcopy(self.enX[:, element])
                     en_pred[list_crash[index]] = deepcopy(en_pred[element])
@@ -365,7 +368,7 @@ class Ensemble:
 
         # Split the ensemble into batches of 500
         if batch_size >= 1000:
-            self.logger(f'Cannot run batch size of {batch_size}. Set to 1000')
+            self.logger.info(f'Cannot run batch size of {batch_size}. Set to 1000')
             batch_size = 1000
         en_pred = []
         batch_en = [np.arange(start, start + batch_size) for start in
@@ -499,7 +502,7 @@ class Ensemble:
                     if len(list_crash) > 1:
                         print(
                             '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
-                        self.logger(
+                        self.logger.info(
                             '\n\033[1;31mERROR: All started simulations has failed! We dump all information and exit!\033[1;m')
                         sys.exit(1)
                     return success
@@ -522,7 +525,7 @@ class Ensemble:
                         f"has been replaced by ensemble member {element}! ---\033[92m"
                         )
                         print(msg)
-                        self.logger(msg)
+                        self.logger.info(msg)
                         if enX[level].shape[1] > 1:
                             enX[level][:, list_crash[index]] = deepcopy(enX[level][:, element])
                         
