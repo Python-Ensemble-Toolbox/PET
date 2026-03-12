@@ -6,14 +6,12 @@ import pandas as pd
 __all__ = [
     'combine_ensemble_predictions', 
     'en_pred_to_pred_data', 
-    'melt_adjoint_to_sensitivity',
-    'combine_ensemble_dataframes', 
-    'combine_adjoint_ensemble', 
+    'merge_dataframes',
+    'multilevel_to_singlelevel_columns',
     'dataframe_to_series', 
     'series_to_dataframe', 
     'series_to_matrix', 
-    'dataframe_to_matrix', 
-    'multilevel_to_singlelevel_columns'
+    'dataframe_to_matrix'
 ]
 
 
@@ -140,42 +138,7 @@ def en_pred_to_pred_data(en_pred):
     return pred_data
 
 
-def melt_adjoint_to_sensitivity(adjoint: pd.DataFrame, datatype: list, idX: dict):
-    
-    adj_datatype = adjoint.columns.levels[0]
-    adj_params = adjoint.columns.levels[1]
-
-    adj_datatype = sorted(adj_datatype, key=lambda x: datatype.index(x))
-    adj_params = sorted(adj_params, key=lambda x: list(idX.keys()).index(x))
-
-    sens = pd.DataFrame(columns=adj_datatype, index=adjoint.index)
-    for idx in sens.index:
-        for dkey in adj_datatype:
-            arr = np.array([])
-            for param in adj_params:
-                
-                if not isinstance(adjoint.at[idx, (dkey, param)], np.ndarray):
-                    if np.isnan(adjoint.at[idx, (dkey, param)]):
-                        dim = idX[param]
-                        dim = dim[1] - dim[0]
-                        arr = np.append(arr, np.zeros(dim))
-                    else:
-                        arr = np.append(arr, np.array([adjoint.at[idx, (dkey, param)]]))
-                    
-                else:
-                    a = adjoint.at[idx, (dkey, param)]
-                    a = np.where(np.isnan(a), 0, a)
-                    arr = np.append(arr, a)
-
-            sens.at[idx, dkey] = arr
-    
-    # Melt
-    sens = sens.melt(ignore_index=False)
-    sens.rename(columns={'variable': 'datatype', 'value': 'adjoint'}, inplace=True)
-    return sens
-
-
-def combine_ensemble_dataframes(en_dfs: list):
+def merge_dataframes(en_dfs: list[pd.DataFrame]) -> pd.DataFrame:
     '''
     Combine a list of DataFrames (one per ensemble member) into a single DataFrame
     where each cell contains an array of ensemble values.
@@ -193,32 +156,36 @@ def combine_ensemble_dataframes(en_dfs: list):
             values = []
             for dfn in en_dfs:
                 values.append(dfn.at[idx, col])
-            df.at[idx, col] = np.array(values).squeeze()
-    
+            df.at[idx, col] = np.array(values).squeeze().T
     return df
 
-def combine_adjoint_ensemble(en_adj, datatype: list, idX: dict):
+def multilevel_to_singlelevel_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert a MultiIndex-column DataFrame with structure (key, param)
+    into a DataFrame with one column per key, where the value is
+    the concatenation of all param-arrays for that key.
+    """
+    result = {}
+
+    # Top-level keys (level 0 of MultiIndex), preserving first appearance order
+    keys = pd.Index(df.columns.get_level_values(0)).unique()
+
+    for key in keys:
+        # Extract all columns for this key → list of arrays per row
+        param_arrays = df[key]  # this is a sub-dataframe for this key
+
+        # For each row, concatenate arrays from all params
+        concatenated = [
+            np.concatenate(param_arrays.iloc[i].values)
+            for i in range(len(df))
+        ]
+
+        result[key] = concatenated
     
-    adjoints = [melt_adjoint_to_sensitivity(adj, datatype, idX) for adj in en_adj]
-
-    index = adjoints[0].index
-    index_name = adjoints[0].index.name
-    keys = adjoints[0]['datatype'].values
-    keys = sorted(keys, key=lambda x: datatype.index(x))
-
-    #df = pd.DataFrame(columns=['datatype', 'adjoint'], index=index, dtype=object)
-
-    data = {'datatype': [], 'adjoint': []}
-    for i, idx in enumerate(index):
-        data['datatype'].append(keys[i])
-        matrix = []    
-        for adj in adjoints:
-            matrix.append(adj.iloc[i]['adjoint'])
-        data['adjoint'].append(np.array(matrix).T) # Transpose to get correct shape (n_param, n_ensembles)
-
-    df = pd.DataFrame(data, index=index)
-    df.index.name = index_name
-    return df      
+    df_new = pd.DataFrame(result, index=df.index)
+    df_new.index.name = df.index.name
+    return df_new    
+  
 
 def dataframe_to_series(df):
     mult_index = []
@@ -250,16 +217,10 @@ def dataframe_to_matrix(df):
     series = dataframe_to_series(df)
     return series_to_matrix(series)
 
-def multilevel_to_singlelevel_columns(df):
-    cols = df.columns.get_level_values(0).unique()
-    parms = df.columns.get_level_values(1).unique()
-    
-    df_new = pd.DataFrame(index=df.index)
-    for col in cols:
-        df_new[col] = np.concatenate([df[(col, param)].values for param in parms])
-    
-    return df_new
 
+
+
+    
             
 
 

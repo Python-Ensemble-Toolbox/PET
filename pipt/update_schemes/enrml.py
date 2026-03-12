@@ -149,8 +149,8 @@ class lmenrmlMixIn(Ensemble):
 
             # Check for adjoint
             if hasattr(self, 'adjoints'):
-                enAdj = dtools.combine_ensemble_dataframes(self.adjoints)
-                enAdj = dtools.dataframe_to_matrix(enAdj) # Shape (nd, ne, nx)
+                enAdj = dtools.merge_dataframes(self.adjoints)
+                enAdj = dtools.dataframe_to_matrix(enAdj) # Shape (nd, nx, ne)
             else:
                 enAdj = None
 

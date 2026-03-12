@@ -12,6 +12,7 @@ from geostat.decomp import Cholesky
 from pipt.loop.ensemble import Ensemble
 import pipt.misc_tools.analysis_tools as at
 import pipt.misc_tools.ensemble_tools as entools
+import pipt.misc_tools.data_tools as dtools
 
 # import update schemes
 from pipt.update_schemes.update_methods_ns.approx_update import approx_update
@@ -158,6 +159,14 @@ class esmdaMixIn(Ensemble):
         if 'localanalysis' in self.keys_da:
             self.local_analysis_update()
         else:
+
+            # Check for adjoint
+            if hasattr(self, 'adjoints'):
+                enAdj = dtools.merge_dataframes(self.adjoints)
+                enAdj = dtools.dataframe_to_matrix(enAdj) # Shape (nd, nx, ne)
+            else:
+                enAdj = None
+
             # Perform the update
             self.update(
                 enX = self.enX, 
