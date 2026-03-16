@@ -133,6 +133,7 @@ class lmenrmlMixIn(Ensemble):
             )
 
             # Store the (mean) data misfit (also for conv. check)
+            self.ensemble_misfit = data_misfit
             self.data_misfit = np.mean(data_misfit)
             self.prior_data_misfit = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
@@ -209,7 +210,7 @@ class lmenrmlMixIn(Ensemble):
         # data instead.
 
         data_misfit = at.calc_objectivefun(self.enObs, enPred, self.cov_data)
-
+        self.ensemble_misfit = data_misfit
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
 
