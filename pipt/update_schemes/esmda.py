@@ -172,7 +172,9 @@ class esmdaMixIn(Ensemble):
                 enX = self.enX, 
                 enY = self.enPred, 
                 enE = self.enObs, 
-                prior = self.prior_enX
+                # kwargs
+                prior = self.prior_enX,
+                enAdj = enAdj
             )
 
             # Update the state ensemble and weights
