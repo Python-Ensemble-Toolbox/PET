@@ -133,6 +133,7 @@ class lmenrmlMixIn(Ensemble):
             )
 
             # Store the (mean) data misfit (also for conv. check)
+            self.ensemble_misfit = data_misfit
             self.data_misfit = np.mean(data_misfit)
             self.prior_data_misfit = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
@@ -149,8 +150,8 @@ class lmenrmlMixIn(Ensemble):
 
             # Check for adjoint
             if hasattr(self, 'adjoints'):
-                enAdj = dtools.combine_ensemble_dataframes(self.adjoints)
-                enAdj = dtools.dataframe_to_matrix(enAdj) # Shape (nd, ne, nx)
+                enAdj = dtools.merge_dataframes(self.adjoints)
+                enAdj = dtools.dataframe_to_matrix(enAdj) # Shape (nd, nx, ne)
             else:
                 enAdj = None
 
@@ -209,7 +210,7 @@ class lmenrmlMixIn(Ensemble):
         # data instead.
 
         data_misfit = at.calc_objectivefun(self.enObs, enPred, self.cov_data)
-
+        self.ensemble_misfit = data_misfit
         self.data_misfit = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
 
@@ -229,11 +230,13 @@ class lmenrmlMixIn(Ensemble):
 
             if self.data_misfit >= self.prev_data_misfit:
                 success = False
+                self.log_update(success=success)
                 self.logger(
                     f'Iterations have converged after {self.iteration} iterations. Objective function reduced '
                     f'from {self.prior_data_misfit:0.1f} to {self.prev_data_misfit:0.1f}'
             )
             else:
+                self.log_update(success=True)
                 self.logger.info(
                     f'Iterations have converged after {self.iteration} iterations. Objective function reduced '
                     f'from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}'
@@ -249,20 +252,21 @@ class lmenrmlMixIn(Ensemble):
                         'prev_data_misfit': self.prev_data_misfit,
                         'lambda': self.lam,
                         'lambda_stop': self.lam >= self.lam_max}
-
-            # Log step
-            self.log_update(success=success)
+            
 
             ###############################################
             ##### update Lambda step-size values ##########
             ###############################################
             # If reduction in mean data misfit, reduce damping param
             if self.data_misfit < self.prev_data_misfit and self.data_misfit_std < self.prev_data_misfit_std:
-                # Reduce damping parameter (divide calculations for ANALYSISDEBUG purpose)
+
+                success = True
+                self.log_update(success=success)
+
+                # Reduce damping parameter
                 if self.lam > self.lam_min:
                     self.lam = self.lam / self.gamma
                     self.logger(f'λ reduced: {self.lam * self.gamma} ──> {self.lam}')
-                success = True
 
                 # Update state ensemble
                 self.enX = cp.deepcopy(self.enX_temp)
@@ -274,8 +278,10 @@ class lmenrmlMixIn(Ensemble):
 
 
             elif self.data_misfit < self.prev_data_misfit and self.data_misfit_std >= self.prev_data_misfit_std:
+
                 # accept itaration, but keep lam the same
                 success = True
+                self.log_update(success=success)
                 
                 # Update state ensemble
                 self.enX = cp.deepcopy(self.enX_temp)
@@ -286,10 +292,11 @@ class lmenrmlMixIn(Ensemble):
                     self.current_W = cp.deepcopy(self.W)
 
             else:  # Reject iteration, and increase lam
-                # Increase damping parameter (divide calculations for ANALYSISDEBUG purpose)
-                self.lam = self.lam * self.gamma
-                self.logger(f'Data misfit increased! λ increased: {self.lam / self.gamma} ──> {self.lam}')
                 success = False
+                self.log_update(success=success)
+                self.lam = self.lam * self.gamma
+                # Increase damping parameter (divide calculations for ANALYSISDEBUG purpose)
+                self.logger(f'Data misfit increased! λ increased: {self.lam / self.gamma} ──> {self.lam}')
 
             if not success:
                 # Reset the objective function after report
@@ -303,21 +310,18 @@ class lmenrmlMixIn(Ensemble):
         '''
         Log the update results in a formatted table.
         '''
-        log_data = {
-            "Iteration": f'{0 if prior_run else self.iteration}',
-            "Status": "Success" if (prior_run or success) else "Failed",
-            "Data Misfit": self.data_misfit,
-            "λ": self.lam
+        info = {
+            "Iteration"     : f'{0 if prior_run else self.iteration}',
+            "Status"        : "Success" if (prior_run or success) else "Failed",
+            "Data Misfit"   : self.data_misfit,
+            "Change (%)"    : '',
+            "λ"             : self.lam
         }
         if not prior_run:
-            if success:
-                log_data["Reduction (%)"] = 100 * (1 - self.data_misfit / self.prev_data_misfit)
-            else:
-                log_data["Increase (%)"] = 100 * (self.data_misfit / self.prev_data_misfit - 1)
-        else:
-            log_data["Reduction (%)"] = 'N/A'
+            delta = 100*(self.data_misfit / self.prev_data_misfit - 1)
+            info["Change (%)"] = delta
         
-        self.logger(**log_data)
+        self.logger(**info)
         
 
 
