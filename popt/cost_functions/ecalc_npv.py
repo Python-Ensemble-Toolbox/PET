@@ -143,7 +143,7 @@ def ecalc_npv(pred_data, **kwargs):
 
         # Save emissions and electrisity usage for later inspection
         np.savez(f'em_values_level{l}.npz', em_values=np.array([em_values]))
-        np.savez(f'el_values_level{l}.npz', em_values=np.array([el_values]))
+        np.savez(f'el_values_level{l}.npz', el_values=np.array([el_values]))
 
         objective[l] = np.array(objective[l]) / npv_const.get('obj_scaling', 1)
 
