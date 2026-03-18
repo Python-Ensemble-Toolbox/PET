@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PET"
+version = "1.0"
+description = "Python Ensemble Toolbox"
+authors = [
+  { name = "Data assimilation and optimization group" }
+]
+maintainers = [
+  { name = "Kristian Fossum", email = "krfo@norceresearch.no" },
+  { name = "Rolf J. Lorentzen", email = "rolo@norceresearch.no" }
+]
+license = { file = "LICENSE.txt" }
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "h5py",
+    "mako",
+    "tqdm",
+    "PyWavelets",
+    "psutil",
+    "geostat @ git+https://github.com/Python-Ensemble-Toolbox/Geostatistics@main",
+    "pytest",
+    "pandas",
+    "p_tqdm",
+    #"mat73",
+    "opencv-python",
+    #"rips",
+    "tomli",
+    "tomli-w",
+    "pyyaml",
+    #"scikit-learn",
+    #"pylops"
+]
+
+[project.optional-dependencies]
+doc = [
+    "mkdocs-material",
+    "mkdocstrings",
+    "mkdocstrings-python",
+    "mkdocs-gen-files",
+    "mkdocs-literate-nav",
+    "mkdocs-section-index",
+    "mkdocs-glightbox",
+    "mkdocs-jupyter",
+    "pybtex"
+]
+
+[project.urls]
+Homepage = "https://github.com/Python-Ensemble-Toolbox/PET"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
