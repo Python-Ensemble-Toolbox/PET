@@ -93,7 +93,6 @@ class Optimize(ABC):
 
         # Initialize variables (set in subclasses)
         self.options = None
-        self.mean_state = None
         self.obj_func_values = None
         self.obj_func_tol = None  # objective tolerance limit
 
@@ -147,7 +146,7 @@ class Optimize(ABC):
         epf_not_converged = True
         previous_state = None
         if self.epf:
-            previous_state = self.mean_state
+            previous_state = self.xk
             self.logger(
                 f'─────> EPF-EnOpt: {self.epf_iteration}, {self.epf["r"]} (outer iteration, penalty factor)'
             )  # print epf info
@@ -192,14 +191,14 @@ class Optimize(ABC):
                 if self.epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
                     self.logger(f'─────> EPF-EnOpt: maximum epf iterations reached')  # print epf info
                     break
-                p = np.abs(previous_state-self.mean_state) / (np.abs(previous_state) + 1.0e-9)
+                p = np.abs(previous_state-self.xk) / (np.abs(previous_state) + 1.0e-9)
                 conv_crit = self.epf['conv_crit']
                 if np.any(p > conv_crit):
                     epf_not_converged = True
-                    previous_state = self.mean_state
+                    previous_state = self.xk
                     self.epf['r'] *= self.epf['r_factor']  # increase penalty factor
                     self.obj_func_tol *= self.epf['tol_factor']  # decrease tolerance
-                    self.obj_func_values = self.fun(self.mean_state, **self.epf)
+                    self.obj_func_values = self.fun(self.xk, **self.epf)
                     self.iteration = 0
                     self.epf_iteration += 1
                     optimize_result = ot.get_optimize_result(self)
@@ -210,7 +209,7 @@ class Optimize(ABC):
                     self.logger(f'─────> EPF-EnOpt: {self.epf_iteration}, {r} (outer iteration, penalty factor)')  # print epf info
                 else:
                     self.logger(f'─────> EPF-EnOpt: converged, no variables changed more than {conv_crit*100} %')  # print epf info
-                    final_obj_no_penalty = str(round(float(self.fun(self.mean_state)),4))
+                    final_obj_no_penalty = str(round(float(self.fun(self.xk)),4))
                     self.logger(f'─────> EPF-EnOpt: objective value without penalty = {final_obj_no_penalty}') # print epf info
     def save(self):
         """
