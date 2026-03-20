@@ -80,7 +80,7 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
                 var = np.clip(var, 0, 1, out=var)
                 self.bounds += mean.size*[(0, 1)]
             else:
-                self.bounds.append((lb, ub))
+                self.bounds += mean.size*[(lb, ub)]
 
             # Fill in lb and ub vectors
             self.lb = np.append(self.lb, lb*np.ones(mean.size))
