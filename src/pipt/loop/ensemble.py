@@ -279,7 +279,7 @@ class Ensemble(PETEnsemble):
                     data_array = load_data[load_data.files[0]]
 
                     # Perform compression for the data type specified in self.sparse_info['compress_data'] if required
-                    if self.sparse_info is not None and datatype == self.sparse_info['compress_data']:
+                    if self.sparse_info is not None and self.keys_da['datatype'][0] == self.sparse_info['compress_data']:
                         data_array = self.compress_manager(data_array, vintage, False)
                         vintage = vintage + 1
 
