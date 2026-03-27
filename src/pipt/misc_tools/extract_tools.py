@@ -444,7 +444,7 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
         sparse['mask'].append(mask.flatten())
 
     # Read rest of keywords
-    sparse['compress_data'] = info['compress_data']
+    sparse['compress_data'] = info.get('compress_data', False)
     sparse['level'] = info['level']
     sparse['wname'] = info['wname']
     sparse['threshold_rule'] = info['threshold_rule']
