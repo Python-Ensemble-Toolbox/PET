@@ -278,10 +278,8 @@ class Ensemble(PETEnsemble):
                     load_data = np.load(truedata[i][0])  # Load the .npz file
                     data_array = load_data[load_data.files[0]]
 
-                    # Perform compression if required (we only and always compress signals with same size as number of active cells)
-                    if self.sparse_info is not None and \
-                            vintage < len(self.sparse_info['mask']) and \
-                            len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
+                    # Perform compression for the data type specified in self.sparse_info['compress_data'] if required
+                    if self.sparse_info is not None and datatype == self.sparse_info['compress_data']:
                         data_array = self.compress_manager(data_array, vintage, False)
                         vintage = vintage + 1
 
@@ -306,16 +304,14 @@ class Ensemble(PETEnsemble):
                     self.obs_data[i][self.keys_da['datatype'][0]] = np.array(
                         truedata[i][:])  # no need to make this into a list
             else:
-                for j in range(len(self.keys_da['datatype'])):  # DATATYPE
+                for j, datatype in enumerate(self.keys_da['datatype']):
                     # Load a Numpy npz file
                     if isinstance(truedata[i][j], str) and truedata[i][j].endswith('.npz'):
                         load_data = np.load(truedata[i][j])  # Load the .npz file
                         data_array = load_data[load_data.files[0]]
 
-                        # Perform compression if required (we only and always compress signals with same size as number of active cells)
-                        if self.sparse_info is not None and \
-                                vintage < len(self.sparse_info['mask']) and \
-                                len(data_array) == int(np.sum(self.sparse_info['mask'][vintage])):
+                        # Perform compression for the data type specified in self.sparse_info['compress_data'] if required
+                        if self.sparse_info is not None and datatype == self.sparse_info['compress_data']:
                             data_array = self.compress_manager(data_array, vintage, False)
                             vintage = vintage + 1
 
@@ -521,8 +517,7 @@ class Ensemble(PETEnsemble):
 
                 # Handle case when noise is estimated using wavelets
                 if self.sparse_info is not None and self.datavar[i][datatype[j]] is not None and \
-                        vintage < len(self.sparse_info['mask']) and \
-                        len(self.datavar[i][datatype[j]]) == int(np.sum(self.sparse_info['mask'][vintage])):
+                            datatype[j]==self.sparse_info['compress_data']:
                     # compute var from sparse_data
                     est_noise = np.power(self.sparse_data[vintage].est_noise, 2)
                     self.datavar[i][datatype[j]] = est_noise  # override the given value

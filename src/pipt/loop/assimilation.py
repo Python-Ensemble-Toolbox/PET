@@ -475,13 +475,10 @@ class Assimilate:
                     vintage = 0
 
                     # Store according to sparse_info
-                    if vintage < len(self.ensemble.sparse_info['mask']) and \
-                            pred_data[key].shape[0] == int(np.sum(self.ensemble.sparse_info['mask'][vintage])):
-
+                    if key == self.ensemble.sparse_info['compress_data'] and pred_data[key] is not None:
                         # If first entry in pred_data_tmp
                         if pred_data_tmp[i] is None:
                             pred_data_tmp[i] = {key: pred_data[key]}
-
                         else:
                             pred_data_tmp[i][key] = pred_data[key]
 
@@ -516,19 +513,18 @@ class Assimilate:
             self.ensemble.data_rec = []
             for i in range(len(pred_data_tmp)):  # INDEX
                 if pred_data_tmp[i] is not None:
-                    for k in pred_data_tmp[i]:  # DATATYPE
-                        if vintage < len(self.ensemble.sparse_info['mask']) and \
-                                len(pred_data_tmp[i][k]) == int(np.sum(self.ensemble.sparse_info['mask'][vintage])):
+                    for key in pred_data_tmp[i]:  # DATATYPE
+                        if key == self.ensemble.sparse_info['compress_data']:
                             if self.ensemble.keys_da['daalg'][1] == 'gies':
-                                self.ensemble.pred_data[i][k] = np.zeros(
-                                    (len(self.ensemble.obs_data[i][k]), self.ensemble.ne+1))
+                                self.ensemble.pred_data[i][key] = np.zeros(
+                                    (len(self.ensemble.obs_data[i][key]), self.ensemble.ne+1))
                             else:
-                                self.ensemble.pred_data[i][k] = np.zeros(
-                                    (len(self.ensemble.obs_data[i][k]), self.ensemble.ne))
-                            for m in range(pred_data_tmp[i][k].shape[1]):
-                                data_array = self.ensemble.compress_manager(pred_data_tmp[i][k][:, m], vintage,
+                                self.ensemble.pred_data[i][key] = np.zeros(
+                                    (len(self.ensemble.obs_data[i][key]), self.ensemble.ne))
+                            for m in range(pred_data_tmp[i][key].shape[1]):
+                                data_array = self.ensemble.compress_manager(pred_data_tmp[i][key][:, m], vintage,
                                                                     self.ensemble.sparse_info['use_ensemble'])
-                                self.ensemble.pred_data[i][k][:, m] = data_array
+                                self.ensemble.pred_data[i][key][:, m] = data_array
                             vintage = vintage + 1
             if self.ensemble.sparse_info['use_ensemble']:
                 self.ensemble.compress_manager()
