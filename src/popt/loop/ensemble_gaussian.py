@@ -87,7 +87,7 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
         enX = np.random.multivariate_normal(self.stateX, self.covX, self.ne).T
 
         # Shift ensemble to have correct mean
-        self.enX = enX - enX.mean(axis=1, keepdims=True) + self.stateX[:,None]
+        enX = enX - enX.mean(axis=1, keepdims=True) + self.stateX[:,None]
 
         # Truncate to bounds
         if (self.lb is not None) and (self.ub is not None):
@@ -123,10 +123,13 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
             index += ne
 
         if 'multilevel' in self.keys_en:
-            weight = np.array(self.keys_en['multilevel']['ml_weights'])
-            if not np.sum(weight) == 1.0:
-                weight = weight / np.sum(weight)  
-            grad = np.dot(grad_ml, weight)
+            weight = np.array(self.multilevel['ml_weights'])
+            if len(weight) > 1:
+                if not np.sum(weight) == 1.0:
+                    weight = weight / np.sum(weight)
+                grad = np.dot(grad_ml, weight)
+            else:
+                grad = grad_ml[0]
         else:
             grad = grad_ml[0]
 
