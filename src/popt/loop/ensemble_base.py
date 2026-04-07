@@ -133,7 +133,7 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
                 self.pred_data, 
                 input_dict=self.sim.input_dict,
                 true_order=self.sim.true_order, 
-                state=matrix_to_dict(x, self.idX),
+                state=matrix_to_dict(self.invert_scale_state(x), self.idX),
                 **kwargs
             )
         else:
