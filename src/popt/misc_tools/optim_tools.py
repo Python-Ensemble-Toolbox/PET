@@ -330,6 +330,12 @@ def get_optimize_result(obj):
                                 'nit':  obj.iteration, 'nfev': obj.nfev, 'njev': obj.njev})
     if hasattr(obj, 'epf') and obj.epf:
         save_dict['epf_iteration'] = obj.epf_iteration
+    if hasattr(obj, 'method') and obj.method:
+        save_dict['method'] = obj.method
+    elif 'method' in obj.options:
+        save_dict['method'] = obj.options['method']
+    if 'save_folder' in obj.options:
+        save_dict['save_folder'] = obj.options['save_folder']
 
     if 'savedata' in obj.options:
 
@@ -353,9 +359,6 @@ def get_optimize_result(obj):
                 save_dict[save_typ] = eval(' obj.{}'.format(save_typ))
             else:
                 print(f'Cannot save {save_typ}!\n\n')
-
-    if 'save_folder' in obj.options:
-        save_dict['save_folder'] = obj.options['save_folder']
 
     return save_dict
 
