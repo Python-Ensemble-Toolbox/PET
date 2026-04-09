@@ -170,7 +170,7 @@ class Optimize(ABC):
                 self.msg = 'Optimization stopped due to maximum iterations reached!'
                 self.optimize_result['message'] = self.msg
             else:
-                if not isinstance(self.msg, str): self.msg = ''
+                self.msg = 'No further improvement possible, optimization converged!'
                 self.optimize_result['message'] = self.msg
 
             # Logging some info to screen
