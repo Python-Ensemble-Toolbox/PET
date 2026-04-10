@@ -198,7 +198,7 @@ class Optimize(ABC):
                     previous_state = self.xk
                     self.epf['r'] *= self.epf['r_factor']  # increase penalty factor
                     self.obj_func_tol *= self.epf['tol_factor']  # decrease tolerance
-                    self.obj_func_values = self.fun(self.xk, **self.epf)
+                    self.obj_func_values = self.fun(self.xk, epf=self.epf)
                     self.iteration = 0
                     self.epf_iteration += 1
                     optimize_result = ot.get_optimize_result(self)

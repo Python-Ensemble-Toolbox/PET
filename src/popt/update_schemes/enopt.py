@@ -97,7 +97,9 @@ class EnOpt(Optimize):
 
         # Set other optimization parameters
         self.obj_func_tol = __set__variable('tol', 1e-6)
-        self.alpha = __set__variable('alpha', 0.1)
+        self.alpha = __set__variable('step_size', 0.1)
+        self.alpha = __set__variable('alpha', 0.1) # accept either 'step_size' or 'alpha' for step size, 
+                                                                   # with 'alpha' as the default
         self.alpha_cov = __set__variable('alpha_cov', 0.001)
         self.beta = __set__variable('beta', 0.0)  # this is stored in the optimizer class
         self.nesterov = __set__variable('nesterov', False)  # use Nesterov acceleration if value is true
