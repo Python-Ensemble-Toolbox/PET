@@ -268,7 +268,7 @@ class LineSearchClass(Optimize):
             self.p_old = None
         
             # Initial results
-            self.optimize_result = ot.get_optimize_results()
+            self.optimize_result = ot.get_optimize_result(self)
             if self.saveit:
                 ot.save_optimize_results(self.optimize_result)
             if self.logger is not None:
@@ -432,7 +432,7 @@ class LineSearchClass(Optimize):
             success = True
 
             # Save Results
-            self.optimize_result = ot.get_optimize_result()
+            self.optimize_result = ot.get_optimize_result(self)
             if self.saveit:
                 ot.save_optimize_results(self.optimize_result)
 
@@ -492,7 +492,7 @@ class LineSearchClass(Optimize):
     
     def get_intermediate_results(self):
 
-        # Obsolete: use get_optimize_results in optim_tools
+        # Obsolete: use get_optimize_result in optim_tools
 
         # Define default results
         results = {
