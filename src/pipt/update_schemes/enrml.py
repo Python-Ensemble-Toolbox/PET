@@ -7,11 +7,15 @@ import pipt.misc_tools.extract_tools as extract
 import pipt.misc_tools.ensemble_tools as entools
 import pipt.misc_tools.data_tools as dtools
 
+
 from geostat.decomp import Cholesky
 from pipt.loop.ensemble import Ensemble
 from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
+from pipt.update_schemes.update_methods_ns.subspace2_update import subspace2_update
 from pipt.update_schemes.update_methods_ns.full_update import full_update
 from pipt.update_schemes.update_methods_ns.approx_update import approx_update
+from pipt.update_schemes.update_methods_ns.margIS_update import margIS_update
+
 import sys
 import pkgutil
 import inspect
@@ -35,11 +39,11 @@ for finder, name, ispkg in pkgutil.walk_packages(ns_pkg.__path__):
 # import standard libraries
 
 # Check and import (if present) from other namespace packages
-if 'margIS_update' in [el[0] for el in tot_ns_pkg]:  # only compare package name
-    from pipt.update_schemes.update_methods_ns.margIS_update import margIS_update
-else:
-    class margIS_update:
-        pass
+#if 'margIS_update' in [el[0] for el in tot_ns_pkg]:  # only compare package name
+#    from pipt.update_schemes.update_methods_ns.margIS_update import margIS_update
+#else:
+#    class margIS_update:
+#        pass
 
 # Internal imports
 from pipt.misc_tools.analysis_tools import aug_state
@@ -168,9 +172,26 @@ class lmenrmlMixIn(Ensemble):
             # Update the state ensemble and weights
             if hasattr(self, 'step'):
                 self.enX_temp = self.enX + self.step
+            # This is the vector update following e.g. Evensen et al 2019 update for subspace
             if hasattr(self, 'w_step'):
                 self.W = self.current_W + self.w_step
-                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W/np.sqrt(self.ne - 1)))
+                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+            #This is the matrix update following e.g. Raanes et al 2019 update for subspace
+            if hasattr(self, 'W_step'):
+                self.W = self.current_W + self.W_step
+                X_p = self.prior_enX @ self.proj * np.sqrt(self.ne - 1)
+                self.enX_temp = np.mean(self.prior_enX, axis=1, keepdims=True) + np.dot(X_p, self.W)
+
+            if hasattr(self, 'sqrt_w_step'):
+                self.w = self.current_w + self.sqrt_w_step
+                Us, Ss, VsT = np.linalg.svd(self.S, full_matrices=False)
+                eps = 1e-8 * Ss[0]  # e.g., 1e-8 * largest
+                s_inv = 1.0 / np.sqrt(np.maximum(Ss, eps))
+                S_inv = np.diag(s_inv)
+                self.W = Us @ S_inv @ Us.T
+                X_p = self.prior_enX @ self.proj * np.sqrt(self.ne - 1)
+                x = np.mean(self.prior_enX, axis=1) + X_p @ self.w
+                self.enX_temp = np.repeat(x[:, None], self.ne, axis=1) + np.dot(X_p, self.W)
 
 
             # Ensure limits are respected
@@ -275,6 +296,8 @@ class lmenrmlMixIn(Ensemble):
                 # Update ensemble weights
                 if hasattr(self, 'W'):
                     self.current_W = cp.deepcopy(self.W)
+                if hasattr(self, 'w'):
+                    self.current_w = cp.deepcopy(self.w)
 
 
             elif self.data_misfit < self.prev_data_misfit and self.data_misfit_std >= self.prev_data_misfit_std:
@@ -290,6 +313,8 @@ class lmenrmlMixIn(Ensemble):
                 # Update ensemble weights
                 if hasattr(self, 'W'):
                     self.current_W = cp.deepcopy(self.W)
+                if hasattr(self, 'w'):
+                    self.current_w = cp.deepcopy(self.w)
 
             else:  # Reject iteration, and increase lam
                 success = False
@@ -335,6 +360,12 @@ class lmenrml_full(lmenrmlMixIn, full_update):
 
 
 class lmenrml_subspace(lmenrmlMixIn, subspace_update):
+    pass
+
+class lmenrml_subspace2(lmenrmlMixIn, subspace2_update):
+    pass
+
+class lmenrml_margIS(lmenrmlMixIn, margIS_update):
     pass
 
 
@@ -660,6 +691,9 @@ class gnenrml_full(gnenrmlMixIn, full_update):
 
 
 class gnenrml_subspace(gnenrmlMixIn, subspace_update):
+    pass
+
+class gnenrml_subspace2(gnenrmlMixIn, subspace2_update):
     pass
 
 
