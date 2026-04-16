@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.linalg import solve, lu_solve, lu_factor
 import pipt.misc_tools.analysis_tools as at
-from sklearn.linear_model import Lasso
+#from sklearn.linear_model import Lasso
 
 class subspace_update():
     """
