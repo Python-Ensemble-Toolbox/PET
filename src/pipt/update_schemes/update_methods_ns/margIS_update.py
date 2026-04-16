@@ -1,45 +1,101 @@
+"""Stochastic iterative ensemble smoother (IES, i.e. EnRML) with *subspace* implementation."""
+
 import numpy as np
-from scipy.linalg import solve
-import copy as cp
-from pipt.misc_tools import analysis_tools as at
+from scipy.linalg import solve, lu_solve, lu_factor, cho_solve
+
+import pipt.misc_tools.analysis_tools as at
+
 
 class margIS_update():
-
     """
-    Placeholder for private margIS method
+    MargIES update from Stordal et.al.
+    This is now implemented with perturbed observations, which means that we set a prior belief on the data uncertainty.
+    Thus, the prior is an invers chi2 distriubtuinm and after scaling the mean varians is 1.
     """
-    def update(self):
-        if self.iteration == 1: # method requires some initiallization
-            self.aug_prior = cp.deepcopy(at.aug_state(self.prior_state, self.list_states))
-            self.mean_prior = self.aug_prior.mean(axis=1)
-            self.X = (self.aug_prior - np.dot(np.resize(self.mean_prior, (len(self.mean_prior), 1)),
-                                              np.ones((1, self.ne))))
-            self.W = np.eye(self.ne)
-            self.current_w = np.zeros((self.ne,))
-            self.E = np.dot(self.real_obs_data, self.proj)
 
-        M = len(self.real_obs_data)
-        Ytmp = solve(self.W, self.proj)
-        if len(self.scale_data.shape) == 1:
-            Y = np.dot(np.expand_dims(self.scale_data ** (-1), axis=1), np.ones((1, self.ne))) * \
-                np.dot(self.aug_pred_data, Ytmp)
+    def update(self, enX, enY, enE, **kwargs):
+
+        if self.iteration == 1:  # method requires some initiallization
+            self.current_W = np.eye(self.ne)
+            self.current_w = np.zeros(self.ne)
+            self.D = self.scale(enE, self.scale_data)
+            # Scale everything so that data uncertainty is I
+
+        sY = self.scale(enY, self.scale_data) #Scaling is same as with 'known' uncertainty, hence makes sense to set s = 1
+        self.S = 0
+
+        deltaD = 0
+        deltaD_sqrt = 0
+
+        Y = np.linalg.solve(self.current_W.T, sY.T).T
+        Y = Y @ self.proj * np.sqrt(self.ne - 1)
+        index = np.arange(0, 70, 70)  # Has to be specified via data types (or select each data)...
+        M = 1 #Numbers of data per type. Computed from index
+        s = 1 #should be default option with possibility to change in setup
+        nu = self.ne-1 #should be default option with possibility to change in setup
+        for j in range(70):
+
+            delta = self.D[index,:]-sY[index,:]
+            Chi = np.sum(delta * delta, axis = 0)
+            Chi = np.mean(Chi)
+            Ratio = (M + nu) / (Chi + nu*s*s)
+            #Ratio = 1
+            #Gradient
+            deltaD = deltaD + (Y[index,:] * Ratio).T @ delta
+            deltaD_sqrt = deltaD_sqrt + np.mean((Y[index, :] * Ratio).T @ delta ,axis=1)
+            # Hessian
+            self.S = self.S + (Y[index,:] * Ratio).T @ Y[index,:]
+            index += 1
+
+        deltaM = (self.ne-1)*(np.eye(self.ne)-self.current_W)
+        deltaM_sqrt = (self.ne-1)*self.current_w
+        self.S = self.S + np.eye(self.ne) * (self.ne - 1)
+        Delta = deltaM + deltaD
+        Delta_sqrt = deltaM_sqrt + deltaD_sqrt
+
+
+        self.W_step =   np.linalg.solve(self.S, Delta) / (1 + self.lam)
+       # self.sqrt_w_step = np.linalg.solve(self.S, Delta_sqrt) / (1 + self.lam)
+
+    def scale(self, data, scaling):
+        """
+        Scale the data perturbations by the data error standard deviation.
+
+        Args:
+            data (np.ndarray): data perturbations
+            scaling (np.ndarray): data error standard deviation
+
+        Returns:
+            np.ndarray: scaled data perturbations
+        """
+
+        if len(scaling.shape) == 1:
+            return (scaling ** (-1))[:, None] * data
         else:
-            Y = solve(self.scale_data, np.dot(self.aug_pred_data, Ytmp))
+            return solve(scaling, data)
 
-        pred_data_mean = np.mean(self.aug_pred_data, 1)
-        delta_d = (self.obs_data_vector - pred_data_mean)
 
-        if len(self.cov_data.shape) == 1:
-            S = np.dot(delta_d, (self.cov_data**(-1)) * delta_d)
-            Ratio = M / S
-            grad_lklhd = np.dot(Y.T * Ratio, (self.cov_data**(-1)) * delta_d)
-            grad_prior = (self.ne - 1) * self.current_w
-            self.C_w = (np.dot(Ratio * Y.T, np.dot(np.diag(self.cov_data ** (-1)), Y)) + (self.ne - 1) * np.eye(self.ne))
-        else:
-            S = np.dot(delta_d, solve(self.cov_data, delta_d))
-            Ratio = M / S
-            grad_lklhd = np.dot(Y.T * Ratio, solve(self.cov_data, delta_d))
-            grad_prior = (self.ne - 1) * self.current_w
-            self.C_w = (np.dot(Ratio * Y.T, solve(self.cov_data, Y)) + (self.ne - 1) * np.eye(self.ne))
 
-        self.sqrt_w_step = solve(self.C_w, grad_prior + grad_lklhd)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

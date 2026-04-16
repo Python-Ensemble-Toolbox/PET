@@ -18,7 +18,7 @@ import pipt.misc_tools.data_tools as dtools
 from pipt.update_schemes.update_methods_ns.approx_update import approx_update
 from pipt.update_schemes.update_methods_ns.full_update import full_update
 from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
-
+from pipt.update_schemes.update_methods_ns.subspace2_update import subspace2_update
 
 class esmdaMixIn(Ensemble):
     """
@@ -180,9 +180,26 @@ class esmdaMixIn(Ensemble):
             # Update the state ensemble and weights
             if hasattr(self, 'step'):
                 self.enX_temp = self.enX + self.step
+                # This is the vector update following e.g. Evensen et al 2019 update for subspace
             if hasattr(self, 'w_step'):
                 self.W = self.current_W + self.w_step
-                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W/np.sqrt(self.ne - 1)))
+                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
+                # This is the matrix update following e.g. Raanes et al 2019 update for subspace
+            if hasattr(self, 'W_step'):
+                self.W = self.current_W + self.W_step
+                X_p = self.prior_enX @ self.proj * np.sqrt(self.ne - 1)
+                self.enX_temp = np.mean(self.prior_enX, axis=1, keepdims=True) + np.dot(X_p, self.W)
+
+            if hasattr(self, 'sqrt_w_step'):
+                self.w = self.current_w + self.sqrt_w_step
+                Us, Ss, VsT = np.linalg.svd(self.S, full_matrices=False)
+                eps = 1e-8 * Ss[0]  # e.g., 1e-8 * largest
+                s_inv = 1.0 / np.sqrt(np.maximum(Ss, eps))
+                S_inv = np.diag(s_inv)
+                self.W = Us @ S_inv @ Us.T
+                X_p = self.prior_enX @ self.proj * np.sqrt(self.ne - 1)
+                x = np.mean(self.prior_enX, axis=1) + X_p @ self.w
+                self.enX_temp = np.repeat(x[:, None], self.ne, axis=1) + np.dot(X_p, self.W)
 
 
             # Ensure limits are respected
@@ -365,6 +382,9 @@ class esmda_full(esmdaMixIn, full_update):
 
 
 class esmda_subspace(esmdaMixIn, subspace_update):
+    pass
+
+class esmda_subspace2(esmdaMixIn, subspace2_update):
     pass
 
 
