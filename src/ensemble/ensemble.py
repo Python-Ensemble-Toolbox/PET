@@ -338,7 +338,7 @@ class Ensemble:
                     print(msg)
                     self.logger.info(msg)
                     if enX.shape[1] > 1:
-                        enX[:, list_crash[index]] = deepcopy(self.enX[:, element])
+                        enX[:, list_crash[index]] = deepcopy(enX[:, element])
                     en_pred[list_crash[index]] = deepcopy(en_pred[element])
             
             if getattr(self.sim, 'compute_adjoints', False):
