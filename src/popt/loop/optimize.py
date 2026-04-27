@@ -191,9 +191,10 @@ class Optimize(ABC):
                 if self.epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
                     self.logger(f'─────> EPF-EnOpt: maximum epf iterations reached')  # print epf info
                     break
-                p = np.abs(previous_state-self.xk) / (np.abs(previous_state) + 1.0e-9)
+                #p = np.abs(previous_state-self.xk) / (np.abs(previous_state) + 1.0e-9)
+                p = np.mean(self.epf['penalty'] / self.epf['r'])  # the penalty term (without r)
                 conv_crit = self.epf['conv_crit']
-                if np.any(p > conv_crit):
+                if p > conv_crit:
                     epf_not_converged = True
                     previous_state = self.xk
                     self.epf['r'] *= self.epf['r_factor']  # increase penalty factor
