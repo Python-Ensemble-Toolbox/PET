@@ -188,7 +188,7 @@ class Optimize(ABC):
             # Test for convergence of outer epf loop
             epf_not_converged = False
             if self.epf:
-                if self.epf_iteration > self.epf['max_epf_iter']:  # max epf_iterations set to 10
+                if self.epf_iteration >= self.epf['max_epf_iter']-1:  # max epf_iterations
                     self.logger(f'─────> EPF-EnOpt: maximum epf iterations reached')  # print epf info
                     break
                 #p = np.abs(previous_state-self.xk) / (np.abs(previous_state) + 1.0e-9)
