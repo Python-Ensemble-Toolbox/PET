@@ -94,7 +94,6 @@ class Optimize(ABC):
         # Initialize variables (set in subclasses)
         self.options = None
         self.obj_func_values = None
-        self.obj_func_tol = None  # objective tolerance limit
 
         # Initialize number of function and jacobi evaluations
         self.nfev = 0
@@ -198,7 +197,7 @@ class Optimize(ABC):
                     epf_not_converged = True
                     previous_state = self.xk
                     self.epf['r'] *= self.epf['r_factor']  # increase penalty factor
-                    self.obj_func_tol *= self.epf['tol_factor']  # decrease tolerance
+                    self.ftol *= self.epf['tol_factor']  # decrease tolerance
                     self.obj_func_values = self.fun(self.xk, epf=self.epf)
                     self.iteration = 0
                     self.epf_iteration += 1
