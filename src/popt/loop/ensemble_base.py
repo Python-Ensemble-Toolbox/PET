@@ -139,7 +139,7 @@ class EnsembleOptimizationBaseClass(SupEnsemble):
         else:
             func_values = np.inf  # the simulations have crashed
 
-        if len(x.shape) == 1:
+        if len(x.shape) == 1 and func_values != np.inf:
             self.stateF = func_values
         else:
             self.enF = func_values 

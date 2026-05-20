@@ -277,7 +277,7 @@ class Ensemble:
             
             # Parallelization on HPC using SLURM
             elif self.sim.input_dict.get('hpc', False): # Run prediction in parallel on hpc
-                en_pred = self.run_on_HPC(enX, batch_size=nparallel)
+                en_pred = self.run_on_HPC(enX, batch_size=nparallel, save_prediction=save_prediction)
 
             # Parallelization on local machine using p_map      
             else:
@@ -412,6 +412,11 @@ class Ensemble:
                 else:
                     en_pred.append(False)
                 self.sim.remove_folder(member_i)
+
+            # Store partial batch results if needed
+            part_pred_data = dtools.en_pred_to_pred_data(en_pred)
+            if 'save_prediction' in kwargs and kwargs['save_prediction']:
+                np.savez(kwargs['save_prediction'] +'.npz', **{'pred_data': part_pred_data})
         
         return en_pred
 
