@@ -45,7 +45,6 @@ Some additional features might be not part of your default installation and need
 
 ```
 python3 -m pip install wheel
-python3 setup.py bdist_wheel
 ```
 
 If you do not install PET inside a virtual environment,
