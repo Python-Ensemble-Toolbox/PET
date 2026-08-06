@@ -91,7 +91,10 @@ class GaussianEnsemble(EnsembleOptimizationBaseClass):
 
         # Truncate to bounds
         if (self.lb is not None) and (self.ub is not None):
-            enX = np.clip(enX, self.lb[:, None], self.ub[:, None])
+            if self.transform:
+                enX = np.clip(enX, 0.0, 1.0)
+            else:
+                enX = np.clip(enX, self.lb[:, None], self.ub[:, None])
 
         # Evaluate objective function for ensemble
         enF = self.function(enX, *args, **kwargs)
