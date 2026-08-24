@@ -417,11 +417,6 @@ class Ensemble:
                 else:
                     en_pred.append(False)
                 self.sim.remove_folder(member_i)
-
-            # Store partial batch results if needed
-            part_pred_data = dtools.en_pred_to_pred_data(en_pred)
-            if 'save_prediction' in kwargs and kwargs['save_prediction']:
-                np.savez(kwargs['save_prediction'] +'.npz', **{'pred_data': part_pred_data})
         
         return en_pred
 
