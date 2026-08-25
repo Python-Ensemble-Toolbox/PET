@@ -71,7 +71,7 @@ To use the subsurface simulators Eclipse or OPM, you need to install the [Simula
 This repository also contains instructions on how to link your own simulator to PET.
 
 ## Visualization
-Some basic plotting functionality is provided [here][https://github.com/Python-Ensemble-Toolbox/Plotting]. The functions should be copied and adapted for each specific use cases.
+Some basic plotting functionality is provided [here](https://github.com/Python-Ensemble-Toolbox/Plotting). The functions should be copied and adapted for each specific use cases.
 
 ## Tutorials
 
