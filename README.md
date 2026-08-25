@@ -70,6 +70,9 @@ PET needs to be set up with a configuration file. See the example [repository](h
 To use the subsurface simulators Eclipse or OPM, you need to install the [SimulatorWrap](https://github.com/Python-Ensemble-Toolbox/SimulatorWrap) repository. 
 This repository also contains instructions on how to link your own simulator to PET.
 
+## Visualization
+Some basic plotting functionality is provided [here][https://github.com/Python-Ensemble-Toolbox/Plotting]. The functions should be copied and adapted for each specific use cases.
+
 ## Tutorials
 
 - A PIPT tutorial is found [here](https://python-ensemble-toolbox.github.io/PET/tutorials/pipt/tutorial_pipt)
