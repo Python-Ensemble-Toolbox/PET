@@ -65,6 +65,11 @@ python3 -m pip install -e .
 
 PET needs to be set up with a configuration file. See the example [repository](https://github.com/Python-Ensemble-Toolbox/Examples) for inspiration.
 
+## Simulation wrappers
+
+To use the subsurface simulators Eclipse or OPM, you need to install the [SimulatorWrap](https://github.com/Python-Ensemble-Toolbox/SimulatorWrap) repository. 
+This repository also contains instructions on how to link your own simulator to PET.
+
 ## Tutorials
 
 - A PIPT tutorial is found [here](https://python-ensemble-toolbox.github.io/PET/tutorials/pipt/tutorial_pipt)
