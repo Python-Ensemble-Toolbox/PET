@@ -18,7 +18,7 @@ class PetLogger:
             format='%(asctime)s : %(message)s',
             datefmt='%Y-%m-%d│%H:%M:%S',
             handlers=[
-                logging.FileHandler(self.filename, mode='w'),
+                logging.FileHandler(self.filename, mode='w', encoding='utf-8'),
                 logging.StreamHandler()
             ]
         )
