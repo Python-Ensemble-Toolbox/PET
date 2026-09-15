@@ -13,6 +13,9 @@ at NORCE Norwegian Research Centre AS.
 
 ## Installation
 
+PET requires Python 3.12 through 3.14. The standard installation includes EnIF
+and EnIF-MDA with their dependencies.
+
 Before installing ensure you have python3 pre-requisites. On a Debian system run:
 
 ```
@@ -77,6 +80,7 @@ Some basic plotting functionality is provided [here](https://github.com/Python-E
 
 - A PIPT tutorial is found [here](https://python-ensemble-toolbox.github.io/PET/tutorials/pipt/tutorial_pipt)
 - A POPT tutorial is found [here](https://python-ensemble-toolbox.github.io/PET/tutorials/popt/tutorial_popt)
+- [EnIF and EnIF-MDA](docs/tutorials/enif.md): installation, analysis settings and parameter graphs.
 
 ## Suggested readings:
 

@@ -15,7 +15,7 @@ maintainers = [
 ]
 license = { file = "LICENSE.txt" }
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "numpy",
     "scipy",
@@ -26,6 +26,7 @@ dependencies = [
     "PyWavelets",
     "psutil",
     "geostat @ git+https://github.com/Python-Ensemble-Toolbox/Geostatistics@main",
+    "graphite-maps>=0.0.11,<0.1",
     "pytest",
     "pandas",
     "p_tqdm",
