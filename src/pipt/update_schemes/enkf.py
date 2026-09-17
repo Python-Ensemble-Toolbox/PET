@@ -114,10 +114,10 @@ class EnKF(AssimilationScheme):
         # Zero tolerances switch off the base class's generic convergence
         # criteria; this scheme decides in check_convergence(). See
         # AssimilationScheme's `misfit_tol`/`step_tol` docs for why.
-        super().__init__(ensemble, misfit_tol=0.0, step_tol=0.0, **restart_options(keys_da))
+        super().__init__(ensemble, misfit_tol=0.0, step_tol=0.0, **restart_options(ensemble.keys_da))
 
         # Flavour is a parameter, so it selects an analysis object not a class.
-        self.bind_analysis(self.resolve_analysis(analysis, keys_da))
+        self.bind_analysis(self.resolve_analysis(analysis, ensemble.keys_da))
 
         self.prev_data_misfit_mean = None
 

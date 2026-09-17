@@ -58,7 +58,7 @@ def test_validate_reports_missing_mandatory_keyword(tmp_path, capsys):
     config_file = tmp_path / "config.toml"
     config_file.write_text('[fwdsim]\nparallel = 1\n')
     assert main(["validate", str(config_file)]) == 1
-    assert "DATATYPE not in FWDSIM" in capsys.readouterr().out
+    assert "[simulator] datatype: required" in capsys.readouterr().out
 
 
 def test_convert_pipt_to_toml(tmp_path, capsys):

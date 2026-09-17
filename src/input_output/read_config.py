@@ -1,5 +1,5 @@
 """Parse config files."""
-from input_output.organize import ConfigNormalizer
+from input_output.config import is_dataassim, normalize as normalize_config
 from pathlib import Path
 import tomli
 import tomli_w
@@ -71,10 +71,7 @@ def read_yaml(filepath: str):
     cfg_sim = config.get("fwdsim") or config.get("simulator") or {}
     cfg_prb = config.get("dataassim") or config.get("optim") or {}
 
-    # Normalize configuration fields for consistency
-    cfg_prb, cfg_sim, cfg_ens = ConfigNormalizer.normalize_config(cfg_prb, cfg_sim, cfg_ens)
-
-    return cfg_prb, cfg_sim, cfg_ens
+    return normalize_config(cfg_prb, cfg_sim, cfg_ens)
 
 
 def read_toml(filepath: str):
@@ -121,32 +118,29 @@ def read_toml(filepath: str):
     cfg_sim = config.get("fwdsim") or config.get("simulator") or {}
     cfg_prb = config.get("dataassim") or config.get("optim") or {}
 
-    # Normalize configuration fields for consistency
-    cfg_prb, cfg_sim, cfg_ens = ConfigNormalizer.normalize_config(cfg_prb, cfg_sim, cfg_ens)
-
-    return cfg_prb, cfg_sim, cfg_ens
+    return normalize_config(cfg_prb, cfg_sim, cfg_ens)
 
 
 def convert_txt_to_toml(init_file):
     # Read .pipt or .popt file
-    pr, fwd = read_txt(init_file)
+    pr, fwd, _ = read_txt(init_file)
 
     # Write dictionaries to toml file with same base file name
     new_file = change_file_extension(init_file, 'toml')
     with open(new_file, 'wb') as f:
-        if 'daalg' in pr:
+        if is_dataassim(pr):
             tomli_w.dump({'dataassim': pr, 'fwdsim': fwd}, f)
         else:
             tomli_w.dump({'optim': pr, 'fwdsim': fwd}, f)
 
 def convert_txt_to_yaml(init_file):
     # Read .pipt or .popt file
-    pr, fwd = read_txt(init_file)
+    pr, fwd, _ = read_txt(init_file)
 
     # Write dictionaries to yaml file with same base file name
     new_file = change_file_extension(init_file, 'yaml')
     with open(new_file, 'w') as f:
-        if 'daalg' in pr:
+        if is_dataassim(pr):
             yaml.dump({'dataassim': pr, 'fwdsim': fwd}, f)
         else:
             yaml.dump({'optim': pr, 'fwdsim': fwd}, f)
@@ -203,23 +197,12 @@ def read_txt(init_file):
 
     # Assign the keys and values to different dictionaries depending on whether we have data assimilation (DATAASSIM)
     # or optimization (OPTIM). FWDSIM info is always assigned to keys_fwd
-    keys_pr = None
-    if pr_part == 'dataassim':
-        keys_pr = parse_keywords(clean_lines_pr)
-        check_mand_keywords_da(keys_pr)
-    elif pr_part == 'optim':
-        keys_pr = parse_keywords(clean_lines_pr)
-        check_mand_keywords_opt(keys_pr)
+    keys_pr = parse_keywords(clean_lines_pr) if pr_part in ('dataassim', 'optim') else None
     keys_fwd = parse_keywords(clean_lines_fwd)
-    check_mand_keywords_fwd(keys_fwd)
-
-    # Normalize configuration fields for consistency
-    cfg_prb, cfg_sim, cfg_ens = ConfigNormalizer.normalize_config(keys_pr, keys_fwd)
-
-    if not cfg_ens:
-        return cfg_prb, cfg_sim
-    else:
-        return cfg_prb, cfg_sim, cfg_ens
+    # Three sections, like the other readers; the text format keeps the
+    # ensemble's keys in DATAASSIM, so the third is empty. What is missing is
+    # reported by `pet validate` and when the run is built, not asserted here.
+    return normalize_config(keys_pr, keys_fwd, None)
 
 
 def read_clean_file(init_file):
@@ -383,41 +366,6 @@ def parse_keywords(lines):
     _promote_numeric_strings(keys)
     return keys
 
-
-def check_mand_keywords_fwd(keys_fwd):
-    """Check for mandatory keywords in `FWDSIM` part, and output error if they are not present"""
-
-    # Mandatory keywords in FWDSIM
-    assert 'parallel' in keys_fwd, 'PARALLEL not in FWDSIM!'
-    assert 'datatype' in keys_fwd, 'DATATYPE not in FWDSIM!'
-
-
-def check_mand_keywords_da(keys_da):
-    """Check for mandatory keywords in `DATAASSIM` part, and output error if they are not present"""
-
-    # Mandatory keywords in DATAASSIM
-    #assert 'truedataindex' in keys_da, 'TRUEDATAINDEX not in DATAASSIM!'
-    #assert 'assimindex' in keys_da, 'ASSIMINDEX not in DATAASSIM!'
-    assert ('truedata' in keys_da) or ('data' in keys_da), 'TRUEDATA not in DATAASSIM!'
-    assert 'datavar' in keys_da, 'DATAVAR not in DATAASSIM!'
-    assert ('obsname' in keys_da) or ('index_name' in keys_da['data']), 'OBSNAME not in DATAASSIM!'
-    assert 'energy' in keys_da, 'ENERGY not in DATAASSIM!'
-
-
-def check_mand_keywords_opt(keys_opt):
-    """Check for mandatory keywords in `OPTIM` part, and output error if they are not present"""
-pass
-
-
-def check_mand_keywords_en(keys_en):
-    """Check for mandatory keywords in `ENSEMBLE` part, and output error if they are not present"""
-
-    # Mandatory keywords in ENSEMBLE
-    assert 'ne' in keys_en, 'NE not in ENSEMBLE!'
-    assert ('state' in keys_en) or ('controls' in keys_en), 'STATE or CONTROLS not in ENSEMBLE!'
-    if 'importstaticvar' not in keys_en:
-        assert filter(list(keys_en.keys()),
-                      'prior_*') != [], 'No PRIOR_<STATICVAR> in DATAASSIM'
 
 def change_file_extension(filename, new_extension):
     if '.' in filename:

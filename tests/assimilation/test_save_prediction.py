@@ -14,7 +14,9 @@ import pytest
 from test_failed_member_replacement import _bare_ensemble, _members
 
 
-@pytest.mark.parametrize("options, folder", [({}, "Predictions"), ({"savefolder": "out"}, "out"), ({"save_folder": "out2"}, "out2")])
+# `save_folder` is mapped to `savefolder` at the config boundary (tests/test_config_boundary.py);
+# a bare ensemble built without it holds canonical keys only.
+@pytest.mark.parametrize("options, folder", [({}, "Predictions"), ({"savefolder": "out"}, "out")])
 def test_the_forecast_is_pickled_under_the_named_folder(tmp_path, monkeypatch, options, folder):
     monkeypatch.chdir(tmp_path)
     ens = _bare_ensemble()

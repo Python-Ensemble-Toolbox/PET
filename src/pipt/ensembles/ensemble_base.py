@@ -13,6 +13,7 @@ import numpy as np
 from scipy.linalg import cholesky
 from misc.sampling import gen_real
 from misc.structures import DataLayout
+from input_output.config import ConfigError, fatal_problems, normalize_dataassim, normalize_ensemble
 
 from ensemble import BaseEnsemble, NullLogger, PetLogger
 import misc.read_input_csv as rcsv
@@ -97,6 +98,14 @@ class AssimilationEnsemble(ForecastMixin, OutlierMixin, LocalAnalysisMixin, Base
             The forward simulator (e.g. flow)
         """
 
+
+        # Canonical copies of both sections; what is missing is reported here,
+        # by key, rather than as a KeyError somewhere inside the run.
+        keys_da = normalize_dataassim(keys_da)
+        keys_en = normalize_ensemble(keys_en)
+        problems = fatal_problems(keys_da, None, keys_en)
+        if problems:
+            raise ConfigError("the config cannot run:\n  " + "\n  ".join(str(p) for p in problems))
 
         # do the initiallization of the PETensemble
         super().__init__(keys_da | keys_en, sim)

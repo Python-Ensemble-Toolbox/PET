@@ -19,6 +19,7 @@ import logging
 from misc.structures.structures import PETDataFrame
 from misc.structures.layout import StateLayout
 from misc.sampling import random_stream
+from input_output.config import normalize_ensemble
 
 # NOTE: pipt.misc_tools is imported lazily inside the methods that need it.
 # `ensemble` is the foundation package that both pipt and popt build on, so a
@@ -64,7 +65,9 @@ class BaseEnsemble:
         """
         import pipt.misc_tools.extract_tools as extract
 
-        # Internalize PET dictionary
+        # Internalize PET dictionary -- in canonical form, as a copy, so the
+        # caller's dictionary is neither read with fallbacks nor written to.
+        keys_en = normalize_ensemble(keys_en)
         self.keys_en = keys_en
         self.sim = sim
         # Every draw this run makes comes from here: a private stream when the
@@ -122,9 +125,9 @@ class BaseEnsemble:
         # Ensemble size
         self.ne = self.keys_en.get('ne', None)
 
-        # Calculate initial ensemble if IMPORTSTATICVAR has not been given in init. file.
+        # Calculate initial ensemble if `importstate` has not been given.
         # Prior info. on state variables must be given by PRIOR_<STATICVAR-name> keyword.
-        if ('importstaticvar' not in self.keys_en) and ('importstate' not in self.keys_en):
+        if 'importstate' not in self.keys_en:
             if self.ne is None:
                 self.ne = 100
             else:
@@ -139,8 +142,7 @@ class BaseEnsemble:
             )
         else:
             # State variable imported as a Numpy save file
-            file = self.keys_en['importstaticvar'] if 'importstaticvar' in self.keys_en else self.keys_en['importstate']
-            file = np.load(file, allow_pickle=True)
+            file = np.load(self.keys_en['importstate'], allow_pickle=True)
             self.enX, layout = StateLayout.from_dict({key: file[key] for key in file.files}, ne=int(self.ne))
         self.idX = layout.indices
         self.list_states = list(layout.variables)
@@ -253,7 +255,7 @@ class BaseEnsemble:
             # The ensemble's own options name the folder (popt passes `save_prediction`; its
             # options are `keys_en`). This read `self.ensemble.keys_da`, an attribute the base
             # ensemble never had, so the feature raised AttributeError whenever it was used.
-            folder = self.keys_en.get('savefolder', self.keys_en.get('save_folder', 'Predictions'))
+            folder = self.keys_en.get('savefolder', 'Predictions')
             os.makedirs(folder, exist_ok=True)
             if is_multilevel:
                 for l in range(self.tot_level):

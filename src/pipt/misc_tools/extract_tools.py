@@ -21,30 +21,11 @@ from scipy.spatial import cKDTree
 from typing import Union
 
 # Internal imports
+from input_output.config import as_flag, pairs_to_dict
 
 
-def is_enabled(value, default=False):
-    """Return boolean for flag values allowing legacy 'yes'/'no' strings."""
-    if value is None:
-        return default
-
-    if isinstance(value, bool):
-        return value
-
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        if lowered == 'yes':
-            return True
-        if lowered == 'no':
-            return False
-        if lowered == 'true':
-            return True
-        if lowered == 'false':
-            return False
-
-    return bool(value)
-
-
+# The flag and list-of-pairs helpers live at the config boundary; the names stay for the callers.
+is_enabled = as_flag
 def extract_prior_info(keys: dict) -> dict:
     '''
     Extract prior information on STATE from keyword(s).
@@ -434,9 +415,8 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
         with masks loaded or created, dimensions flipped for compatibility, and
         all options standardized.
     """
-    # Ensure a dict
-    if isinstance(info, list):
-        info = list_to_dict(info)
+    # Ensure a dict, and work on a copy: the flags below are rewritten in place.
+    info = list_to_dict(info) if isinstance(info, list) else dict(info)
     assert isinstance(info, dict)
 
     # Redefine all 'yes' and 'no' values to bool
@@ -488,42 +468,25 @@ def organize_sparse_representation(info: Union[dict,list]) -> dict:
 
 
 def extract_maxiter(keys: dict) -> dict:
-
+    """``max_iter`` from the ``iteration`` or ``mda`` block; 1 without either. Reads without rewriting the block."""
     if 'iteration' in keys:
-        if isinstance(keys['iteration'], list):
-            keys['iteration'] = list_to_dict(keys['iteration'])
+        block = keys['iteration']
+        block = list_to_dict(block) if isinstance(block, list) else block
         try:
-            max_iter = keys['iteration']['max_iter']
+            max_iter = block['max_iter']
         except KeyError:
                 raise AssertionError('MAX_ITER has not been given in ITERATION')
-
     elif 'mda' in keys:
-        if isinstance(keys['mda'], list):
-            keys['mda'] = list_to_dict(keys['mda'])
+        block = keys['mda']
+        block = list_to_dict(block) if isinstance(block, list) else block
         try:
-            max_iter = keys['mda']['max_iter']
+            max_iter = block['max_iter']
         except KeyError:
                 raise AssertionError('MAX_ITER has not been given in MDA')
-
     else:
         max_iter = 1
 
     return max_iter
 
 
-def list_to_dict(info_list: list) -> dict:
-    assert isinstance(info_list, list)
-    # Initialize and loop over entries
-    info_dict = {}
-    for entry in info_list:
-        if not isinstance(entry, list):
-            entry = [entry]
-        # Fill in values
-        if len(entry) == 1:
-            info_dict[str(entry[0])] = None
-        elif len(entry) == 2:
-            info_dict[str(entry[0])] = entry[1]
-        else:
-            info_dict[str(entry[0])] = entry[1:]
-
-    return info_dict
+list_to_dict = pairs_to_dict

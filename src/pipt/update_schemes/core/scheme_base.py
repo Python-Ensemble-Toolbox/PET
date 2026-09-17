@@ -207,6 +207,8 @@ def restart_options(keys_da) -> dict:
     }
     if "restart_file" in keys_da:
         options["restart_file"] = keys_da["restart_file"]
+    elif "restartfile" in keys_da:   # a section that did not pass the config boundary
+        options["restart_file"] = keys_da["restartfile"]
     return options
 
 

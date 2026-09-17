@@ -18,8 +18,8 @@ class DataReader:
 
     def __init__(self, info: dict, **kwargs):
         self.info = info
-        self.data = info.get('truedata', info.get('data', None))
-        self.var = info.get('datavar', info.get('var', None))
+        self.data = info.get('data', None)
+        self.var = info.get('datavar', None)
 
         # NB: Not sure if this will be used or needed!
         self.assimindex  = info.get('assimindex', None)
@@ -32,10 +32,10 @@ class DataReader:
 
         # Error handling for missing data or variance
         if self.data is None:
-            msg = "Data missing: 'truedata' or 'data' key is missing in info dictionary."
+            msg = "Data missing: the 'data' key is missing in info dictionary."
             raise ValueError(msg)
         if self.var is None:
-            msg = "Variance missing: 'datavar' or 'var' key is missing in info dictionary."
+            msg = "Variance missing: the 'datavar' key is missing in info dictionary."
             raise ValueError(msg)
 
 

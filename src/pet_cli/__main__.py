@@ -18,7 +18,7 @@ import sys
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 from pathlib import Path
 
-from input_output import read_config
+from input_output import config, read_config
 from pet_cli.migrate import migrate_config
 
 
@@ -48,38 +48,20 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         count = len(section) if section else 0
         print(f"  [{name}] {count} keyword(s)")
 
-    problems = _check_mandatory_keywords(sections)
+    cfg_prb, cfg_sim, cfg_ens = sections
+    problems = config.validate(cfg_prb, cfg_sim, cfg_ens)
+    unknown = config.unknown_keys(cfg_prb, cfg_ens)
+    if unknown:
+        print("\nKeys nothing in PET reads (check the spelling):")
+        for key in unknown:
+            print(f"  - {key}")
     if problems:
         print("\nProblems found:")
         for problem in problems:
             print(f"  - {problem}")
         return 1
-
     print("\nNo problems found.")
     return 0
-
-
-def _check_mandatory_keywords(sections) -> list[str]:
-    """Run the mandatory-keyword checks and collect any failures as messages."""
-    cfg_prb = sections[0] or {}
-    cfg_sim = sections[1] if len(sections) > 1 else {}
-    cfg_ens = sections[2] if len(sections) > 2 else None
-
-    problems: list[str] = []
-    checks = [(read_config.check_mand_keywords_fwd, cfg_sim)]
-    if "scheme" in cfg_prb or "daalg" in cfg_prb:
-        checks.append((read_config.check_mand_keywords_da, cfg_prb))
-    elif cfg_prb:
-        checks.append((read_config.check_mand_keywords_opt, cfg_prb))
-    if cfg_ens:
-        checks.append((read_config.check_mand_keywords_en, cfg_ens))
-
-    for check, section in checks:
-        try:
-            check(section)
-        except AssertionError as err:
-            problems.append(str(err))
-    return problems
 
 
 def _cmd_convert(args: argparse.Namespace) -> int:
