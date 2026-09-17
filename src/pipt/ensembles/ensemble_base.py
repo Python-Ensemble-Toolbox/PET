@@ -250,11 +250,13 @@ class AssimilationEnsemble(ForecastMixin, OutlierMixin, LocalAnalysisMixin, Base
     resuming process built its ensemble."""
 
     def restart_state(self) -> dict:
+        """What a checkpoint carries for this ensemble: ``RESTART_ATTRIBUTES`` plus the random stream's state."""
         state = {name: getattr(self, name) for name in self.RESTART_ATTRIBUTES if hasattr(self, name)}
         state['rng_state'] = self.rng.get_state()
         return state
 
     def restore_restart_state(self, state: dict) -> None:
+        """Overlay a checkpoint's ensemble state and mark the ensemble as resumed."""
         state = dict(state)
         self.rng.set_state(state.pop('rng_state'))
         for name, value in state.items():

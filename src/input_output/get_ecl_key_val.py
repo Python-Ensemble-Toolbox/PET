@@ -5,6 +5,7 @@ import sys
 
 
 def read_file(val_type, filename):
+    """Values of keyword ``val_type`` in an Eclipse-style include file, read until the terminating ``/``."""
 
     file = open(filename, 'r')
     lines = file.readlines()
@@ -48,6 +49,7 @@ def read_file(val_type, filename):
     return values
 
 def write_file(filename, val_type, data):
+    """Write ``data`` as keyword ``val_type`` in an Eclipse-style include file."""
 
     file = open(filename, 'w')
     file.writelines(val_type + '\n')

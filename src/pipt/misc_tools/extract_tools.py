@@ -320,6 +320,7 @@ def extract_multilevel_info(keys: Union[dict, list]) -> dict:
 
 
 def extract_local_analysis_info(keys: Union[dict, list], state: list) -> dict:
+    """Local-analysis settings from the ``localanalysis`` block: parameter and region lists restricted to ``state``, ``search_range``, ``column_update``, and the pickled position and mask files."""
     # Check if keys are list, and make it a dict if not
     if isinstance(keys, list):
         keys = list_to_dict(keys)

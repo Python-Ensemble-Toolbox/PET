@@ -86,7 +86,7 @@ BLOCKS_OPTIM: tuple = ()
 KNOWN_DATAASSIM = frozenset({
     "scheme", "analysis", "data", "datavar", "obsname", "datatype", "truedataindex", "assimindex", "energy",
     "emp_cov", "iteration", "mda", "compress", "localization", "localanalysis", "actnum", "scale_data", "scale",
-    "screendata", "post_process_forecast", "remove_outliers", "add_synthetic_noise",
+    "screendata", "post_process_forecast", "remove_outliers",
     "savefolder", "nosave", "savedata", "analysisdebug", "iterinfo", "obsvarsave", "qa", "qc",
     "restart", "restartsave", "restart_file", "logit", "logger_name",
     # legacy text files keep the ensemble's keys in DATAASSIM
@@ -206,6 +206,7 @@ def validate(cfg_prb, cfg_sim=None, cfg_ens=None) -> list:
 
 
 def fatal_problems(cfg_prb, cfg_sim=None, cfg_ens=None) -> list:
+    """The problems that stop a run at construction."""
     return [problem for problem in validate(cfg_prb, cfg_sim, cfg_ens) if problem.fatal]
 
 

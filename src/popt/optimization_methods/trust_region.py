@@ -300,6 +300,7 @@ class TrustRegion(OptimizerBase):
         self.quasi_newton = state.get("quasi_newton", self.quasi_newton)
 
     def log_columns(self) -> dict:
+        """The row of the iteration log: iteration, objective, trust radius, reduction ratio, whether the step hit the boundary."""
         columns = {
             "iter.": self.iteration,
             fun_xk_symbol: self.fk,

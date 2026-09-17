@@ -177,6 +177,7 @@ class SmcOpt(OptimizerBase):
         self.optimizer.__dict__.update(state.get("optimizer_state", {}))
 
     def log_columns(self) -> dict:
+        """The row of the iteration log: iteration, backtracking attempts, objective, best objective seen, step size."""
         return {
             "iter.": self.iteration,
             "alpha_iter": self.alpha_iter,

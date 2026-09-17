@@ -94,6 +94,7 @@ class GaspariCohnKernel:
         field_shape:      tuple,
         ensemble_size:    Optional[int] = None,
     ) -> np.ndarray:
+        """Taper weights around a datum: smooth Gaspari-Cohn decay over ``radius`` cells, stretched by ``anisotropy_ratio``."""
         nx, ny = 2 * field_shape[1], 2 * field_shape[2]
         X, Y   = _kernel_coordinates(nx, ny)
         coords = np.vstack((X.ravel(), Y.ravel()))
@@ -138,6 +139,7 @@ class FurrerBengtssonKernel:
         field_shape:      tuple,
         ensemble_size:    Optional[int] = None,
     ) -> np.ndarray:
+        """Taper weights around a datum: Furrer-Bengtsson decay over ``radius`` cells, adjusted for the ensemble size."""
         nx, ny = 2 * field_shape[1], 2 * field_shape[2]
         X, Y   = _kernel_coordinates(nx, ny)
         coords = np.vstack((X.ravel(), Y.ravel()))
@@ -168,6 +170,7 @@ class RegionKernel:
         field_shape:      tuple         = None,
         ensemble_size:    Optional[int] = None,
     ) -> np.ndarray:
+        """Weight 1 everywhere within ``radius`` (stretched by ``anisotropy_ratio``), 0 outside."""
         return np.ones((1, 1))
 
 

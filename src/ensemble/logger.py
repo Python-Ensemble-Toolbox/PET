@@ -14,6 +14,7 @@ class NullLogger:
         pass
 
     def info(self, *args, **kwargs):
+        """No-op."""
         pass
 
 class PetLogger:
@@ -103,6 +104,7 @@ class PetLogger:
             self._logger.info('')
 
     def info(self, *args, **kwargs):
+        """Log as given; ``__call__`` is the table-aware form."""
         self._logger.info(*args, **kwargs)
 
     def _set_ns(self, **kwargs):

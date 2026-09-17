@@ -243,6 +243,7 @@ class LineSearch(OptimizerBase):
         return alpha
 
     def log_columns(self) -> dict:
+        """The row of the iteration log: iteration, objective, gradient infinity norm, step length taken."""
         return {
             'iter.': self.iteration,
             fun_xk_symbol: self.fk,

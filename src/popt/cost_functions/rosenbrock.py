@@ -12,4 +12,5 @@ def _rosenbrock(state, *args, **kwargs):
     return f
 
 def rosenbrock(x, *args, **kwargs):
+    """SciPy's Rosenbrock function of ``x``; extra arguments are ignored."""
     return rosen(x)

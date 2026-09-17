@@ -11,6 +11,8 @@ nav:
   - Home: index.md
   - Reference: reference/
   - Tutorials: tutorials/
+  - Configuration: configuration.md
+  - Architecture: architecture.md
   - Bibliography: references.md
   - dev_guide.md
 

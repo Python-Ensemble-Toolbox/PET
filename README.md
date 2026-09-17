@@ -61,6 +61,13 @@ To also install the tools needed for running tests and linting locally:
 python3 -m pip install -e ".[dev]"
 ```
 
+## Documentation
+
+The [configuration reference](docs/configuration.md) lists every key of the
+`dataassim`, `ensemble`, `optim` and `simulator` sections; the
+[architecture page](docs/architecture.md) explains how a run is put together
+and where a new scheme, analysis, localization, optimizer or simulator goes.
+
 ## Command-line interface
 
 Installing PET also installs a `pet` command for working with config files:

@@ -145,9 +145,11 @@ class GradientDescent:
         self._momentum  = self.momentum
 
     def get_momentum_for_nesterov(self):
+        """The momentum term, ``beta * velocity``, used for the Nesterov look-ahead."""
         return self.momentum * self.velocity
 
     def get_step_size(self):
+        """Current step size."""
         return self._step_size
 
 
@@ -292,6 +294,7 @@ class Adam:
         self._step_size = self.step_size
 
     def get_step_size(self):
+        """Current step size."""
         return self._step_size
 
 
@@ -303,6 +306,7 @@ class AdaMax(Adam):
         super().__init__(step_size, beta1, beta2)
 
     def apply_update(self, control, gradient, **kwargs):
+        """An AdaMax step (Adam with the infinity norm on the second moment); returns ``(new_control, step)``."""
         iter  = kwargs['iter']
         alpha = self._step_size
         beta1 = self.beta1
@@ -486,4 +490,5 @@ class Steihaug:
         self.delta = self.delta0
 
     def get_step_size(self):
+        """Current trust-region radius, which plays the role of the step size."""
         return self.delta

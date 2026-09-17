@@ -389,6 +389,7 @@ def bfgs_update(Hk, sk, yk):
     return Hk_new
 
 def newton_cg(gk, Hk=None, maxiter=None, **kwargs):
+    """Newton-CG search direction for gradient ``gk`` and Hessian ``Hk`` (Hessian-vector products by finite differences of ``jac`` when ``Hk`` is None); ``-gk`` when no descent direction is found."""
 
     # Check for logger
     logger = kwargs.get('logger', None)

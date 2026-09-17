@@ -25,33 +25,43 @@ class GlobalRandomStream:
     """
 
     def randn(self, *shape):
+        """As ``numpy.random.randn``, on the global stream."""
         return np.random.randn(*shape)
 
     def standard_normal(self, size=None):
+        """As ``numpy.random.standard_normal``, on the global stream."""
         return np.random.standard_normal(size)
 
     def normal(self, loc=0.0, scale=1.0, size=None):
+        """As ``numpy.random.normal``, on the global stream."""
         return np.random.normal(loc, scale, size)
 
     def rand(self, *shape):
+        """As ``numpy.random.rand``, on the global stream."""
         return np.random.rand(*shape)
 
     def uniform(self, low=0.0, high=1.0, size=None):
+        """As ``numpy.random.uniform``, on the global stream."""
         return np.random.uniform(low, high, size)
 
     def choice(self, a, size=None, replace=True, p=None):
+        """As ``numpy.random.choice``, on the global stream."""
         return np.random.choice(a, size=size, replace=replace, p=p)
 
     def permutation(self, x):
+        """As ``numpy.random.permutation``, on the global stream."""
         return np.random.permutation(x)
 
     def multivariate_normal(self, mean, cov, size=None):
+        """As ``numpy.random.multivariate_normal``, on the global stream."""
         return np.random.multivariate_normal(mean, cov, size)
 
     def get_state(self):
+        """As ``numpy.random.get_state``, on the global stream."""
         return np.random.get_state()
 
     def set_state(self, state):
+        """As ``numpy.random.set_state``, on the global stream."""
         np.random.set_state(state)
 
     def __reduce__(self):

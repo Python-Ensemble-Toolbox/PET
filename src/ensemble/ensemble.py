@@ -318,6 +318,7 @@ class BaseEnsemble:
 
     @sim_data.setter
     def sim_data(self, value):
+        """Set the frame view directly, as a forecast loaded from a file is."""
         self._sim_data = value
 
     def _collect_sim_data(self, sim_output):
@@ -362,6 +363,7 @@ class BaseEnsemble:
         return sim_data
 
     def run_on_HPC(self, enX, batch_size=None, **kwargs):
+        """Run the members through the simulator's HPC queue, ``batch_size`` at a time; needs the queue hooks on the wrapper."""
         import pipt.misc_tools.analysis_tools as at
 
         list_member_index = list(range(self.ne))

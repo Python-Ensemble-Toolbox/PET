@@ -9,6 +9,7 @@ from copy import deepcopy
 
 
 class SparseRepresentation:
+    """Wavelet compression of one seismic vintage. Thresholding the observed vintage fixes the leading coefficients; later calls reduce any vintage to those."""
 
     # Initialize
     def __init__(self, options):
@@ -30,6 +31,7 @@ class SparseRepresentation:
     # Function for image compression. If the function is called without threshold, then the leading indices must
     # be defined in the class. Typically, this is done by running the compression on true data with a given threshold.
     def compress(self, data, th_mult=None):
+        """Compress ``data`` (the masked grid, flattened). With ``th_mult`` the coefficients are thresholded and the leading indices (re)defined; without it the stored indices select them. Returns ``(compressed, wdec_rec)``."""
         if ('inactive_value' not in self.options) or (self.options['inactive_value'] is None):
             self.options['inactive_value'] = np.mean(data)
         signal = np.zeros(self.num_grid)
@@ -216,6 +218,7 @@ class SparseRepresentation:
 
     # Reconstruct the current compressed dataset.
     def reconstruct(self, wdec_rec):
+        """The masked, flattened vintage rebuilt from the retained wavelet coefficients."""
 
         if wdec_rec is None:
             raise ValueError('No signal to reconstruct')

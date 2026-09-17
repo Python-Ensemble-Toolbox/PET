@@ -111,6 +111,7 @@ class margIS_update(AnalysisBase):
     """
 
     def update(self, enX, enY, enE, **kwargs):
+        """The margIES weight-space update (Stordal et al.), one regularisation term per data type; returns the analysis result the scheme applies."""
 
         scheme = self.scheme
         ne = scheme.ne

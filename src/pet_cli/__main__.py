@@ -113,6 +113,7 @@ def _cmd_migrate(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """The ``pet`` argument parser: ``validate``, ``convert``, ``migrate``, ``version``."""
     parser = argparse.ArgumentParser(prog="pet", description=__doc__.strip().splitlines()[0])
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -138,6 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point of the ``pet`` command; returns the exit code."""
     parser = build_parser()
     args = parser.parse_args(argv)
     return args.func(args)

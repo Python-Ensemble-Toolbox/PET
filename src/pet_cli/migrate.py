@@ -65,6 +65,7 @@ class MigrationReport:
 
     @property
     def changed(self) -> bool:
+        """Whether the migration changed anything."""
         return bool(self.changes)
 
     def __str__(self) -> str:

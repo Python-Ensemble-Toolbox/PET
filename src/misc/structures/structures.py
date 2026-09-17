@@ -184,6 +184,7 @@ class PETDataFrame(pd.DataFrame):
 
 
     def to_series(self) -> pd.Series:
+        """Cells as a Series indexed by ``(label, datatype)``, label-major: the legacy flatten order."""
         mult_index = []
         for idx in self.index:
             for col in self.columns:
@@ -199,6 +200,7 @@ class PETDataFrame(pd.DataFrame):
 
 
     def to_matrix(self, filter=True, is_jacobian=False, squeeze=True) -> np.ndarray:
+        """Legacy flatten of the observed cells, label-major then type; ``misc.structures.DataLayout`` is the analysis path's equivalent."""
 
         # If multi-index columns, convert to single-level first
         if isinstance(self.columns, pd.MultiIndex):

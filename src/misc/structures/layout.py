@@ -49,10 +49,12 @@ class LayoutRow:
 
     @property
     def size(self) -> int:
+        """Number of rows this cell owns."""
         return self.stop - self.start
 
     @property
     def rows(self) -> slice:
+        """The slice of the data vector this cell owns."""
         return slice(self.start, self.stop)
 
 
@@ -81,9 +83,11 @@ class DataLayout:
 
     @property
     def nd(self) -> int:
+        """Length of the data vector."""
         return self.rows[-1].stop if self.rows else 0
 
     def row(self, label, datatype) -> LayoutRow:
+        """The row of ``(label, datatype)``; ``KeyError`` when that cell was not observed."""
         for row in self.rows:
             if row.label == label and row.datatype == datatype:
                 return row
@@ -159,13 +163,16 @@ class StateLayout:
 
     @property
     def nx(self) -> int:
+        """Number of state rows."""
         return max((stop for _, stop in self.indices.values()), default=0)
 
     @property
     def variables(self) -> tuple:
+        """Variable names in stacking order."""
         return tuple(self.indices)
 
     def rows(self, name) -> slice:
+        """The row slice of variable ``name``."""
         start, stop = self.indices[name]
         return slice(start, stop)
 

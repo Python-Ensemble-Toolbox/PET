@@ -29,8 +29,10 @@ def quadratic(x, *args, **kwargs):
 
 # Equality constraint saying that sum of x should be equal to dimention + 1
 def g(x):
+    """Equality constraint ``sum(x) - (n + 1) = 0``."""
     return sum(x) - (x.size + 1)
 
 # Inequality constrint saying that x_1 should be equal or less than 0
 def h(x):
+    """Inequality constraint ``-x[0] <= 0``."""
     return -x[0]

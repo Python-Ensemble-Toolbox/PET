@@ -45,4 +45,5 @@ class ForwardSimulator(Protocol):
 
     input_dict: dict
 
-    def run_fwd_sim(self, state, member_index, *args, **kwargs): ...
+    def run_fwd_sim(self, state, member_index, *args, **kwargs):
+        """Run one member; the class docstring lists the accepted return values."""

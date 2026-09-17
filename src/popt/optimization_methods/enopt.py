@@ -216,6 +216,7 @@ class EnOpt(OptimizerBase):
         self.optimizer.__dict__.update(state.get("optimizer_state", {}))
 
     def log_columns(self) -> dict:
+        """The row of the iteration log: iteration, backtracking attempts, objective, step size, first covariance entry."""
         return {
             "iter.": self.iteration,
             "alpha_iter": self.alpha_iter,

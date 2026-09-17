@@ -122,6 +122,7 @@ def read_toml(filepath: str):
 
 
 def convert_txt_to_toml(init_file):
+    """Write a legacy ``.pipt``/``.popt`` file as ``<name>.toml`` next to it."""
     # Read .pipt or .popt file
     pr, fwd, _ = read_txt(init_file)
 
@@ -134,6 +135,7 @@ def convert_txt_to_toml(init_file):
             tomli_w.dump({'optim': pr, 'fwdsim': fwd}, f)
 
 def convert_txt_to_yaml(init_file):
+    """Write a legacy ``.pipt``/``.popt`` file as ``<name>.yaml`` next to it."""
     # Read .pipt or .popt file
     pr, fwd, _ = read_txt(init_file)
 
@@ -368,6 +370,7 @@ def parse_keywords(lines):
 
 
 def change_file_extension(filename, new_extension):
+    """``filename`` with its extension replaced by ``new_extension``."""
     if '.' in filename:
         name, old_extension = filename.rsplit('.', 1)
         new_filename = name + '.' + new_extension

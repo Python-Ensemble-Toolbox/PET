@@ -282,6 +282,7 @@ class AutoAdaptiveLocalization(LocalizationBase):
 
 
     def rational_function(self, distance, length_scale):
+        """Piecewise rational taper of ``distance`` at ``length_scale``: 1 inside the scale, decaying to 0 at twice the scale."""
         z_ratio = np.absolute(distance) / length_scale
         idx_inner = np.where(z_ratio <= 1)
         idx_outer = np.where(z_ratio <= 2)
@@ -311,6 +312,7 @@ class AutoAdaptiveLocalization(LocalizationBase):
 
     @staticmethod
     def rational_function_sigmoid(distance, length_scale):
+        """A steep sigmoid taper switching at ``length_scale``."""
         steepness = 50
         return expit((distance - length_scale) * steepness)
 

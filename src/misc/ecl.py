@@ -855,6 +855,7 @@ class EclipseRestart (EclipseData):
         return _intehead_date(intehead)
 
     def arrays(self):
+        """Names of the arrays in the file."""
         ecl_file = EclipseFile(self.root, self.ext)
         return [list(ecl_file.cat.keys())[i][0] for i, _ in enumerate(ecl_file.cat)]
 
@@ -1246,6 +1247,7 @@ class EclipseCase (object):
         return self._grid.grid()
 
     def arrays(self, when):
+        """Names of the arrays in the restart step at ``when``."""
         return self.at(when).arrays()
 
 

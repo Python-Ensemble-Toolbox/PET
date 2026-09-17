@@ -43,10 +43,12 @@ class PredictedData:
 
     @property
     def nd(self) -> int:
+        """Number of data rows."""
         return self.matrix.shape[0]
 
     @property
     def ne(self) -> int:
+        """Number of members."""
         return self.matrix.shape[1]
 
     @classmethod

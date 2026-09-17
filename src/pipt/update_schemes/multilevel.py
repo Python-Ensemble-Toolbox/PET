@@ -160,6 +160,7 @@ class esmda_hybrid(ESMDA):
         )
 
     def calc_analysis(self):
+        """The ES-MDA analysis over every fidelity level: per-level predictions, redrawn observations, the hybrid update, clipped proposals."""
 
         # Get ensemble predictions at all levels
         self.enPred = []

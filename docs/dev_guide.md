@@ -17,6 +17,10 @@ package lives under `src/`.
 
 ### How a run is put together
 
+The [architecture page](architecture.md) describes the layers and contracts in
+full and the [configuration reference](configuration.md) every key; this is
+the short version.
+
 A **scheme** (`pipt.update_schemes.core.AssimilationScheme`) owns the
 iteration loop, the convergence checks and the checkpointing. It holds an
 **ensemble** collaborator (`pipt.ensembles.AssimilationEnsemble`) that owns

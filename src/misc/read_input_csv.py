@@ -15,6 +15,7 @@ import numpy as np
 from misc.structures import PETDataFrame
 
 class DataReader:
+    """Reads the observed data and its variance, as frames, from the files a config names."""
 
     def __init__(self, info: dict, **kwargs):
         self.info = info
@@ -40,6 +41,7 @@ class DataReader:
 
 
     def get_data(self) -> PETDataFrame:
+        """The observations as a frame: report labels as index, data types as columns; ``.npz`` cells are loaded and compressed vintages reduced to their leading wavelet coefficients."""
         if isinstance(self.data, str):
             df = self._read_from_file(self.data)
         elif isinstance(self.data, dict):
@@ -75,6 +77,7 @@ class DataReader:
 
 
     def get_variance(self, data_df: PETDataFrame, sparse_data: list=None) -> PETDataFrame:
+        """The variance frame on ``data_df``'s geometry, from ``['abs', v]``, ``['rel', percent]``, ``['emp', ensemble]`` or ``['cd', file]`` cells; a compressed vintage gets its estimated noise squared."""
         if isinstance(self.var, str):
             _df = self._read_from_file(self.var)
         else:
