@@ -17,7 +17,7 @@ import logging
 
 # Internal imports
 from misc.structures.structures import PETDataFrame
-from misc.structures.state import StateLayout
+from misc.structures.layout import StateLayout
 from misc.sampling import random_stream
 
 # NOTE: pipt.misc_tools is imported lazily inside the methods that need it.

@@ -6,8 +6,7 @@ a ``DataLayout`` (``PredictedData`` for the forecast). The state is a plain
 ``(nx, ne)`` array whose variable layout is a ``StateLayout``.
 """
 from .structures import PETDataFrame
-from misc.structures.layout import DataLayout, LayoutRow
+from misc.structures.layout import DataLayout, LayoutRow, StateLayout
 from misc.structures.predicted import PredictedData
-from misc.structures.state import StateLayout
 
 __all__ = ["PETDataFrame", "DataLayout", "LayoutRow", "PredictedData", "StateLayout"]
