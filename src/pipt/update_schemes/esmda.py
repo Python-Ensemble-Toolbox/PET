@@ -148,11 +148,8 @@ class ESMDA(AssimilationScheme):
         #self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
         #self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
 
-        # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
-        # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
-        self.max_iter = len(self._ext_assim_steps())+1
-        # Prior forecast is not a counted iteration under the base loop.
-        self.maxiter = self.max_iter - 1
+        # One update per assimilation step of the MDA schedule.
+        self.maxiter = len(self._ext_assim_steps())
         self.iteration = 0
         # Mirrored so ensemble-side helpers that consult the iteration
         # counter (e.g. data screening in perturb_observations) agree with

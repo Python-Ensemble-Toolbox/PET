@@ -132,11 +132,8 @@ class EnKF(AssimilationScheme):
         self.ensemble.list_datatypes = self.keys_da['datatype']
 
 
-        # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
-        # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
-        self.max_iter = len(self.keys_da['assimindex'])+1
-        # Prior forecast is not a counted iteration under the base loop.
-        self.maxiter = self.max_iter - 1
+        # One update per assimilation index.
+        self.maxiter = len(self.keys_da['assimindex'])
         self.iteration = 0
         # Mirrored for ensemble-side helpers that consult it.
         self.ensemble.iteration = 0

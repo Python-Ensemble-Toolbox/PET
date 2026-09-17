@@ -89,11 +89,8 @@ class ES(EnKF):
         # are given as in the Simultaneous loop.
         self.ensemble.check_assimindex_simultaneous()
 
-        # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
-        # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
-        self.max_iter = 2
-        # Prior forecast is not a counted iteration under the base loop.
-        self.maxiter = self.max_iter - 1
+        # A single all-data-at-once update.
+        self.maxiter = 1
 
     def check_convergence(self) -> bool:
         """ES takes a single all-data-at-once step; nothing stops early."""
