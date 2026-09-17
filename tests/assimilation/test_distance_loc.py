@@ -9,6 +9,8 @@ Covers:
 
 from __future__ import annotations
 
+import pickle
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -524,6 +526,51 @@ class TestDistanceLocalizationOutput:
         )()
 
         np.testing.assert_array_equal(without.toarray(), with_all.toarray())
+
+    # ------------------------------------------------------------------
+    # Pickled mask files
+    # ------------------------------------------------------------------
+
+    def test_a_pickled_localization_file_is_read(self, tmp_path):
+        """Pickled files hold plain dicts. They were returned unconverted, so the first
+        thing that asked for `.taper` raised AttributeError and no pickled mask file
+        could be used at all."""
+        legacy = {
+            ("pressure", 1.0, "perm"): {"taper_func": "gc", "position": [[5, 5, 0]],
+                                        "range": [4, ":"], "anisotropi": [1.0, 0.0]},
+            ("pressure", 1.0, "poro"): {"taper_func": None, "position": None,
+                                        "range": None, "anisotropi": None},
+        }
+        path = tmp_path / "masks.p"
+        with open(path, "wb") as handle:
+            pickle.dump(legacy, handle)
+
+        prior_info = {p: {"nx": NX, "ny": NY, "nz": NZ} for p in ("perm", "poro")}
+        loc = DistanceLocalization(
+            {"field": FIELD, "taper_func": "gc", "locfile": str(path)},
+            data=_make_data(), parameters=["perm", "poro"], prior_info=prior_info,
+        )
+        dense = loc().toarray()
+        n_cells = NZ * NX * NY
+
+        assert dense.shape == (2 * n_cells, 1)
+        assert np.any(dense[:n_cells] > 0)                    # perm is tapered
+        np.testing.assert_array_equal(dense[n_cells:], 0.0)   # poro has no entry
+
+    def test_a_pickled_radius_without_a_z_range_still_reads(self, tmp_path):
+        """Older files wrote `range` as the radius alone rather than [radius, z_range]."""
+        path = tmp_path / "masks.pkl"
+        with open(path, "wb") as handle:
+            pickle.dump({("pressure", 1.0, "perm"): {
+                "taper_func": "gc", "position": [[5, 5, 0]], "range": 4, "anisotropi": [1.0, 0.0]
+            }}, handle)
+
+        loc = DistanceLocalization(
+            {"field": FIELD, "taper_func": "gc", "locfile": str(path)},
+            data=_make_data(), parameters=["perm"],
+        )
+
+        assert np.any(loc().toarray() > 0)
 
     # ------------------------------------------------------------------
     # z_range selection

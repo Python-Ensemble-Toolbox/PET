@@ -542,6 +542,49 @@ class DistanceLocalization(LocalizationBase):
     # Config parsing
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _entry_from_legacy(raw) -> LocalizationEntry:
+        """Convert one entry of a pickled localization file to a :class:`LocalizationEntry`.
+
+        Those files hold plain dicts -- ``taper_func``, ``position``, ``range`` as
+        ``[radius, z_range]``, ``anisotropi`` as ``[ratio, rotation]``, and ``file`` for
+        the ``import`` taper. They used to be returned as-is, so the first thing that
+        asked for ``.taper`` raised ``AttributeError: 'dict' object has no attribute
+        'taper'`` and no pickled mask file could be used at all.
+        """
+        if isinstance(raw, LocalizationEntry):
+            return raw
+        if not isinstance(raw, dict):
+            raise TypeError(f"Localization pickle holds {type(raw).__name__}, expected a dict per entry.")
+
+        taper = raw.get("taper_func")
+        if taper is None:                       # a skeleton entry: no localization here
+            return LocalizationEntry(taper=None, positions=None, radius=None, z_range=None)
+
+        if taper == "import":
+            return LocalizationEntry(
+                taper="import", positions=None, radius=None,
+                z_range=raw.get("range"), filepath=raw.get("file"),
+            )
+
+        # ``range`` is [radius, z_range]; older files sometimes wrote the radius alone.
+        loc_range = raw.get("range")
+        if isinstance(loc_range, (list, tuple)):
+            radius, z_range = loc_range[0], (loc_range[1] if len(loc_range) > 1 else ":")
+        else:
+            radius, z_range = loc_range, ":"
+
+        aniso = raw.get("anisotropi") or [1.0, 0.0]
+
+        return LocalizationEntry(
+            taper            = taper,
+            positions        = raw.get("position"),
+            radius           = int(radius) if radius is not None else None,
+            z_range          = str(z_range),
+            anisotropy_ratio = float(aniso[0]),
+            rotation_deg     = float(aniso[1]),
+        )
+
     def _parse_config(self, info: dict) -> Dict[Tuple, LocalizationEntry]:
         """Parse localization config into a ``(data_type, time, param)`` entry dict."""
 
@@ -550,8 +593,11 @@ class DistanceLocalization(LocalizationBase):
             if str(v).endswith((".p", ".pkl")):
                 with open(v, "rb") as f:
                     raw = pickle.load(f)
-                return {k: v for k, v in raw.items()
-                        if isinstance(k, tuple) and len(k) == 3}
+                return {
+                    k: self._entry_from_legacy(v)
+                    for k, v in raw.items()
+                    if isinstance(k, tuple) and len(k) == 3
+                }
 
         # -- skeleton: one empty entry per (data_type, time, param) combo
         entries: Dict[Tuple, LocalizationEntry] = {
