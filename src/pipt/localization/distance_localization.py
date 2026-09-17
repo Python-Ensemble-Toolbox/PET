@@ -722,7 +722,14 @@ class DistanceLocalization(LocalizationBase):
     # ------------------------------------------------------------------
 
     def _resolve_mask(self, key: Tuple[str, float, str]) -> np.ndarray:
-        """Return the repositioned spatial mask for an entry key."""
+        """Return the repositioned spatial mask for an entry key, over the active cells.
+
+        The kernel is placed on the full grid, but the state holds only the active
+        cells, and :meth:`_zero_mask` already reduces to them. Returning the full grid
+        here made the two disagree: a localized parameter contributed one row per grid
+        cell and an unlocalized one a row per active cell, so the operator came out
+        with the wrong number of rows altogether.
+        """
         entry = self._entries[key]
         kernel = self._mask_cache[self._cache_key(entry)]
         if entry.z_range == ":":
@@ -747,7 +754,11 @@ class DistanceLocalization(LocalizationBase):
                     )
 
         mask = np.maximum.reduce(masks)
-        return mask
+        if self.actnum is None:
+            return mask
+        # The caller flattens with reshape(1, -1), so select on the same C-order
+        # flattening rather than on the grid axes.
+        return mask.ravel()[self.actnum]
 
     def _place_kernel(self, kernel: np.ndarray, position: List[int]) -> np.ndarray:
         """

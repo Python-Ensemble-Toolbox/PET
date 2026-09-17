@@ -488,6 +488,44 @@ class TestDistanceLocalizationOutput:
         assert result.shape == (2 * NZ * NX * NY, 1)
 
     # ------------------------------------------------------------------
+    # Active-cell mask
+    # ------------------------------------------------------------------
+
+    def test_actnum_reduces_a_localized_parameter_to_the_active_cells(self, tmp_path):
+        """A localized parameter used to contribute one row per grid cell while an
+        unlocalized one contributed a row per active cell, so the operator came out
+        with the wrong number of rows: 160 instead of 120 on this 60-of-100 case."""
+        n_cells = NZ * NX * NY
+        n_active = 60
+        actnum = np.zeros(n_cells, dtype=bool)
+        actnum[:n_active] = True
+        actnum_file = tmp_path / "active.npz"
+        np.savez(actnum_file, actnum=actnum)
+
+        info = {**_make_info(), "actnum": str(actnum_file)}
+        prior_info = {"other": {"nx": NX, "ny": NY, "nz": NZ}}
+        loc = DistanceLocalization(
+            info, data=_make_data(), parameters=["perm", "other"], prior_info=prior_info
+        )
+        result = loc()
+
+        assert result.shape == (2 * n_active, 1)
+        dense = result.toarray()
+        assert np.any(dense[:n_active] > 0)                  # the localized parameter
+        np.testing.assert_array_equal(dense[n_active:], 0.0)  # the unlocalized one
+
+    def test_an_all_active_actnum_matches_giving_none(self, tmp_path):
+        actnum_file = tmp_path / "all.npz"
+        np.savez(actnum_file, actnum=np.ones(NZ * NX * NY, dtype=bool))
+
+        without = DistanceLocalization(_make_info(), data=_make_data(), parameters=["perm"])()
+        with_all = DistanceLocalization(
+            {**_make_info(), "actnum": str(actnum_file)}, data=_make_data(), parameters=["perm"]
+        )()
+
+        np.testing.assert_array_equal(without.toarray(), with_all.toarray())
+
+    # ------------------------------------------------------------------
     # z_range selection
     # ------------------------------------------------------------------
 
