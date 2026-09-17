@@ -43,7 +43,7 @@ class PetLogger:
             self._logger.removeHandler(handler)
             handler.close()
         formatter = logging.Formatter('%(asctime)s : %(message)s', datefmt='%Y-%m-%d│%H:%M:%S')
-        for handler in (logging.FileHandler(self.filename, mode='w'), logging.StreamHandler()):
+        for handler in (logging.FileHandler(self.filename, mode='w', encoding='utf-8'), logging.StreamHandler()):
             handler.setFormatter(formatter)
             self._logger.addHandler(handler)
 

@@ -30,6 +30,20 @@ def test_a_logger_does_not_configure_the_root_logger(tmp_path):
     assert list(logging.getLogger().handlers) == before
 
 
+def test_the_log_file_is_written_as_utf8(tmp_path):
+    """The timestamp format embeds U+2502 and the tables draw with box characters.
+    Opened in the OS default encoding, every record raised UnicodeEncodeError on a
+    cp1252 Windows and the file stayed empty while the run carried on regardless."""
+    logger = PetLogger(str(tmp_path / "encoding.log"))
+    logger("one")
+    file_handlers = [h for h in logger._logger.handlers if isinstance(h, logging.FileHandler)]
+    for handler in file_handlers:
+        handler.flush()
+
+    assert [h.encoding for h in file_handlers] == ["utf-8"]
+    assert "│" in (tmp_path / "encoding.log").read_text(encoding="utf-8")
+
+
 def test_save_folder_is_not_created_by_reading_it(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     host = object.__new__(ForecastMixin)
