@@ -684,6 +684,7 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   first branch.
 
 ### Changed
+- Seismic compression happens while the prediction matrix is filled: a compressed data type's raw vintage becomes its leading wavelet coefficients through the same `SparseRepresentation` that reduced the observed vintage, member by member, as the values enter `PredictedData`. The frame-based `post_process_forecast` rewrite is gone; `post_process_forecast` now only enables the `sim2seis` scaling (`scale_results.pkl`), and compression follows from `compress` alone -- a config with `compress` but without `post_process_forecast` used to leave predictions uncompressed against compressed observations. Reconstructions of compressed members are computed only when `saveforecast` will write them (`rec_results.pkl` unchanged). Checked against an AVO case: the reader reproduces a previous run's compressed observations and variances bit for bit (7376 and 7122 coefficients over two vintages), and real member vintages filled through the new path equal their direct compression.
 - The ensemble builds `obs_variance` once from the layout (`(nd,)`, or `(nd, ne)` for an empirical error ensemble); the schemes, the observation perturbation and outlier detection read it. `construct_data_cov` is gone.
 - The full forecast is kept as what the members returned (`member_outputs`); the `sim_data` frame is built from them when something asks for it -- saving, QA/QC, popt's objective -- and cached until the next forecast. Outlier replacement reorders the raw outputs instead of rewriting every frame cell. Adjoints are an `(nd, nx, ne)` array in layout order, scaled with the data, instead of a frame flattened on every analysis; the frame path stacked every row the simulator reported, not only the observed ones. Adjoint-based updates move at the 1e-13 level: the legacy stack was a non-contiguous array, so the member mean summed in a different order (values are identical; verified on the Van der Pol case).
 - Predictions are a `PredictedData` container -- the `(nd, ne)` matrix in `DataLayout` order plus the layout -- filled directly from what each member's simulation returned, scaled as the observations were. The schemes read `pred_data.matrix`; nothing on the analysis path flattens a frame any more. `pred_data.to_frame()` is the frame view (QA/QC, inspection); `sim_data`, the full forecast, is still a frame and still what gets saved. Observations and predictions now share one row order by construction, so an unobserved cell can no longer leave the observation vector shorter than the prediction matrix. The multilevel model-error correction and outlier detection work on the matrices. In `savedata` files, `pred_data` is the matrix rather than a list of records. The seismic compression path (`post_process_forecast`) still runs on the frame and is wrapped into the container afterwards.
@@ -860,6 +861,7 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   named helpers with identical behaviour.
 
 ### Removed
+- `pipt.ensembles.CompressionMixin` and its `compress_manager`, which rewrote the observation, variance and prediction frames cell by cell.
 - `misc.read_input_csv`'s module-level readers (`read_data_df`, `read_var_df`, `read_data_csv`, `read_var_csv`, `convert_to_array`, `to_array_if_sequence`, 470 lines): nothing called them; `DataReader` is the reader.
 - `BaseEnsemble.load()` and the `if self.restart is False:` guards around every scheme's and the ensemble's initialisation, which were always true. Construction now always initialises; a checkpoint is overlaid afterwards when `run_assimilation()` starts.
 
@@ -902,6 +904,16 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the aliases.
 
 ### Known issues
+
+- **`use_ensemble` in the `compress` section is not supported and now says so.** It
+  meant: widen the leading wavelet indices with the first forecast, then
+  compress the observations with them. Observations are perturbed when the
+  scheme is built, before any forecast exists, and for this option the reader
+  kept the observed vintage raw while giving it the compressed-length variance,
+  so the two could never be used together; the perturbation step failed on the
+  shape mismatch. A config that enables it now gets a `ValueError` explaining
+  this. Supporting it means perturbing observations after the prior forecast,
+  the same change `screendata` needs.
 
 - **`screendata` is not supported and now says so.** Data screening inflates
   the variance of observations the ensemble cannot reach, which needs

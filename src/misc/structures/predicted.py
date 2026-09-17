@@ -7,10 +7,10 @@ import pandas as pd
 
 from misc.structures.layout import DataLayout
 
-__all__ = ["PredictedData"]
+__all__ = ["PredictedData", "member_cell"]
 
 
-def _cell(member, row, position):
+def member_cell(member, row, position):
     """One member's value for one observed cell, from its records or its frame."""
     if isinstance(member, pd.DataFrame):
         return member.loc[row.label, row.datatype]
@@ -50,7 +50,7 @@ class PredictedData:
         return self.matrix.shape[1]
 
     @classmethod
-    def from_members(cls, layout, members, position=None, scale=None) -> "PredictedData":
+    def from_members(cls, layout, members, position=None, scale=None, transform=None) -> "PredictedData":
         """Fill the matrix from one output per member.
 
         Parameters
@@ -64,22 +64,29 @@ class PredictedData:
         scale : (minimum, maximum), optional
             Per-data-type max-min scaling to apply, as the observations were
             scaled: ``(value - minimum) / (maximum - minimum)``.
+        transform : callable, optional
+            ``transform(row, values) -> values``, applied to a member's
+            (scaled) raw values before they enter the matrix -- how a
+            simulated seismic vintage becomes the wavelet coefficients the
+            observed one was reduced to. Its output must have ``row.size``
+            values; the raw values need not.
         """
         matrix = np.empty((layout.nd, len(members)))
+        minimum, maximum = scale if scale is not None else (None, None)
         for j, member in enumerate(members):
             for row in layout.rows:
-                values = np.ravel(np.asarray(_cell(member, row, position), dtype=float))
+                values = np.ravel(np.asarray(member_cell(member, row, position), dtype=float))
+                if scale is not None:
+                    low = minimum[row.datatype]
+                    values = (values - low) / (maximum[row.datatype] - low)
+                if transform is not None:
+                    values = np.ravel(np.asarray(transform(row, values), dtype=float))
                 if values.size != row.size:
                     raise ValueError(
                         f"member {j}: {row.datatype!r} at {row.label!r} has {values.size} values; "
                         f"the observation has {row.size}"
                     )
                 matrix[row.rows, j] = values
-        if scale is not None:
-            minimum, maximum = scale
-            for row in layout.rows:
-                low = minimum[row.datatype]
-                matrix[row.rows] = (matrix[row.rows] - low) / (maximum[row.datatype] - low)
         return cls(matrix, layout)
 
     @classmethod

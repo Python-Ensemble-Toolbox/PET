@@ -20,7 +20,6 @@ from pipt.localization import build_localization_instance
 import pipt.misc_tools.analysis_tools as at
 import pipt.misc_tools.extract_tools as extract
 
-from pipt.ensembles.compression import CompressionMixin
 from pipt.ensembles.forecast import ForecastMixin, OutlierMixin
 from pipt.ensembles.local_analysis import LocalAnalysisMixin
 
@@ -40,7 +39,7 @@ class NoLocalization:
     name = None
 
 
-class AssimilationEnsemble(ForecastMixin, OutlierMixin, CompressionMixin, LocalAnalysisMixin, BaseEnsemble):
+class AssimilationEnsemble(ForecastMixin, OutlierMixin, LocalAnalysisMixin, BaseEnsemble):
     """
     Class for organizing/initializing misc. variables and simulator for an
     ensemble-based inversion run. Inherits the PET ensemble structure
@@ -129,6 +128,17 @@ class AssimilationEnsemble(ForecastMixin, OutlierMixin, CompressionMixin, LocalA
         # Prepare sparse representation
         if 'compress' in self.keys_da:
             self.sparse_info = extract.organize_sparse_representation(self.keys_da['compress'])
+            if self.sparse_info.get('use_ensemble'):
+                # The option meant: widen the leading wavelet indices with the first
+                # forecast, then compress the observations with them. Observations are
+                # perturbed when the scheme is built, before any forecast exists, so the
+                # raw observation vector and the compressed-length variance the reader
+                # produced for this option could never be used together.
+                raise ValueError(
+                    "'use_ensemble' in the compress section is not supported: observations are "
+                    "perturbed when the scheme is built, before a forecast exists to widen the "
+                    "leading indices with. Set use_ensemble to no."
+                )
         else:
             self.sparse_info = None
 
@@ -222,7 +232,8 @@ class AssimilationEnsemble(ForecastMixin, OutlierMixin, CompressionMixin, LocalA
     # Checkpointing (the scheme's RestartMixin calls these)
     # ------------------------------------------------------------------
     RESTART_ATTRIBUTES = ('enX', 'prior_enX', 'pred_data', 'member_outputs', 'member_adjoints', 'adjoints',
-                          'scale_data', 'Am', 'proj', 'iteration')
+                          'scale_data', 'Am', 'proj', 'iteration',
+                          'sparse_data', 'scale_val')
     """What a resume must restore on the ensemble: what iterations change (the
     state, its forecast), and what construction drew or derived from a draw
     (the prior, the observation scaling, the scaled prior's SVD), so a resumed

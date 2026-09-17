@@ -215,8 +215,5 @@ class DataReader:
         arr_reconstructed = sparsrep.reconstruct(wdec_rec)  # reconstruct the data
         np.savez('truedata_rec_' + str(vintage) + '.npz', arr_reconstructed)
 
-        if self.sparse.get('use_ensemble', False):
-            return arr
-        else:
-            return arr_compressed
+        return arr_compressed
 

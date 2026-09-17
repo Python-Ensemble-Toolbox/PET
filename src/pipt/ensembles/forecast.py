@@ -13,7 +13,6 @@ delegates to it. Mixed into :class:`pipt.ensembles.AssimilationEnsemble`.
 
 import os
 import pickle
-from copy import deepcopy
 from typing import Any
 
 import numpy as np
@@ -54,10 +53,7 @@ class ForecastMixin:
             self.treat_modeling_error()
 
         self._apply_prediction_scaling()
-
-        if extract.is_enabled(self.keys_da.get("post_process_forecast", False)):
-            self.post_process_forecast()
-
+        self._save_reconstructed_forecast_if_requested()
         self._save_forecast_debug()
 
     def _predicted_data(self):
@@ -65,13 +61,72 @@ class ForecastMixin:
 
         One container per level for a multilevel ensemble. Scaling follows the
         observations: when ``data_df`` was max-min scaled, so are these, with
-        the same minimum and maximum per data type.
+        the same minimum and maximum per data type. Compressed data types are
+        reduced to the observed vintage's wavelet coefficients on the way in.
         """
         scale = (self.data_df.scale_min, self.data_df.scale_max) if self.data_df.is_scaled else None
         position = self._record_positions()
-        levels = [PredictedData.from_members(self.data_layout, members, position=position, scale=scale)
+        transform = self._row_transform()
+        levels = [PredictedData.from_members(self.data_layout, members, position=position, scale=scale, transform=transform)
                   for members in self.member_outputs]
         return levels if getattr(self, "multilevel", None) is not None else levels[0]
+
+    # ------------------------------------------------------------------
+    # Wavelet compression of seismic data types (the `compress` option)
+    # ------------------------------------------------------------------
+    def _compressed_rows(self) -> dict:
+        """``{(label, datatype): vintage}`` for the observed cells the reader compressed, in its order.
+
+        The reader walks the observed frame label-major then type and numbers
+        the compressed cells it meets; the layout walks the same way, so the
+        n-th compressed row is vintage n. Cells beyond the masks given stay
+        uncompressed on both sides.
+        """
+        if not self.sparse_info or not self.sparse_data:
+            return {}
+        types = self.sparse_info["compress_data"]
+        types = [types] if isinstance(types, str) else list(types)
+        rows = [row for row in self.data_layout.rows if row.datatype in types]
+        return {(row.label, row.datatype): vintage for vintage, row in enumerate(rows[:len(self.sparse_data)])}
+
+    def _sim2seis_scale(self):
+        """The `sim2seis` scaling factor from ``scale_results.pkl``, read once; ``None`` when not in use."""
+        if not extract.is_enabled(self.keys_da.get("post_process_forecast", False)):
+            return None
+        if self.scale_val is None and os.path.exists("scale_results.pkl"):
+            with open("scale_results.pkl", "rb") as file:
+                scale = pickle.load(file)
+            self.scale_val = np.sum(scale[0]) / len(scale[0])
+        return self.scale_val
+
+    def _row_transform(self):
+        """What a member's raw values go through before entering the matrix; ``None`` when nothing does.
+
+        Data types containing ``sim2seis`` are divided by the sim2seis scale
+        when one is configured; compressed vintages become their leading
+        wavelet coefficients, through the same :class:`SparseRepresentation`
+        that reduced the observed vintage, so the leading indices match. The
+        reconstruction of each compressed member is kept only when
+        ``saveforecast`` will write it.
+        """
+        compressed = self._compressed_rows()
+        scale_val = self._sim2seis_scale()
+        if not compressed and scale_val is None:
+            return None
+        keep_reconstruction = compressed and "saveforecast" in self.sim.input_dict
+        self.data_rec = [[] for _ in range(len(self.sparse_data))] if compressed else []
+
+        def transform(row, values):
+            if scale_val is not None and "sim2seis" in row.datatype:
+                values = values / scale_val
+            vintage = compressed.get((row.label, row.datatype))
+            if vintage is not None:
+                values, wdec_rec = self.sparse_data[vintage].compress(values)
+                if keep_reconstruction:
+                    self.data_rec[vintage].append(self.sparse_data[vintage].reconstruct(wdec_rec))
+            return values
+
+        return transform
 
     def _adjoint_array(self):
         """The members' adjoints as ``(nd, nx, ne)`` in layout order, scaled with the data; ``None`` without adjoints.
@@ -217,98 +272,11 @@ class ForecastMixin:
         columns = self.data_df.columns
         return pred.filter_dataframe(index=index, columns=columns)
 
-    # ------------------------------------------------------------------
-    # Post-processing
-    # ------------------------------------------------------------------
-    def post_process_forecast(self) -> None:
-        """Compress and rescale seismic predictions after a forecast run.
-
-        This path still works on the prediction frame -- built here from
-        ``sim_data``, as before -- and is wrapped into the container at the
-        end. Moving the compression to a per-data-type transform at fill time
-        is the next step of the data-structure work; it needs a test first.
-        """
-        self.pred_data = self.sim_to_pred_data(self.sim_data)
-
-        compress_columns = self.sparse_info["compress_data"]
-        if not isinstance(compress_columns, list):
-            compress_columns = [compress_columns]
-        pred_data_tmp = deepcopy(self.pred_data[compress_columns])
-
-        self._apply_sim2seis_scaling(pred_data_tmp)
-        self._apply_sparse_compression(pred_data_tmp)
-        self._save_reconstructed_forecast_if_requested()
-
-        self.pred_data = self._container_from_frame(self.pred_data)
-
-    def _apply_sim2seis_scaling(self, pred_data_tmp: Any) -> None:
-        if not os.path.exists("scale_results.pkl"):
-            return
-
-        if self.scale_val is None:
-            with open("scale_results.pkl", "rb") as file:
-                scale = pickle.load(file)
-            self.scale_val = np.sum(scale[0]) / len(scale[0])
-
-        if self.sparse_info is not None:
-            self._scale_sparse_sim2seis(pred_data_tmp, self.scale_val)
-        else:
-            self._scale_dense_sim2seis(self.scale_val)
-
-    def _scale_sparse_sim2seis(self, pred_data_tmp: Any, scale_value: float) -> None:
-        for index in pred_data_tmp.index:
-            row = pred_data_tmp.loc[index]
-            if row is None:
-                continue
-            for column in row:
-                if "sim2seis" in column and row[column] is not None:
-                    pred_data_tmp.at[index, column] = row[column] / scale_value
-
-    def _scale_dense_sim2seis(self, scale_value: float) -> None:
-        for index in self.pred_data.index:
-            row = self.pred_data.loc[index]
-            for column in row:
-                if "sim2seis" in column and row[column] is not None:
-                    self.pred_data.at[index, column] = row[column] / scale_value
-
-    def _apply_sparse_compression(self, pred_data_tmp: Any) -> None:
-        if not self.sparse_info:
-            return
-
-        self.data_rec = []
-        compress_key = self.sparse_info["compress_data"]
-        use_ensemble = self.sparse_info["use_ensemble"]
-        ensemble_size = self.ne + 1 if self.keys_da["scheme"] == "gies" else self.ne
-
-        vintage = 0
-        for index in pred_data_tmp.index:
-            cell = pred_data_tmp.loc[index, compress_key]
-            if None in cell:
-                continue
-
-            data_length = len(self.data_df.loc[index, compress_key])
-            self.pred_data.at[index, compress_key] = np.zeros((data_length, ensemble_size))
-
-            for member in range(ensemble_size):
-                compressed_data = self.compress_manager(
-                    cell[:, member], vintage, use_ensemble,
-                )
-                self.pred_data.at[index, compress_key][:, member] = compressed_data
-            vintage += 1
-
-        if use_ensemble:
-            self.compress_manager()
-            self.sparse_info["use_ensemble"] = None
-
     def _save_reconstructed_forecast_if_requested(self) -> None:
-        if "saveforecast" not in self.sim.input_dict:
+        """Write the reconstructed compressed vintages, ``(n_raw, ne)`` per vintage, when ``saveforecast`` asks."""
+        if "saveforecast" not in self.sim.input_dict or not self.data_rec:
             return
-        if not self.sparse_data:
-            return
-
-        for vintage in np.arange(len(self.data_rec)):
-            self.data_rec[vintage] = np.asarray(self.data_rec[vintage]).T
-
+        self.data_rec = [np.asarray(members).T for members in self.data_rec]
         with open("rec_results.pkl", "wb") as file:
             pickle.dump(self.data_rec, file)
 
