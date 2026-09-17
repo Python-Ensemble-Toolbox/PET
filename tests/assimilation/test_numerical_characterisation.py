@@ -117,7 +117,10 @@ def _write_config(name, scheme, analysis, report_points, ne=ENSEMBLE_SIZE):
     else:
         extra = {
             "iteration": {
-                "max_iter": 3,
+                # Two updates. The reference numbers were generated when `max_iter`
+                # counted the prior forecast as iteration 0, i.e. with `max_iter: 3`;
+                # the meaning changed, the runs did not.
+                "max_iter": 2,
                 "lambda": 10,
                 "lambda_factor": 5,
                 "trunc_energy": 0.99,

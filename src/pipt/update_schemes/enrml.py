@@ -115,9 +115,8 @@ class IterativeEnRML(AssimilationScheme):
         self.iteration = 0
         # Mirrored for ensemble-side helpers that consult it.
         self.ensemble.iteration = 0
-        # `max_iter` in the config counts the prior forecast as iteration 0 (legacy
-        # convention, kept so existing configs run as before); the loop counts updates.
-        self.maxiter = extract.extract_maxiter(self.keys_da) - 1
+        # `max_iter` is the number of update iterations; the prior forecast is not one of them.
+        self.maxiter = extract.extract_maxiter(self.keys_da)
         self._converged = False
         self.ensemble.prior_enX = cp.deepcopy(self.enX)
         self.prev_data_misfit_mean = None  # Data misfit at previous iteration

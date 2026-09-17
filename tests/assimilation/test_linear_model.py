@@ -38,7 +38,9 @@ CFG_DA = {
     "data": "true_data.pkl",
     "datavar": "var.pkl",
     "iteration": {
-        "max_iter": 5,
+        # Four updates. The expected numbers below were pinned when `max_iter`
+        # counted the prior forecast as iteration 0, i.e. with `max_iter: 5`.
+        "max_iter": 4,
         "data_misfit_tol": 1e-3,
         "step_tol": 0.0,
         "lambda": 50.0,
