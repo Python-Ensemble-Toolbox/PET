@@ -7,7 +7,12 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A `LOCALIZATION` block that names no mode runs again.** Localization was selected by which keyword appeared in the block -- `autoadaloc`, `localanalysis`, `dist_loc`, a pickled mask file, or none of them for the parallel update -- and the rewrite replaced that with a required `name` key. Every config written before the rewrite therefore stopped at startup with `Localization config has no 'name'`, naming three strings its author had never seen, and `pet migrate` did not cover the block. The mode is now inferred from the keyword that used to select it, and an explicit `name` still wins.
+- **`autoadaloc = <n>` is no longer discarded.** The value is the number of noise standard deviations a correlation must clear -- `nstd` inside the old code -- and it was the value of the `autoadaloc` keyword itself. Only `cutoff` was read, so a config saying `autoadaloc = 2` silently ran at the default of 0.3: no error, a different taper, a different posterior. `cutoff`, `nstd` and `autoadaloc` are all accepted, `cutoff` first. The default stays 0.3; it was 1 before the rewrite, so a block that gave `autoadaloc` as a bare flag with no value tapers differently than it used to.
+
 ### Breaking changes
+- **`localanalysis` and the parallel update are refused while the config is read.** Both worked before the update schemes were restructured, and both need the per-subset observation machinery (`_ext_obs`, `current_state`, `pert_preddata`) that the rewrite replaced with a single `DataLayout` built once at setup. `localanalysis` previously reached a branch that left the posterior equal to the prior while still reporting a misfit, and is no longer a registered strategy; naming either now raises `ConfigError` explaining why and naming `autoadaloc` and `distance_loc` as the alternatives. Reimplementing them on the new contract is tracked separately; `analysis_tools.parallel_upd` is left in place for the dormant GIES schemes that still call it.
 - **`conv_crit` in the `epf` section means a penalty magnitude, not a state change.** The outer EPF loop used to stop once no control moved more than `conv_crit` relative to its previous value; it now stops once `mean(epf['penalty']) / epf['r']` falls below it. The old test asked the wrong question: it reported success whenever the inner optimizer stalled, however badly the constraints were still violated, and refused to finish while a single control kept jittering. The default is still `1e-5`, so a config written for the old criterion loads unchanged, but the number now carries the units of the objective rather than being dimensionless — check it against your penalty's scale. The objective must write `penalty` into the `epf` dict it is handed; one that does not now raises `KeyError` instead of silently converging on the step size. Ported from upstream 5358e07 and 4b8d878.
 - `max_iter` in the `iteration` section is the number of update iterations. It used to count the prior forecast as iteration 0, so `max_iter: 5` performed four updates; the same config now performs five. To keep an existing run as it was, lower `max_iter` by one. The run table, the convergence message and the `assimilation_result_{i}` files already numbered updates from 1 with the prior as 0, and are unchanged.
 - `PETStateArray` is gone. The state ensemble is a plain `(nx, ne)` NumPy array; its variable layout is the ensemble's `idX` dictionary, wrapped by `misc.structures.StateLayout` (`ensemble.state_layout`), which owns what the subclass carried: `to_dict(enX)`, `member_dicts(enX)` (was `to_list_of_dicts`), `clip(enX, limits)` (was `clip_matrix`), and the constructors `StateLayout.from_dict(...)` and `StateLayout.from_prior_info(...)`, both returning `(matrix, layout)`. The subclass copied the row map onto every slice and view, so a five-row slice still claimed the full layout, and lost it on unpickling; twenty operator overrides existed only so a type checker inferred the subclass. Code that did `enX.to_dict()` or `enX.indices` now goes through the layout.
@@ -932,11 +937,17 @@ and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   again means perturbing observations after the prior forecast, which changes
   the order of random draws for every scheme.
 
-- **Local analysis is broken along both routes.** `localization = {name =
-  "localanalysis"}` reaches a branch that warns and returns `None`, so no update
-  is applied and the run completes reporting a misfit — the posterior is the
-  prior. Separately, `LocalAnalysisMixin` calls `self._ext_obs()`, which is
-  defined nowhere in the codebase.
+- **Local analysis is unsupported, and now refuses rather than misbehaving.** It is
+  no longer a registered strategy: naming it raises `ConfigError` while the config
+  is read. What it needs is `LocalAnalysisMixin` (198 lines) rewritten against the
+  current contract — it indexes `self.state[name]` as a dictionary, calls
+  `self.update()` expecting `self.step` to appear as a side effect, and needs eight
+  names that no longer exist anywhere (`_ext_obs`, `current_state`, `pert_preddata`,
+  `real_obs_data`, `obs_data_vector`, `aug_pred_data`, `enX_temp`,
+  `set_observations`). Earlier entries here described it as warning and returning
+  `None`; it did not get that far, since `LocalAnalysisLocalization.__init__` called
+  a `super().__init__` that takes no arguments and raised `TypeError` on
+  construction.
 - **`es`/`enkf` with `analysis="subspace"`** raise `ValueError: Length of values
   (11) does not match length of index (15)`. `esmda/subspace` is unaffected, so
   the fault is in the sequential path.

@@ -41,7 +41,15 @@ def test_unknown_localization_name_raises_instead_of_returning_none():
         build_localization_instance({"name": "banana"}, None, None, None, 10)
 
 
-def test_missing_localization_name_raises():
-    with pytest.raises(ValueError, match="no 'name'"):
+def test_a_block_naming_no_mode_is_inferred_then_refused_by_that_mode():
+    """A nameless block used to be rejected for having no 'name' -- a key its author had
+    never written. The mode is now inferred the way it always was selected; a block that
+    names nothing meant the parallel update, so that is what it is refused as."""
+    with pytest.raises(ValueError, match="parallel update is not supported"):
         build_localization_instance({}, None, None, None, 10)
+
+
+def test_an_explicitly_empty_localization_name_still_raises():
+    with pytest.raises(ValueError, match="no 'name'"):
+        build_localization_instance({"name": None}, None, None, None, 10)
 

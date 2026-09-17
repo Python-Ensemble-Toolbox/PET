@@ -16,6 +16,7 @@ __all__ = [
     "LocalizationConfigBuilder",
     "parse_init_args",
     "normalize_parsed_info",
+    "infer_name",
 ]
 
 class LocalizationBase(ABC):
@@ -262,12 +263,47 @@ class LocalizationConfigBuilder:
         return (taper_func, aniso_1, aniso_2, loc_range), loc_range
 
 
+#: The keyword whose *presence* selected each mode before the strategies were named.
+#: Order matters: it is the order the original chain tested them in.
+_MODE_KEYWORDS = (
+    ("autoadaloc", "autoadaloc"),
+    ("localanalysis", "localanalysis"),
+    ("dist_loc", "distance_loc"),
+)
+
+
+def infer_name(info: dict) -> str:
+    """Name the localization mode a config selects by keyword rather than by name.
+
+    Localization used to be chosen by which keyword appeared in the block --
+    ``autoadaloc``, ``localanalysis``, ``dist_loc``, a pickled mask file, or none of
+    them for the parallel update. Those configs carry no ``name``, so it is worked out
+    here and they keep running unchanged.
+    """
+    for keyword, name in _MODE_KEYWORDS:
+        if keyword in info:
+            return name
+
+    # ``dist_loc`` was also accepted as a bare value rather than a key.
+    values = [str(value) for value in info.values()]
+    if "dist_loc" in values:
+        return "distance_loc"
+
+    # A pickled mask file, under any key, means distance localization.
+    if any(value.endswith((".p", ".pkl")) for value in values):
+        return "distance_loc"
+
+    return "parallel_update"
+
+
 def normalize_parsed_info(parsed_info: Union[dict, list]) -> dict:
-    """Normalize localization input to dictionary form."""
+    """Normalize localization input to dictionary form, naming the mode if it does not."""
     if isinstance(parsed_info, list):
         parsed_info = list_to_dict(parsed_info)
     if not isinstance(parsed_info, dict):
         raise TypeError("parsed_info must be dict or list")
+    if "name" not in parsed_info:
+        parsed_info = {**parsed_info, "name": infer_name(parsed_info)}
     return parsed_info
 
 

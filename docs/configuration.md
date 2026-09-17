@@ -65,11 +65,19 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 lists them, `register_localization` adds one. All strategies take `field`
 (grid dimensions as a list of integers) and an optional `actnum` (`.npz` mask).
 
+A block that gives no `name` is still understood: the mode is inferred from the
+keyword that used to select it — `autoadaloc`, `localanalysis` or `dist_loc` (as a
+key or as a bare value), a `.p`/`.pkl` mask file for `distance_loc`, and none of
+them for the parallel update. An explicit `name` always wins.
+
 | `name` | Keys | Meaning |
 | --- | --- | --- |
-| `autoadaloc` | `threshold` (`adaptive`, `fixed`, `universal`), `cutoff`, `type` (`hard`, `soft`, `sigm`), `projection` (`rank-r`, `ensemble`), `parameters` | Auto-adaptive localization from the correlations the ensemble itself shows; `cutoff` is the fixed threshold (default `0.3`). |
+| `autoadaloc` | `threshold` (`adaptive`, `fixed`, `universal`), `cutoff`, `type` (`hard`, `soft`, `sigm`), `projection` (`rank-r`, `ensemble`), `parameters` | Auto-adaptive localization from the correlations the ensemble itself shows. `cutoff` is how many noise standard deviations a correlation must clear (default `0.3`); it is also read from `nstd`, or from the value of `autoadaloc` itself. |
 | `distance_loc` | `taper_func` (`gaspari_cohn`, `furrer_bengtsson`, `region`), `entries` (list of rows or a `.csv`) | Distance-based tapering around each datum: per entry a data type, report label, parameter, radius, anisotropy and vertical range. |
-| `localanalysis` | `region_parameter`, `cell_parameter`, `vector_region_parameter`, `search_range`, `column_update`, `*_position_file`, `update_mask_file` | Local analysis per region. Not working at present; see *Known issues* in the changelog. |
+
+`localanalysis` and the parallel update are **not supported**: both need per-subset
+observation machinery the scheme rewrite replaced, and naming either raises a
+`ConfigError` saying so. Use `distance_loc` or `autoadaloc` instead.
 
 ### Seismic compression: the `[dataassim.compress]` block
 

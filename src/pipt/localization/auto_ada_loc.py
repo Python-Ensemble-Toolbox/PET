@@ -110,7 +110,7 @@ class AutoAdaptiveLocalization(LocalizationBase):
         # The stream the shuffle below draws from; the global one unless the run is seeded.
         self.rng = rng if rng is not None else random_stream()
         self.field, self.actnum = self.config_common(info)
-        self.cutoff = info.get("cutoff", 0.3)
+        self.cutoff = self._cutoff_from(info)
         self.threshold  = info.get("threshold", "adaptive")
         self.tapertype  = info.get("type", "hard")
         self.parameters = info.get("parameters", ['NA'])
@@ -193,6 +193,27 @@ class AutoAdaptiveLocalization(LocalizationBase):
 
         return taper
 
+
+    @staticmethod
+    def _cutoff_from(info: dict) -> float:
+        """How many noise standard deviations a correlation must clear to survive.
+
+        This is what used to be called ``nstd``, and it was carried as the value of the
+        ``autoadaloc`` key itself -- ``AUTOADALOC 2`` meant two. Reading only ``cutoff``
+        left such a config running at the default while the number the user wrote was
+        ignored, which changes the taper and so the posterior without any error. All
+        three spellings are accepted; ``autoadaloc`` is also set to ``True`` as a plain
+        mode flag, which is not a value and is skipped.
+        """
+        for key in ("cutoff", "nstd", "autoadaloc"):
+            value = info.get(key)
+            if value is None or isinstance(value, bool):
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return 0.3
 
     def tapering_function(self, corr_values: np.ndarray, corr_values_shuffled: np.ndarray) -> np.ndarray:
 

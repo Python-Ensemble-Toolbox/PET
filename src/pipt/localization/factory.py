@@ -9,30 +9,44 @@ from typing import Callable, Union
 
 import pandas as pd
 
+from input_output.config import ConfigError
 from pipt.localization.common import normalize_parsed_info
 
 __all__ = [
     "LOCALIZATIONS",
+    "UNSUPPORTED_LOCALIZATIONS",
     "available_localizations",
     "build_localization_instance",
     "register_localization",
 ]
 
+#: Modes a config may still select that this line cannot run, and why. Both worked
+#: before the update schemes were restructured; each needs machinery that was rewritten
+#: around it and neither was carried across. Refusing here, while the config is being
+#: read, beats failing part way through the first update or -- as local analysis used
+#: to -- reporting a misfit for a posterior that is still the prior.
+UNSUPPORTED_LOCALIZATIONS: dict[str, str] = {
+    "localanalysis": (
+        "Local analysis is not supported. It updates each parameter against its own "
+        "subset of the data, which needs the per-subset observation machinery "
+        "(`_ext_obs`, `current_state`, `pert_preddata`) that the scheme rewrite "
+        "replaced with a single DataLayout built once at setup. Use distance "
+        "localization (`name = \"distance_loc\"`) or the auto-adaptive taper "
+        "(`name = \"autoadaloc\"`) instead."
+    ),
+    "parallel_update": (
+        "The parallel update is not supported. It was the fallback when a "
+        "LOCALIZATION block named no other mode, and it needs the same per-subset "
+        "observation machinery as local analysis. Name the mode you want: "
+        "`autoadaloc`, `distance_loc`, or remove the LOCALIZATION block to assimilate "
+        "without localization."
+    ),
+}
+
 
 def _build_autoadaloc(*, info, rng=None, **_):
     from pipt.localization.auto_ada_loc import AutoAdaptiveLocalization
     return AutoAdaptiveLocalization(info, rng=rng)
-
-
-def _build_localanalysis(*, info, data_indices, data_types, parameters, ensemble_size, **_):
-    from pipt.localization.local_analysis import LocalAnalysisLocalization
-    return LocalAnalysisLocalization(
-        info=info,
-        data_indices=data_indices,
-        data_types=data_types,
-        parameters=parameters,
-        ensemble_size=ensemble_size,
-    )
 
 
 def _build_distance(*, info, data, parameters, ensemble_size, prior_info, **_):
@@ -51,7 +65,6 @@ def _build_distance(*, info, data, parameters, ensemble_size, prior_info, **_):
 #: receives) and takes what it needs.
 LOCALIZATIONS: dict[str, Callable[..., object]] = {
     "autoadaloc": _build_autoadaloc,
-    "localanalysis": _build_localanalysis,
     "distance_loc": _build_distance,
 }
 
@@ -101,10 +114,13 @@ def build_localization_instance(
     info = normalize_parsed_info(parsed_info)
     name = info.pop("name", None)
     if name is None:
-        raise ValueError(f"Localization config has no 'name'; expected one of {available_localizations()}.")
-    builder = LOCALIZATIONS.get(str(name).lower())
+        raise ConfigError(f"Localization config has no 'name'; expected one of {available_localizations()}.")
+    key = str(name).lower()
+    if key in UNSUPPORTED_LOCALIZATIONS:
+        raise ConfigError(UNSUPPORTED_LOCALIZATIONS[key])
+    builder = LOCALIZATIONS.get(key)
     if builder is None:
-        raise ValueError(f"Unknown localization type {name!r}; expected one of {available_localizations()}.")
+        raise ConfigError(f"Unknown localization type {name!r}; expected one of {available_localizations()}.")
     return builder(
         info=info,
         data_indices=data_indices,

@@ -2,6 +2,7 @@
 
 import pytest
 
+from input_output.config import ConfigError
 from pipt.localization import (
     LOCALIZATIONS,
     available_localizations,
@@ -23,7 +24,21 @@ def _build_custom(*, info, ensemble_size, **_):
 
 
 def test_the_shipped_strategies_are_registered():
-    assert available_localizations() == ["autoadaloc", "distance_loc", "localanalysis"]
+    assert available_localizations() == ["autoadaloc", "distance_loc"]
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("localanalysis", "Local analysis is not supported"),
+    ("parallel_update", "The parallel update is not supported"),
+])
+def test_an_unsupported_mode_says_so_and_names_the_alternatives(name, expected):
+    """Both ran before the schemes were restructured. Refusing while the config is read
+    beats failing part way through the first update -- or, as local analysis used to,
+    reporting a misfit for a posterior that is still the prior."""
+    with pytest.raises(ConfigError, match=expected):
+        build_localization_instance({"name": name, "field": [1, 10, 10]}, None, None, None, 10)
+
+    assert name not in available_localizations()
 
 
 def test_a_registered_strategy_is_built_from_its_name(monkeypatch):
