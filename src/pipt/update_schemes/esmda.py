@@ -12,6 +12,7 @@ from pipt.update_schemes.core import AssimilationScheme, StepReport, restart_opt
 from pipt.update_schemes.analysis.approx import approx_update
 from pipt.update_schemes.analysis.full import full_update
 from pipt.update_schemes.analysis.subspace import subspace_update
+from pipt.update_schemes.analysis.subspace2 import subspace2_update
 import pipt.misc_tools.analysis_tools as at
 
 __all__ = ['ESMDA']
@@ -105,6 +106,7 @@ class ESMDA(AssimilationScheme):
         "approx": approx_update,
         "full": full_update,
         "subspace": subspace_update,
+        "subspace2": subspace2_update,
     }
 
     # The perturbed observations are redrawn every step (from the ensemble's

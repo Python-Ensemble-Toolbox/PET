@@ -187,7 +187,7 @@ def test_mixin_path_is_untouched_by_the_new_init():
 def test_registry_resolves_the_shipped_flavours():
     assert get_analysis("approx") is approx_update
     assert get_analysis("subspace") is subspace_update
-    assert available_analyses() == ["approx", "full", "subspace"]
+    assert available_analyses() == ["approx", "full", "subspace", "subspace2"]
 
 
 def test_registry_is_case_insensitive():

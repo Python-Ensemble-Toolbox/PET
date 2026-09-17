@@ -13,8 +13,8 @@ Layout
 ------
 ``base``
     :class:`AnalysisBase` -- the shared contract and helpers.
-``approx``, ``full``, ``subspace``
-    The three registered flavours.
+``approx``, ``full``, ``subspace``, ``subspace2``
+    The four registered flavours.
 ``hybrid``, ``margis``
     Flavours consumed as mixins rather than through the registry: ``hybrid``
     belongs to the multilevel scheme and ``margis`` is backed by a private
@@ -34,6 +34,7 @@ from .approx import approx_update
 from .full import full_update
 from .hybrid import hybrid_update
 from .subspace import subspace_update
+from .subspace2 import subspace2_update
 from .registry import (
     ANALYSES,
     available_analyses,
@@ -47,6 +48,7 @@ __all__ = [
     "approx_update",
     "full_update",
     "subspace_update",
+    "subspace2_update",
     "hybrid_update",
     "ANALYSES",
     "available_analyses",

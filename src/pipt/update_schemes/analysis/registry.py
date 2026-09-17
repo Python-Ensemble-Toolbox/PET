@@ -22,6 +22,7 @@ its own importers. ``tests/test_import_hygiene.py`` guards the layering.
 from pipt.update_schemes.analysis.approx import approx_update
 from pipt.update_schemes.analysis.full import full_update
 from pipt.update_schemes.analysis.subspace import subspace_update
+from pipt.update_schemes.analysis.subspace2 import subspace2_update
 
 __all__ = ["ANALYSES", "available_analyses", "get_analysis", "register_analysis"]
 
@@ -31,6 +32,7 @@ ANALYSES: dict[str, type] = {
     "approx": approx_update,
     "full": full_update,
     "subspace": subspace_update,
+    "subspace2": subspace2_update,
 }
 
 

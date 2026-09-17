@@ -102,6 +102,14 @@ def test_available_schemes_is_sorted_and_covers_specials():
     assert ("esmda", "geo") not in combos, "esmda_geo was dead code and has been removed"
 
 
+#: Flavour/algorithm pairs deliberately absent, and why. `subspace2` solves for an
+#: ne x ne transform, which the sequential schemes cannot apply one datum at a time;
+#: `subspace` is registered on them and already fails on the characterisation case
+#: (see the note on CASES in test_numerical_characterisation), so advertising a second
+#: weight-space flavour there would only widen a known fault.
+DELIBERATELY_UNREGISTERED = {("enkf", "subspace2"), ("es", "subspace2")}
+
+
 def test_every_algorithm_gets_every_registered_flavour():
     from pipt.update_schemes.analysis.registry import available_analyses
 
@@ -110,6 +118,9 @@ def test_every_algorithm_gets_every_registered_flavour():
         if algo in ("co_lm_enrml", "gn_enrml"):
             continue  # historical names pin one flavour by design
         for flavour in available_analyses():
+            if (algo, flavour) in DELIBERATELY_UNREGISTERED:
+                assert (algo, flavour) not in combos, "remove it from the exception set"
+                continue
             assert (algo, flavour) in combos
 
 

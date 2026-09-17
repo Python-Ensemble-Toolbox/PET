@@ -13,8 +13,9 @@ from pipt.update_schemes.analysis import AnalysisBase
 from pipt.update_schemes.analysis.approx import approx_update
 from pipt.update_schemes.analysis.full import full_update
 from pipt.update_schemes.analysis.subspace import subspace_update
+from pipt.update_schemes.analysis.subspace2 import subspace2_update
 
-FLAVOURS = [approx_update, full_update, subspace_update]
+FLAVOURS = [approx_update, full_update, subspace_update, subspace2_update]
 
 
 @pytest.mark.parametrize("flavour", FLAVOURS, ids=lambda c: c.__name__)

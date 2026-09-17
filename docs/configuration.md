@@ -20,7 +20,7 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 | Key | Meaning | Default |
 | --- | --- | --- |
 | `scheme` | Algorithm: `esmda`, `es`, `enkf`, `lmenrml`, `gnenrml`. `pipt.available_schemes()` lists every `(scheme, analysis)` pair. | required |
-| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (all schemes); `margis` (GN-EnRML). | `approx` |
+| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (all schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
 | `energy` | Truncation energy of the SVD in ES-MDA, ES and EnKF; a fraction, or a percentage when greater than 1. The iterative schemes read `iteration.energy`. | `0.98` |
 | `emp_cov` | The variance file holds an ensemble of observation errors; the analyses use that empirical covariance. Flag. | off |
 

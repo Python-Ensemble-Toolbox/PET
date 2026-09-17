@@ -15,9 +15,9 @@ from pipt.update_schemes import registry
 ALGORITHMS = {
     "EnKF": ("enkf", ["approx", "full", "subspace"]),
     "ES": ("es", ["approx", "full", "subspace"]),
-    "ESMDA": ("esmda", ["approx", "full", "subspace", "hybrid"]),
-    "LMEnRML": ("lmenrml", ["approx", "full", "subspace"]),
-    "GNEnRML": ("gnenrml", ["approx", "full", "subspace", "margis"]),
+    "ESMDA": ("esmda", ["approx", "full", "subspace", "subspace2", "hybrid"]),
+    "LMEnRML": ("lmenrml", ["approx", "full", "subspace", "subspace2"]),
+    "GNEnRML": ("gnenrml", ["approx", "full", "subspace", "subspace2", "margis"]),
 }
 
 
@@ -49,10 +49,11 @@ def test_five_algorithms_cover_every_registered_combination():
 
 
 def test_registry_size_matches_the_algorithms_specials_and_historical_names():
-    """Down from eighteen hand-written classes: 5 algorithms x 3 flavours,
-    the two combinations backed by a distinct implementation, and the two
-    historical names (co_lm_enrml, gn_enrml) that each pin a single flavour."""
-    assert len(registry.available_schemes()) == 5 * 3 + 2 + 2
+    """Down from eighteen hand-written classes: 5 algorithms x 3 flavours, ``subspace2``
+    on the three schemes that can apply an ensemble transform, the two combinations
+    backed by a distinct implementation, and the two historical names (co_lm_enrml,
+    gn_enrml) that each pin a single flavour."""
+    assert len(registry.available_schemes()) == 5 * 3 + 3 + 2 + 2
     assert len(ALGORITHMS) == 5               # the public constructors above
     assert len(registry.ALGORITHMS) == 5 + 2  # plus the two historical names
 
