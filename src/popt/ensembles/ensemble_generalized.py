@@ -173,7 +173,13 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
         return self.avg_hess
 
     def mutation_gradient(self, x, *args, **kwargs):
-        """Gradient of the expected objective with respect to the marginal's parameter ``theta``, for adapting the distribution. Also sets ``nat_hess``."""
+        """Gradient of the expected objective with respect to the marginal's parameter ``theta``, for adapting the distribution. Also sets ``nat_hess``.
+
+        With ``return_ensembles=True`` it returns ``(nat_grad, {'gaussian': enZ,
+        'objective': enF})`` instead, so a caller adapting the correlation matrix --
+        :class:`~popt.optimization_methods.subroutines.cma.CMA` -- can reuse the
+        ensemble this gradient came from rather than drawing and simulating another.
+        """
 
        # Update state vector
         self.stateX = x
@@ -208,6 +214,12 @@ class GeneralizedEnsemble(EnsembleOptimizationBase):
         # Fisher
         self.nat_grad = self.nat_grad/ne
         self.nat_hess = np.diag(self.nat_hess/ne)
+
+        if kwargs.get('return_ensembles', False):
+            # CMA adapts the correlation from the Gaussian samples and their
+            # objective values, so `GenOpt` asks for the ensemble this gradient
+            # was built from rather than drawing -- and simulating -- a second one.
+            return self.nat_grad, {'gaussian': self.enZ, 'objective': np.asarray(self.enF)}
         return self.nat_grad
 
     def mutation_hessian(self, x, *args, **kwargs):
