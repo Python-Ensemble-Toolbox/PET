@@ -302,7 +302,9 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
                 - r: Initial penalty factor
                 - r_factor: Penalty factor update multiplier (default: 2)
                 - tol_factor: Function tolerance update multiplier (default: 0.9)
-                - conv_crit: EPF convergence criterion for relative state change (default: 1e-5)
+                - conv_crit: EPF convergence criterion, compared against the mean
+                  penalty with the penalty factor divided out (default: 1e-5). The
+                  objective must write `penalty` into the epf dict it is handed.
             - transform: Enable [lb, ub] --> [0, 1] transformation for optimization (default: False)
             - saveit: Save intermediate results after each iteration (default: False)
             - savefolder (or save_folder): Folder for those results (default: 'Iteration_Results')
@@ -582,6 +584,11 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
     def check_epf_convergence(self):
         """Evaluate convergence of the outer EPF iteration.
 
+        The loop stops once the constraints are satisfied, measured as the mean of
+        ``self.epf['penalty']`` with the penalty factor ``r`` divided back out. The
+        objective is responsible for writing ``penalty`` into the ``epf`` dict it is
+        handed; without it there is nothing to converge on and this raises.
+
         Returns
         -------
         bool
@@ -592,10 +599,22 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
                 self.logger('─────> Maximum number of outer EPF iterations reached')
             return True
 
-        # Relative change in state-components
-        relative_change = np.abs(self.xk - self.xk_old) / (np.abs(self.xk_old) + 1e-9)
-        relative_change_tol = self.epf.get('conv_crit', 1e-5)
-        if np.any(relative_change > relative_change_tol):
+        # Mean penalty magnitude with the penalty factor divided back out, so the test
+        # asks whether the constraints are still violated rather than whether the
+        # controls happened to move. The objective writes `penalty` into the epf dict it
+        # is handed; `cost_functions.epf.epf` returns r * 0.5 * (...), so dividing by r
+        # leaves the violation itself.
+        if 'penalty' not in self.epf:
+            raise KeyError(
+                "EPF convergence needs self.epf['penalty']; the objective must write it "
+                "into the epf dict it is passed."
+            )
+        penalty = np.asarray(self.epf['penalty'])
+        if penalty.size == 0:
+            raise ValueError('EPF penalty is empty; cannot compute the convergence criterion.')
+        mean_penalty = np.mean(penalty) / self.epf['r']
+        conv_crit = self.epf.get('conv_crit', 1e-5)
+        if mean_penalty > conv_crit:
 
             # Update penalty factor
             rold = self.epf['r']
@@ -614,7 +633,7 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
             return False
         else:
             if self.logger:
-                self.logger(f'Outer EPF loop converged ─────> No variables changed more than {relative_change_tol*100} %')
+                self.logger(f'Outer EPF loop converged ─────> penalty term smaller than {conv_crit}')
             return True
 
     # ==========================================
