@@ -89,14 +89,14 @@ class EnsembleOptimizationBase(BaseEnsemble):
         Returns
         -------
         numpy.ndarray
-            Objective function values.
+            Objective function values, or ``inf`` when the simulation crashed, so the
+            optimizer rejects the point instead of the run ending. A crashed
+            single-point evaluation leaves ``stateF`` at its last good value.
 
         Raises
         ------
         ValueError
             If ``x`` is not one- or two-dimensional.
-        RuntimeError
-            If simulation-based objective evaluation fails.
         """
         self._aux_input()
         x = np.asarray(x)
@@ -115,21 +115,34 @@ class EnsembleOptimizationBase(BaseEnsemble):
             x = self._reorganize_multilevel_ensemble(x)
             sim_success = self.calc_prediction(x, save_prediction=self.save_prediction)
             x = self._reorganize_multilevel_ensemble(x)
-            if not sim_success:
-                raise RuntimeError("Simulation failed while evaluating objective function.")
 
-            func_values = self.obj_func(
-                self.sim_data,
-                input_dict=self.sim.input_dict,
-                true_order=self.sim.true_order,
-                state=matrix_to_dict(x, self.idX),
-                **kwargs
-            )
+            if sim_success:
+                func_values = self.obj_func(
+                    self.sim_data,
+                    input_dict=self.sim.input_dict,
+                    true_order=self.sim.true_order,
+                    state=matrix_to_dict(x, self.idX),
+                    **kwargs
+                )
+            else:
+                # A crashed evaluation costs the point, not the run: the optimizer
+                # sees an objective it can never improve on, so backtracking rejects
+                # the trial point and carries on from the last good one. Raising here
+                # ended the whole optimization because one trial control vector
+                # happened to be one the simulator could not run.
+                self.logger.error(
+                    "Simulation failed while evaluating the objective; the point is "
+                    "reported as inf so the optimizer can reject it."
+                )
+                func_values = np.full(self.ne, np.inf)
 
         if ensemble_input:
             self.enF = func_values
-        else:
+        elif np.all(np.isfinite(func_values)):
             self.stateF = func_values
+        # A crashed single-point evaluation leaves `stateF` alone. The gradient is
+        # `enF - repeat(stateF, nr)`, so writing inf here would poison every later
+        # gradient with inf/NaN rather than just rejecting this one point.
 
         return func_values
 
