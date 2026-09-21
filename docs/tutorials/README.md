@@ -5,6 +5,7 @@ Here are some tutorials.
 ## Running PIPT and POPT
 
 - [`tutorial_pipt.ipynb`](pipt/TinyBox/tutorial_pipt): Tutorial for running PIPT
+- [`tutorial_minires.ipynb`](pipt/MiniRes/tutorial_minires): The same, with a forward model that needs nothing installed -- a MiniRes waterflood
 - [`tutorial_popt.ipynb`](popt/5Spot/tutorial_popt): Tutorial for running POPT
 
 ## Data structures
