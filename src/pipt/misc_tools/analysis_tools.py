@@ -9,17 +9,18 @@ implementing, leave it in that class.
 __all__ = [
     'parallel_upd',
     'calc_autocov',
-    'calc_crosscov',
     'calc_objectivefun'
 ]
 
 # External imports
+import os
 import numpy as np          # Numerical tools
 from scipy import linalg    # Linear algebra tools
 from misc.system_tools.environ_var import OpenBlasSingleThread  # only single thread
 import multiprocessing as mp  # parallel updates
-import time
 import pickle
+import logging
+import warnings
 from importlib import import_module  # To import packages
 
 from scipy.spatial import cKDTree
@@ -80,11 +81,11 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
 
     dat = [el for el in local_mask_info.keys()]
     # data coordinates to initialize search
-    tot_completions = [tuple(el) for dat_mask in dat if type(
-        dat_mask) == tuple for el in local_mask_info[dat_mask]['position']]
+    tot_completions = [tuple(el) for dat_mask in dat if isinstance(
+        dat_mask, tuple) for el in local_mask_info[dat_mask]['position']]
     uniq_completions = [el for el in set(tot_completions)]
-    tot_w_name = [dat_mask for dat_mask in dat if type(
-        dat_mask) == tuple for _ in local_mask_info[dat_mask]['position']]
+    tot_w_name = [dat_mask for dat_mask in dat if isinstance(
+        dat_mask, tuple) for _ in local_mask_info[dat_mask]['position']]
     uniq_w_name = [tot_w_name[tot_completions.index(el)] for el in uniq_completions]
     # todo: limit to active datanan
     coord_search = cKDTree(data=uniq_completions)
@@ -94,9 +95,9 @@ def parallel_upd(list_state, prior_info, states_dict, X, local_mask_info, obs_da
 
         tot_well_dict = {}
         for well in set(act_w_name):
-            tot_well_dict[well] = [el for el in local_mask_info.keys() if type(el) == tuple and
+            tot_well_dict[well] = [el for el in local_mask_info.keys() if isinstance(el, tuple) and
                                    el[0].split()[1] == well]
-    except:
+    except Exception:
         tot_well_dict = local_mask_info
 
     if len(scale_data.shape) == 1:
@@ -240,7 +241,7 @@ def _calc_row_upd(inp):
 
     Parameters
     ----------
-    inp : list    
+    inp : list
         List of [state, param_coordinates, metadata file name]
     """
 
@@ -258,7 +259,8 @@ def _calc_row_upd(inp):
     max_r = {}
     for state in states:
         tmp_r = [meta_data['local_mask_info'][el]['range'][0] for el in meta_data['local_mask_info'].keys() if
-                 type(el) == tuple and state in el and type(meta_data['local_mask_info'][el]['range'][0]) == int]
+                 isinstance(el, tuple) and state in el and
+                 isinstance(meta_data['local_mask_info'][el]['range'][0], int)]
         if len(tmp_r):
             max_r[state] = max(tmp_r)
         else:
@@ -291,7 +293,7 @@ def _calc_row_upd(inp):
                 try:
                     tot_act_well = [elem for elem in meta_data['tot_well_dict']
                                     [well[0].split()[1]] if elem[2] == el]
-                except:
+                except Exception:
                     tot_act_well = [elem for elem in meta_data['tot_well_dict'][well]]
                 # curr_completions = frozenset((inp[1][tot_act_well[0]]['position']))
                 tot_act_data_types = set([el[0].split()[0] for el in tot_act_well])
@@ -335,7 +337,7 @@ def _calc_region(loc_info, states, field_dim, actnum):
     ----------
     loc_info : dict
         Information for localization
-    states : dict 
+    states : dict
         State variables
     field_dim : list
         Dimension of grid
@@ -349,7 +351,7 @@ def _calc_region(loc_info, states, field_dim, actnum):
     """
     regions = {}
     for state in states:
-        tmp_reg = [loc_info[el]['range'] for el in loc_info.keys() if type(el) == tuple and 'region' in loc_info[el]['taper_func']
+        tmp_reg = [loc_info[el]['range'] for el in loc_info.keys() if isinstance(el, tuple) and 'region' in loc_info[el]['taper_func']
                    and state in el]
         unique_reg = [el for el in set(map(tuple, tmp_reg))]
         regions[state] = []
@@ -376,7 +378,7 @@ def _get_region(reg, field_dim=None, actnum=None):
 
     Parameters
     ----------
-    reg : 
+    reg :
     field_dim : list
         Dimension of grid
     actnum : ndarray
@@ -388,7 +390,7 @@ def _get_region(reg, field_dim=None, actnum=None):
     """
 
     # Get the files
-    if type(reg[0]) == str:
+    if isinstance(reg[0], str):
         flag_region = [int(el) for el in reg[1:]]
         with open(reg[0], 'r') as file:
             lines = file.readlines()
@@ -528,7 +530,6 @@ def calc_autocov(pert):
     # Return the auto-covariance matrix
     return cov_auto
 
-
 def calc_objectivefun(pert_obs, pred_data, Cd):
     """
     Calculate the objective function.
@@ -552,107 +553,28 @@ def calc_objectivefun(pert_obs, pred_data, Cd):
     #ne = pred_data.shape[1]
     ne = pert_obs.shape[1]
     r = (pred_data[:, :ne] - pert_obs)  # Only use ne members (gies code has ne+1 predicted data)
+    # The per-member misfit is the diagonal of r.T @ (Cd^-1 r). Summing the
+    # columns gives the same numbers without forming the (ne, ne) product.
     if len(Cd.shape) == 1:
-        precission = Cd**(-1)
-        data_misfit = np.diag(r.T.dot(r*precission[:, None]))
+        precision = Cd**(-1)
+        data_misfit = np.sum(r * (r*precision[:, None]), axis=0)
     else:
-        data_misfit = np.diag(r.T.dot(linalg.solve(Cd, r)))
+        data_misfit = np.sum(r * linalg.solve(Cd, r), axis=0)
 
     return data_misfit
 
 
-def calc_crosscov(pert1, pert2):
+def save_assimilation_result(ind_save, **kwargs):
     """
-    Calculate sample cross-covariance matrix.
+    Save the requested variables for one assimilation iteration.
 
-    Parameters
-    ----------
-    pert1, pert2: ndarray
-        Perturbation matrices (matrix of variables perturbed with their mean).
-
-    Returns
-    -------
-    cov_cross : ndarray
-        Sample cross-covariance matrix
-    """
-    # TODO: Implement sqrt-covariance matrices
-
-    # No of samples
-    ne = pert1.shape[1]
-
-    # Standard calc. of sample cross-covariance
-    cov_cross = (1 / (ne - 1)) * np.dot(pert1, pert2.T)
-
-    # Return the cross-covariance matrix
-    return cov_cross
-
-
-def update_datavar(cov_data, datavar, assim_index, list_data):
-    """
-    Extract the separate variance from an augmented vector. It is assumed that the augmented variance
-    is made gen_covdata, hence this is the reverse method of gen_covdata.
-
-    Parameters
-    ----------
-    cov_data : array-like
-        Augmented vector of variance.
-
-    datavar : dict
-        Dictionary of separate variances.
-
-    assim_index : list
-        Assimilation order as a list.
-
-    list_data : list
-        List of data keys.
-
-    Returns
-    -------
-    datavar : dict
-        Updated dictionary of separate variances."""
-
-    # Loop over all entries in list_state and extract a vector with same number of elements as the key in datavar
-    # determines from aug and replace the values in datavar[key].
-
-    # Make sure assim_index is list
-    if isinstance(assim_index[1], list):  # Check if prim. ind. is a list
-        l_prim = [int(x) for x in assim_index[1]]
-    else:
-        l_prim = [int(assim_index[1])]
-
-    # Extract the diagonal if cov_data is a matrix
-    if len(cov_data.shape) == 2:
-        cov_data = np.diag(cov_data)
-
-    # Initialize a variable to keep track of which row in 'cov_data' we start from in each loop
-    aug_row = 0
-    # Loop over all primary indices
-    for ix in range(len(l_prim)):
-        # Loop over data types and augment the data variance
-        for i in range(len(list_data)):
-            if datavar[l_prim[ix]][list_data[i]] is not None:
-
-                # If there is an observed data here, update it
-                no_rows = datavar[l_prim[ix]][list_data[i]].shape[0]
-
-                # Extract the rows from aug and update 'state[key]'
-                datavar[l_prim[ix]][list_data[i]] = cov_data[aug_row:aug_row + no_rows]
-
-                # Update tracking variable for row in 'aug'
-                aug_row += no_rows
-
-    # Return
-    return datavar
-
-
-def save_analysisdebug(ind_save, **kwargs):
-    """
-    Save variables in analysis step for debugging purpose
+    The PIPT counterpart to ``popt.misc_tools.optim_tools.save_optimize_results``,
+    which writes ``optimize_result_{i}.npz``.
 
     Parameters
     ----------
     ind_save : int
-        Index of analysis step
+        Iteration index. ``0`` is the prior.
     **kwargs : dict
         Variables that will be saved to npz file
 
@@ -663,16 +585,33 @@ def save_analysisdebug(ind_save, **kwargs):
     """
     # Save input variables
     folder = kwargs.pop('savefolder')
+    os.makedirs(folder, exist_ok=True)
     try:
-        np.savez(f'{folder}/debug_analysis_step_{ind_save}', **kwargs)
-    except: # if npz save fails dump to a pickle file
-        with open(f'{folder}/debug_analysis_step_{ind_save}.p', 'wb') as file:
+        np.savez(f'{folder}/assimilation_result_{ind_save}', **kwargs)
+    except Exception: # if npz save fails dump to a pickle file
+        with open(f'{folder}/assimilation_result_{ind_save}.p', 'wb') as file:
             pickle.dump(kwargs, file)
+
+
+def save_analysisdebug(ind_save, **kwargs):
+    """Deprecated alias for :func:`save_assimilation_result`.
+
+    The files are not a debugging aid -- they are the per-iteration record of
+    a run -- so both the function and what it writes were renamed.
+    """
+    warnings.warn(
+        "save_analysisdebug is deprecated; use save_assimilation_result. "
+        "Note that it now writes 'assimilation_result_{i}.npz' rather than "
+        "'debug_analysis_step_{i}.npz'.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return save_assimilation_result(ind_save, **kwargs)
 
 
 def get_list_data_types(obs_data, assim_index):
     """
-    Extract the list of all and active data types 
+    Extract the list of all and active data types
 
     Parameters
     ----------
@@ -802,56 +741,6 @@ def gen_covdata(datavar, assim_index, list_data):
     return cd
 
 
-def screen_data(cov_data, pred_data, obs_data_vector, keys_da, iteration):
-    """
-    INSERT DESCRIPTION
-
-    Parameters
-    ----------
-    cov_data : ndarray
-        Data covariance matrix
-    pred_data : ndarray
-        Predicted data
-    obs_data_vector : 
-        Observed data (1D array)
-    keys_da : dict
-        Dictionary with every input in `DATAASSIM`
-    iteration : int
-        Current iteration
-
-    Returns
-    -------
-    cov_data : ndarray
-        Updated data covariance matrix
-    """
-
-    if ('restart' in keys_da and keys_da['restart'] == 'yes') or (iteration != 0):
-        with open('cov_data.p', 'rb') as f:
-            cov_data = pickle.load(f)
-    else:
-        emp_cov = False
-        if cov_data.ndim == 2:  # assume emp_cov
-            emp_cov = True
-            var = np.var(cov_data, ddof=1, axis=1)
-            cov_data = cov_data - cov_data.mean(1)[:, np.newaxis]
-        num_data = pred_data.shape[0]
-        for i in range(num_data):
-            v = 0
-            if obs_data_vector[i] < np.min(pred_data[i, :]):
-                v = np.abs(obs_data_vector[i] - np.min(pred_data[i, :]))
-            elif obs_data_vector[i] > np.max(pred_data[i, :]):
-                v = np.abs(obs_data_vector[i] - np.max(pred_data[i, :]))
-            if not emp_cov:
-                cov_data[i] = np.max((cov_data[i], v ** 2))
-            else:
-                v = np.max((v**2 / var[i], 1))
-                cov_data[i, :] *= np.sqrt(v)
-        with open('cov_data.p', 'wb') as f:
-            pickle.dump(cov_data, f)
-
-    return cov_data
-
-
 def store_ensemble_sim_information(saveinfo, member):
     """
     Here, we can either run a unique python script or do some other post-processing routines. The function should
@@ -865,54 +754,6 @@ def store_ensemble_sim_information(saveinfo, member):
             # Note: the function must be named main, and we pass the full current instance of the object pluss the
             # current member.
             sim_info_func.main(member)
-
-
-def extract_tot_empirical_cov(data_var, assim_index, list_data, ne):
-    """
-    Extract realizations of noise from data_var (if imported), or generate realizations if only variance is specified
-    (assume uncorrelated)
-
-    Parameters
-    ----------
-    data_var : list
-        List of dictionaries containing the varianse as read from the input
-    assim_index : int
-        Index of the assimilation
-    list_data : list
-        List of data types
-    ne : int
-        Ensemble size
-
-    Returns
-    -------
-    E : ndarray
-        Sorted (according to assim_index and list_data) matrix of data realization noise.
-    """
-
-    if isinstance(assim_index[1], list):  # Check if prim. ind. is a list
-        l_prim = [int(x) for x in assim_index[1]]
-    else:
-        l_prim = [int(assim_index[1])]
-
-    tmp_E = []
-    for el in l_prim:
-        tmp_tmp_E = {}
-        for dat in list_data:
-            if data_var[el][dat] is not None:
-                if len(data_var[el][dat].shape) == 1:
-                    tmp_tmp_E[dat] = np.sqrt(
-                        data_var[el][dat][:, np.newaxis])*np.random.randn(data_var[el][dat].shape[0], ne)
-                else:
-                    if data_var[el][dat].shape[0] == data_var[el][dat].shape[1]:
-                        tmp_tmp_E[dat] = np.dot(linalg.cholesky(
-                            data_var[el][dat]), np.random.randn(data_var[el][dat].shape[1], ne))
-                    else:
-                        tmp_tmp_E[dat] = data_var[el][dat]
-        tmp_E.append(tmp_tmp_E)
-    E = np.concatenate(tuple(tmp_E[i][dat] for i, el in enumerate(
-        l_prim) for dat in list_data if data_var[el][dat] is not None))
-
-    return E
 
 
 def aug_obs_pred_data(obs_data, pred_data, assim_index, list_data):
@@ -930,7 +771,7 @@ def aug_obs_pred_data(obs_data, pred_data, assim_index, list_data):
 
     Returns
     -------
-    obs : ndarray 
+    obs : ndarray
         Augmented vector of observed data
     pred : ndarray
         Ensemble matrix of predicted data
@@ -948,7 +789,7 @@ def aug_obs_pred_data(obs_data, pred_data, assim_index, list_data):
 
     tot_pred = tuple(pred_data[el][dat] for el in l_prim if pred_data[el]
                      is not None for dat in list_data if obs_data[el][dat] is not None)
-    
+
     if len(tot_pred):  # if this is done during the initiallization tot_pred contains nothing
         pred = np.concatenate(tot_pred)
     else:
@@ -993,202 +834,6 @@ def aug_obs_pred_data(obs_data, pred_data, assim_index, list_data):
     #
     # # Return augmented arrays
     return obs, pred
-
-
-def calc_kalmangain(cov_cross, cov_auto, cov_data, opt=None):
-    r"""
-    Calculate the Kalman gain
-
-    Parameters
-    ----------
-    cov_cross : ndarray
-        Cross-covariance matrix between state and predicted data
-    cov_auto : ndarray
-        Auto-covariance matrix of predicted data
-    cov_data : ndarray
-        Variance on observed data (diagonal matrix)
-    opt : str
-        Which method should we use to calculate Kalman gain
-        <ul>
-            <li>'lu': LU decomposition (default)</li>
-            <li>'chol': Cholesky decomposition</li>
-        </ul>
-
-    Returns
-    -------
-    kalman_gain : ndarray
-        Kalman gain
-
-    Notes
-    -----
-    In the following Kalman gain is $K$, cross-covariance is $C_{mg}$, predicted data auto-covariance is $C_{g}$,
-    and data covariance is $C_{d}$.
-
-    With `'lu'` option, we solve the transposed linear system:
-    $$
-        K^T = (C_{g} + C_{d})^{-T}C_{mg}^T
-    $$
-
-    With `'chol'` option we use Cholesky on auto-covariance matrix,
-    $$
-       L L^T = (C_{g} + C_{d})^T
-    $$
-    and solve linear system with the square-root matrix from Cholesky:
-    $$
-        L^T Y = C_{mg}^T\\
-        LK = Y
-    $$
-    """
-    if opt is None:
-        calc_opt = 'lu'
-
-    # Add data and predicted data auto-covariance matrices
-    if len(cov_data.shape) == 1:
-        cov_data = np.diag(cov_data)
-    c_auto = cov_auto + cov_data
-
-    if calc_opt == 'lu':
-        kg = linalg.solve(c_auto.T, cov_cross.T)
-        kalman_gain = kg.T
-
-    elif calc_opt == 'chol':
-        # Cholesky decomp (upper triangular matrix)
-        u = linalg.cho_factor(c_auto.T, check_finite=False)
-
-        # Solve linear system with cholesky square-root
-        kalman_gain = linalg.cho_solve(u, cov_cross.T, check_finite=False)
-
-    # Return Kalman gain
-    return kalman_gain
-
-
-def calc_subspace_kalmangain(cov_cross, data_pert, cov_data, energy):
-    """
-    Compute the Kalman gain in a efficient subspace determined by how much energy (i.e. percentage of singluar values)
-    to retain. For more info regarding the implementation, see Chapter 14 in [`evensen2009a`][].
-
-    Parameters
-    cov_cross : ndarray
-        Cross-covariance matrix between state and predicted data
-    data_pert : ndarray
-            Predicted data - mean of predicted data
-    cov_data : ndarray
-        Variance on observed data (diagonal matrix)
-
-    Returns
-    -------
-    k_g : ndarray
-        Subspace Kalman gain
-    """
-    # No. ensemble members
-    ne = data_pert.shape[1]
-
-    # Perform SVD on pred. data perturbations
-    u_d, s_d, v_d = np.linalg.svd(np.sqrt(1 / (ne - 1)) * data_pert, full_matrices=False)
-
-    # If no. measurements is more than ne - 1, we only keep ne - 1 sing. val.
-    if data_pert.shape[0] >= ne:
-        u_d, s_d, v_d = u_d[:, :-1].copy(), s_d[:-1].copy(), v_d[:-1, :].copy()
-
-    # If energy is less than 100 we truncate the SVD matrices
-    if energy < 100:
-        ti = (np.cumsum(s_d) / sum(s_d)) * 100 <= energy
-        u_d, s_d, v_d = u_d[:, ti].copy(), s_d[ti].copy(), v_d[ti, :].copy()
-
-    # Calculate x_0 and its eigenvalue decomp.
-    if len(cov_data.shape) == 1:
-        x_0 = np.dot(np.diag(s_d[:]**(-1)), np.dot(u_d[:, :].T, np.expand_dims(cov_data, axis=1)*np.dot(u_d[:, :],
-                                                                                                        np.diag(s_d[:]**(-1)).T)))
-    else:
-        x_0 = np.dot(np.diag(s_d[:] ** (-1)), np.dot(u_d[:, :].T, np.dot(cov_data, np.dot(u_d[:, :],
-                                                                                          np.diag(s_d[:] ** (-1)).T))))
-    s, u = np.linalg.eig(x_0)
-
-    # Calculate x_1
-    x_1 = np.dot(u_d[:, :], np.dot(np.diag(s_d[:]**(-1)).T, u))
-
-    # Calculate Kalman gain based on the subspace matrices we made above
-    k_g = np.dot(cov_cross, np.dot(x_1, linalg.solve(
-        (np.eye(s.shape[0]) + np.diag(s)), x_1.T)))
-
-    # Return subspace Kalman gain
-    return k_g
-
-
-def compute_x(pert_preddata, cov_data, keys_da, alfa=None):
-    """
-    INSERT DESCRIPTION
-
-    Parameters
-    ----------
-    pert_preddata : ndarray
-        Perturbed predicted data
-    cov_data : ndarray
-        Data covariance matrix
-    keys_da : dict
-        Dictionary with every input in `DATAASSIM`
-    alfa : None, optional
-        INSERT DESCRIPTION
-
-    Returns
-    -------
-    X : ndarray
-        INSERT DESCRIPTION
-    """
-    X = []
-    if 'kalmangain' in keys_da and keys_da['kalmangain'][0] == 'subspace':
-
-        # TSVD energy
-        energy = keys_da['kalmangain'][1]
-
-        # No. ensemble members
-        ne = pert_preddata.shape[1]
-
-        # Calculate x_0 and its eigenvalue decomp.
-        if len(cov_data.shape) == 1:
-            scale = np.expand_dims(np.sqrt(cov_data), axis=1)
-        else:
-            scale = np.expand_dims(np.sqrt(np.diag(cov_data)), axis=1)
-
-        # Perform SVD on pred. data perturbations
-        u_d, s_d, v_d = np.linalg.svd(pert_preddata/scale, full_matrices=False)
-
-        # If no. measurements is more than ne - 1, we only keep ne - 1 sing. val.
-        if pert_preddata.shape[0] >= ne:
-            u_d, s_d, v_d = u_d[:, :-1].copy(), s_d[:-1].copy(), v_d[:-1, :].copy()
-
-        # If energy is less than 100 we truncate the SVD matrices
-        if energy < 100:
-            ti = (np.cumsum(s_d) / sum(s_d)) * 100 <= energy
-            u_d, s_d, v_d = u_d[:, ti].copy(), s_d[ti].copy(), v_d[ti, :].copy()
-
-        # Calculate x_0 and its eigenvalue decomp.
-        if len(cov_data.shape) == 1:
-            x_0 = np.dot(np.diag(s_d[:] ** (-1)),
-                         np.dot(u_d[:, :].T, np.expand_dims(cov_data, axis=1) * np.dot(u_d[:, :],
-                                                                                       np.diag(s_d[:] ** (-1)).T)))
-        else:
-            x_0 = np.dot(np.diag(s_d[:] ** (-1)), np.dot(u_d[:, :].T, np.dot(cov_data, np.dot(u_d[:, :],
-                                                                                              np.diag(s_d[:] ** (-1)).T))))
-        s, u = np.linalg.eig(x_0)
-
-        # Calculate x_1
-        x_1 = np.dot(u_d[:, :], np.dot(np.diag(s_d[:] ** (-1)).T, u))/scale
-
-        # Calculate X based on the subspace matrices we made above
-        X = np.dot(np.dot(pert_preddata.T, x_1), linalg.solve(
-            (np.eye(s.shape[0]) + np.diag(s)), x_1.T))
-
-    else:
-        if len(cov_data.shape) == 1:
-            X = linalg.solve(np.dot(pert_preddata, pert_preddata.T) +
-                             np.diag(cov_data), pert_preddata)
-        else:
-            X = linalg.solve(np.dot(pert_preddata, pert_preddata.T) +
-                             cov_data, pert_preddata)
-        X = X.T
-
-    return X
 
 
 def aug_state(state, list_state, cell_index=None):
@@ -1243,10 +888,12 @@ def calc_scaling(enX, idX, prior_info):
 
     Parameters
     ----------
-    state : dict
-        Dictionary containing the state
-    list_state : list
-        List of states for augmenting
+    enX : np.ndarray
+        State ensemble matrix, shape ``(nx, ne)``; only its row count per
+        variable is used.
+    idX : dict
+        Row range ``(start, stop)`` of each state variable in ``enX``, in the
+        order the state was stacked.
     prior_info : dict
         Nested dictionary containing prior information
 
@@ -1260,13 +907,14 @@ def calc_scaling(enX, idX, prior_info):
     for elem in idX.keys():
         # more than single value. This is for multiple layers. Assume all values are active
         if len(prior_info[elem]['variance']) > 1:
-            scaling.append(np.concatenate(tuple(np.sqrt(prior_info[elem]['variance'][z]) *
-                                                np.ones(
-                                                    prior_info[elem]['ny']*prior_info[elem]['nx'])
-                                                for z in range(prior_info[elem]['nz']))))
+            ny = prior_info[elem]['ny']
+            nx = prior_info[elem]['nx']
+            scaling.append(np.tile(np.sqrt(prior_info[elem]['variance']), ny*nx))
         else:
-            scaling.append(tuple(np.sqrt(prior_info[elem]['variance']) *
-                                 np.ones(enX[idX[elem][0]:idX[elem][1]].shape[0])))
+            i = idX[elem][0]
+            j = idX[elem][1]
+            ones = np.ones(enX[i:j].shape[0])
+            scaling.append(np.sqrt(prior_info[elem]['variance']) * ones)
 
     return np.concatenate(scaling)
 
@@ -1321,117 +969,6 @@ def update_state(aug_state, state, list_state, cell_index=None):
     return state
 
 
-def resample_state(aug_state, state, list_state, new_en_size):
-    """
-    Extract the seperate state variables from an augmented state matrix. Calculate the mean and covariance, and resample
-    this.
-
-    Parameters
-    ----------
-    aug_state : ndarray
-        Augmented matrix of state variables
-    state : dict
-        Dict. af state variables
-    list_state : list
-        List of state variable
-    new_en_size : int
-        Size of the new ensemble
-
-    Returns
-    -------
-    state : dict
-        Dict. of resampled members
-    """
-
-    aug_row = 0
-    curr_ne = state[list_state[0]].shape[1]
-    new_state = {}
-    for elem in list_state:
-        # determine how many rows to extract
-        no_rows = state[elem].shape[0]
-        new_state[elem] = np.empty((no_rows, new_en_size))
-
-        mean_state = np.mean(aug_state[aug_row:aug_row + no_rows, :], 1)
-        pert_state = np.sqrt(1/(curr_ne - 1)) * (aug_state[aug_row:aug_row + no_rows, :] - np.dot(np.resize(mean_state,
-                                                                                                            (len(mean_state), 1)), np.ones((1, curr_ne))))
-        for i in range(new_en_size):
-            new_state[elem][:, i] = mean_state + \
-                np.dot(pert_state, np.random.normal(0, 1, pert_state.shape[1]))
-
-        aug_row += no_rows
-
-    return new_state
-
-
-def block_diag_cov(cov, list_state):
-    """
-    Block diagonalize a covariance matrix dictionary.
-
-    Parameters
-    ----------
-    cov : dict
-        Dict. with cov. matrices
-    list_state : list
-        Fixed list of keys in state dict.
-
-    Returns
-    -------
-    cov_out : ndarray
-        Block diag. matrix with prior covariance matrices for each state.
-    """
-    # TODO: Change if there are cross-correlation between different states
-
-    # Init. block in matrix
-    cov_out = cov[list_state[0]]
-
-    # Test if scalar has been given in init. block
-    if not hasattr(cov_out, '__len__'):
-        cov_out = np.array([[cov_out]])
-
-    # Loop of rest of the state-names and add in block diag. matrix
-    for i in range(1, len(list_state)):
-        cov_out = linalg.block_diag(cov_out, cov[list_state[i]])
-
-    # Return
-    return cov_out
-
-
-def calc_kalman_filter_eq(aug_state, kalman_gain, obs_data, pred_data):
-    """
-    Calculate the updated augment state using the Kalman filter equations
-
-    Parameters
-    ----------
-    aug_state : ndarray
-        Augmented state variable (all the parameters defined in `STATICVAR` augmented in one array)
-    kalman_gain : ndarray
-        Kalman gain
-    obs_data : ndarray
-        Augmented observed data vector (all `OBSNAME` augmented in one array)
-    pred_data : ndarray
-        Augmented predicted data vector (all `OBSNAME` augmented in one array)
-
-    Returns
-    -------
-    aug_state_upd : ndarray
-        Updated augmented state variable using the Kalman filter equations
-    """
-    # TODO: Implement svd updating algorithm
-
-    # Matrix version
-    # aug_state_upd = aug_state + np.dot(kalman_gain, (obs_data - pred_data))
-
-    # For-loop version
-    aug_state_upd = np.zeros(aug_state.shape)  # Init. updated state
-
-    for i in range(aug_state.shape[1]):  # Loop over ensemble members
-        aug_state_upd[:, i] = aug_state[:, i] + \
-            np.dot(kalman_gain, (obs_data[:, i] - pred_data[:, i]))
-
-    # Return the updated state
-    return aug_state_upd
-
-
 def limits(state, prior_info):
     """
     Check if any state variables overshoots the limits given by the prior info. If so, modify these values
@@ -1455,44 +992,6 @@ def limits(state, prior_info):
     return state
 
 
-def subsample_state(index, aug_state, pert_state):
-    """
-    Draw a subsample from the original state, given by the index
-
-    Parameters
-    ----------
-    index : ndarray
-        Index of parameters to draw.
-    aug_state : ndarray
-        Original augmented state.
-    pert_state : ndarray
-        Perturbed augmented state, for error covariance.
-
-    Returns
-    -------
-    new_state : dict
-        Subsample of state.
-    """
-
-    new_state = np.empty((aug_state.shape[0], len(index)))
-    for i in range(len(index)):
-        new_state[:, i] = aug_state[:, index[i]] + \
-            np.dot(pert_state, np.random.normal(0, 1, pert_state.shape[1]))
-        # select some elements
-
-    return new_state
-
-
-def get_obs_size(obs_data, time_index, datatypes):
-    """Return a 2D list of sizes for each observation array."""
-    return [
-        [
-            obs_data[int(time)][data].size if obs_data[int(time)][data] is not None else 0
-            for data in datatypes
-        ]
-        for time in time_index
-    ]
-
 def truncSVD(matrix, r=None, energy=None, full_matrices=False):
     '''
     Perform truncated SVD on input matrix.
@@ -1506,19 +1005,24 @@ def truncSVD(matrix, r=None, energy=None, full_matrices=False):
         Rank to truncate the SVD to. If None, energy must be specified.
 
     energy : float, optional
-        Percentage of energy to retain in the truncated SVD. If None, r must be specified.
+        Fraction of the singular-value sum to retain, given either as a fraction
+        in (0, 1] or as a percentage in (1, 100]. The smallest rank whose
+        retained fraction reaches this value is used, so the requested amount is
+        met rather than approached from below. Note this accumulates the
+        singular values themselves, not their squares -- it is a fraction of the
+        nuclear norm, not of the Frobenius energy. If None, r must be specified.
 
     full_matrices : bool, optional
         Whether to compute full or reduced SVD. Default is False.
-    
+
     Returns
     -------
     U : ndarray, shape (m, r)
         Left singular vectors.
-    
+
     S : ndarray, shape (r,)
         Singular values.
-    
+
     VT : ndarray, shape (r, n)
         Right singular vectors transposed.
     '''
@@ -1527,20 +1031,90 @@ def truncSVD(matrix, r=None, energy=None, full_matrices=False):
 
     # If not specified rank, energy must be given
     if r is None:
-        if energy is not None:
-            # Energy is given as fraction
-            if energy < 1:
-                r = np.searchsorted(np.cumsum(S)/np.sum(S), energy)
-            # Energy is given as a percentage
-            else:
-                r = np.searchsorted(np.cumsum(S)/np.sum(S), energy/100)
-        else:
+        if energy is None:
             raise ValueError("Either rank 'r' or 'energy' must be specified for truncSVD.")
-    
+
+        # Accept a percentage (1, 100] as well as a fraction (0, 1]. The bound is
+        # exclusive so that energy=1 keeps everything rather than meaning 1%.
+        fraction = energy/100 if energy > 1 else energy
+
+        total = np.sum(S)
+        if total == 0:
+            # No spectrum to apportion; nothing is more representative than
+            # anything else, so keep it all rather than dividing by zero.
+            r = len(S)
+        else:
+            # searchsorted gives the first index at which the cumulative
+            # fraction REACHES `fraction`; that index must be kept, hence +1.
+            # Clamped here rather than below so that energy=1 does not trip the
+            # "specified rank" warning on a rounding error in the last entry.
+            r = min(int(np.searchsorted(np.cumsum(S)/total, fraction)) + 1, len(S))
+
     if r == 0:
         r = 1  # Ensure at least one singular value is retained
     if r > len(S):
-        print("Warning: Specified rank exceeds number of singular values. Using maximum available rank.")
+        warnings.warn("Specified rank exceeds the number of singular values; using all of them.", stacklevel=2)
         r = len(S)
 
     return U[:,:r], S[:r], VT[:r,:]
+
+def get_outlier_index(
+    pred,
+    data,
+    data_var=None,
+    tresh=4.0
+):
+    """
+    Identify outlier ensemble members based on a normalized data-mismatch score.
+
+    For each ensemble member j, the mismatch is:
+
+        h_j = sum_i ((Y_ij - d_i) / sigma_i)^2
+
+    where sigma_i is the ensemble standard deviation (or provided variance) for observable i.
+    Members whose score deviates more than `tresh` standard deviations from the mean are flagged as outliers.
+
+    Parameters
+    ----------
+    pred : array_like, shape (nd, ne)
+        Predicted data ensemble, one column per member.
+    data : array_like, shape (nd,)
+        Observed data, in the same row order.
+    data_var : array_like or None, optional
+        Data variance, ``(nd,)`` or ``(nd, ne)`` for an empirical ensemble. If not provided, the ensemble
+        variance of the predicted data is used.
+    tresh : float, optional
+        Outlier threshold in numbers of standard deviations. Default is 4.
+
+    Returns
+    -------
+    outlier_indices : np.ndarray
+        Indices of outlier ensemble members.
+    members : np.ndarray
+        Array of ensemble member indices, with outliers replaced by randomly selected non-outlier members.
+    """
+    Y = np.asarray(pred, dtype=float)  # (nd, ne)
+    d = np.asarray(data, dtype=float).reshape(-1, 1)  # (nd, 1)
+
+    # Determine variance for normalization
+    if data_var is not None:
+        var = np.asarray(data_var, dtype=float)
+        if var.ndim == 1:
+            var = var[:, np.newaxis]
+    else:
+        var = np.var(Y, axis=1, ddof=1)[:, np.newaxis]
+
+    # Compute normalized data-mismatch score for each ensemble member
+    mismatch = np.sum(((Y - d) / np.sqrt(var)) ** 2, axis=0)  # (ne,)
+
+    # Identify outliers using the sigma rule
+    mean_mismatch = np.mean(mismatch)
+    std_mismatch = np.std(mismatch)
+    outlier_mask = np.abs(mismatch - mean_mismatch) > tresh * std_mismatch
+    outlier_indices = np.where(outlier_mask)[0]
+    non_outlier_members = np.where(~outlier_mask)[0]
+
+    if len(outlier_indices) > 0:
+        logging.getLogger(__name__).info(f" Identified outliers: {outlier_indices}")
+
+    return outlier_indices, non_outlier_members

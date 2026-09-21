@@ -156,7 +156,7 @@ def elem_vtcs_ndcs(nk, nj, ni):  # pylint: disable=invalid-name
     Returns
     -------
     ndarray
-        Zero-based indices for the hexahedral element corners, 
+        Zero-based indices for the hexahedral element corners,
         with shape (nk*nj*ni, 8) and dtype int.
     """
     # hex_perm is the order a hexahedron should be specified to the
@@ -299,7 +299,7 @@ def cp_cells(grid, face):
     dict
         Set of geometrical objects that can be sent to rendering. Contains:
         - 'points': ndarray, shape (nverts, 3)
-        - 'cells': ndarray, shape (nelems, ncorns), where ncorns is either 8 
+        - 'cells': ndarray, shape (nelems, ncorns), where ncorns is either 8
           (hexahedron volume) or 4 (quadrilateral face), depending on the face parameter.
     """
     src = {}
@@ -355,7 +355,7 @@ def cell_filter(grid, func):
     # call the filter function on all these addresses, and simply
     # return the boolean array of those
     filter_flags = func(kji[2], kji[1], kji[0])
-    masked = filter_flags.astype(np.bool)
+    masked = filter_flags.astype(bool)
 
     # get the mask of active cells, and combine this with the masked
     # cells from the filter, giving us a flag for all visible nodes
@@ -645,10 +645,10 @@ def mass_center(corn, filtr):
     Parameters
     ----------
     corn : numpy.ndarray
-        Coordinate values for each corner. This matrix can be constructed with the 
+        Coordinate values for each corner. This matrix can be constructed with the
         `corner_coordinates` function. Shape = (3, nk*2*nj*2*ni*2).
     filtr : numpy.ndarray
-        Active corners; use scatter of ACTNUM if no filtering. Shape = (nk, 2, nj, 2, ni, 2), 
+        Active corners; use scatter of ACTNUM if no filtering. Shape = (nk, 2, nj, 2, ni, 2),
         dtype = numpy.bool.
 
     Returns

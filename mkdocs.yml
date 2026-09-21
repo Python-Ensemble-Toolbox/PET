@@ -11,6 +11,8 @@ nav:
   - Home: index.md
   - Reference: reference/
   - Tutorials: tutorials/
+  - Configuration: configuration.md
+  - Architecture: architecture.md
   - Bibliography: references.md
   - dev_guide.md
 
@@ -89,7 +91,7 @@ plugins:
       handlers:
         python:
           # load_external_modules: true
-          paths: [.]
+          paths: [src]
           # NB: The following does not work coz pipt and popt contain submodules with the same name.
           # paths: [pipt, popt, simulator, ensemble, misc, input_output, tests]
           import:

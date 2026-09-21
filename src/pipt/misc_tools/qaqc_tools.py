@@ -1,1052 +1,703 @@
-"""Quality Assurance of the forecast (QA) and analysis (QC) step."""
-import copy
-import numpy as np
-import os
-# import matplotlib as mpl
-# mpl.use('Qt5Agg')
-import matplotlib.pyplot as plt
-import matplotlib.patches as pat
-import matplotlib.collections as mcoll
-from matplotlib.colors import ListedColormap
-import itertools
+"""Quality assurance of the forecast (QA) and of the analysis (QC).
+
+Four diagnostics, driven by the scheme through its hooks: after the prior
+forecast and after every accepted iteration.
+
+``calc_coverage``
+    Is every observation inside the range the ensemble forecasts? Plots the
+    forecast spread with the observations, marking those outside it, and logs
+    how many fall outside per data type. Seismic (vector) data get the
+    importance-scaled 2-D coverage maps of E. O. Lie (GeoCore).
+``calc_mahalanobis``
+    The model-deficiency diagnostic of Oliver (2020), *Diagnosing reservoir
+    model deficiency for model improvement*: Mahalanobis distances between the
+    observations and the perturbed forecast, singly (level 1) or in pairs and
+    triples, logged as a ranked list with cross-plots of the worst.
+``calc_kg``
+    The ES-style Kalman gain each data type would apply to each parameter,
+    ranked by size, so conflicting or dominant data can be spotted; field
+    parameters can be written to the grid through the simulator.
+``calc_da_stat``
+    How far the parameters moved from the prior, in units of the prior
+    standard deviation, per parameter group.
+
+Data enters as the ensemble's frames -- observations, variances and
+predictions indexed by report point with one column per data type, each cell
+an array (``(1,)`` for point data, ``(n,)`` for vector data such as seismic)
+or ``None`` -- and is adapted once, per data type, into the arrays the
+diagnostics consume. Outputs go to a ``QAQC`` folder under the run's save
+folder. Multilevel ensembles are not supported.
+
+Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
+"""
+
 import logging
-from pipt.misc_tools import cov_regularization
+from pathlib import Path
+
+import matplotlib.collections as mcoll
+import matplotlib.patches as pat
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import ListedColormap
 from scipy.interpolate import interp1d
 from scipy.io import loadmat
-import cv2
+
+import pipt.misc_tools.analysis_tools as at
+
+__all__ = ["QAQC"]
+
+#: Data types treated as seismic (vector) data by the coverage maps.
+SEISMIC_TYPES = ("bulkimp", "sim2seis", "avo", "grav")
 
 
-# Define the class for qa/qc tools.
+def _finite_array(cell):
+    """The cell as a flat float array, or ``None`` if it holds no usable value."""
+    if cell is None:
+        return None
+    try:
+        values = np.asarray(cell, dtype=float).ravel()
+    except (TypeError, ValueError):
+        return None
+    if values.size == 0 or not np.isfinite(values).all():
+        return None
+    return values
+
+
+def _rgb_to_hls(rgb):
+    """Vectorised colorsys.rgb_to_hls on an (..., 3) array in [0, 1]."""
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    maxc, minc = rgb.max(axis=-1), rgb.min(axis=-1)
+    lum = (maxc + minc) / 2
+    delta = maxc - minc
+    with np.errstate(divide="ignore", invalid="ignore"):
+        sat = np.where(delta == 0, 0.0,
+                       np.where(lum <= 0.5, delta / (maxc + minc), delta / (2 - maxc - minc)))
+        rc, gc, bc = (maxc - r) / delta, (maxc - g) / delta, (maxc - b) / delta
+    hue = np.where(r == maxc, bc - gc, np.where(g == maxc, 2 + rc - bc, 4 + gc - rc))
+    hue = np.where(delta == 0, 0.0, (hue / 6) % 1)
+    return np.stack((hue, lum, sat), axis=-1)
+
+
+def _hls_to_rgb(hls):
+    """Vectorised colorsys.hls_to_rgb on an (..., 3) array in [0, 1]."""
+    h, lum, s = hls[..., 0], hls[..., 1], hls[..., 2]
+    m2 = np.where(lum <= 0.5, lum * (1 + s), lum + s - lum * s)
+    m1 = 2 * lum - m2
+
+    def channel(hue):
+        hue = hue % 1
+        return np.where(hue < 1 / 6, m1 + (m2 - m1) * hue * 6,
+               np.where(hue < 0.5, m2,
+               np.where(hue < 2 / 3, m1 + (m2 - m1) * (2 / 3 - hue) * 6, m1)))
+
+    rgb = np.stack((channel(h + 1 / 3), channel(h), channel(h - 1 / 3)), axis=-1)
+    return np.where(s[..., None] == 0, lum[..., None], rgb)
+
+
 class QAQC:
+    """Quality assurance of the forecast (QA) and the analysis (QC); see the module docstring.
+
+    Parameters
+    ----------
+    keys : dict
+        The ``dataassim`` config merged with the simulator's ``input_dict``.
+        Read: ``assimindex`` (which report points are assimilated), and
+        optionally ``actnum`` (path to an ``.npz`` with an ``actnum`` mask)
+        and ``scale`` (a divisor applied to seismic data before plotting).
+    data_df, data_var_df : PETDataFrame
+        Observations and their variances, indexed by report point, one column
+        per data type.
+    logger : object, optional
+        Anything with an ``info`` method. Defaults to ``logging.getLogger``.
+    prior_info : dict, optional
+        Per-parameter prior description (``nx``, ``ny``, ``nz``); needed by
+        ``calc_kg`` and by grid output.
+    sim : object, optional
+        Simulator; used only for an optional ``write_to_grid`` method.
+    ini_state : dict, optional
+        The prior state, ``{parameter: (n, ne) array}``, as ``state_layout.to_dict(enX)``
+        returns it; defines the parameter groups and the ensemble size.
+    localization : object, optional
+        The scheme's localization. Only the auto-adaptive kind is used, by
+        ``calc_kg``; anything else is ignored.
+    folder : str or Path, optional
+        Where plots and grid files go. Default ``QAQC`` in the working directory.
     """
-     Perform Quality Assurance of the forecast (QA) and analysis (QC) step.
-     Available functions:
-        1) calc_coverage: check forecast data coverage
-        2) calc_mahalanobis: evaluate "higher-order" data coverage
-        3) calc_kg: check/write individual gain for parameters;
-                    flag data which have conflicting updates
-        4) calc_da_stat: compute statistics for updated parameters
 
-     Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-     """
+    def __init__(self, keys, data_df, data_var_df, logger=None, prior_info=None, sim=None,
+                 ini_state=None, localization=None, folder="QAQC"):
+        if "multilevel" in keys:
+            raise NotImplementedError(
+                "QA/QC is not available for multilevel ensembles: the diagnostics "
+                "assume one prediction ensemble per report point."
+            )
+        self.keys = keys
+        self.logger = logger if logger is not None else logging.getLogger("QAQC")
+        self.prior_info = prior_info
+        self.sim = sim
+        self.ini_state = ini_state
+        self.localization = localization if getattr(localization, "name", None) == "autoadaloc" else None
+        self.list_state = list(ini_state.keys()) if ini_state else []
+        self.ne = next(iter(ini_state.values())).shape[1] if ini_state else None
+        self.folder = Path(folder)
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self.actnum = self._load_actnum(keys)
 
-    # Initialize
-    def __init__(self, keys, obs_data, datavar, logger=None, prior_info=None, sim=None, ini_state=None):
-        self.keys = keys  # input info for the case
-        self.obs_data = obs_data  # observed (real) data
-        self.datavar = datavar  # data variance
-        if logger is None:  # define a logger to print ouput
-            logging.basicConfig(level=logging.INFO,
-                                filename='qaqc_logger.log',
-                                filemode='a',
-                                format='%(asctime)s : %(levelname)s : %(name)s : %(message)s')
-            self.logger = logging.getLogger('QAQC')
-        else:
-            self.logger = logger
-        self.prior_info = prior_info  # prior info for the different parameter types
-        self.sim = sim  # this class contains potential writing functions (this class can be saved to debug_analysis)
-        self.ini_state = ini_state  # the first state; used to compute statistics
-        self.ne = 0
-        if 'multilevel' in keys:
-            self.multilevel = keys['multilevel']
-            for i, opt in enumerate(list(zip(*self.multilevel))[0]):
-                if opt == 'levels':
-                    self.tot_level = int(self.multilevel[i][1])
-                if opt == 'en_size':
-                    self.ml_ne = [int(el) for el in self.multilevel[i][1]]
-                if opt == 'cov_wgt':
-                    try:
-                        cov_mat_wgt = [float(elem) for elem in [item for item in self.multilevel[i][1]]]
-                    except:
-                        cov_mat_wgt = [float(item) for item in self.multilevel[i][1]]
-                    Sum = 0
-                    for i in range(len(cov_mat_wgt)):
-                        Sum += cov_mat_wgt[i]
-                    for i in range(len(cov_mat_wgt)):
-                        cov_mat_wgt[i] /= Sum
-                    self.cov_wgt = cov_mat_wgt
-            self.list_state = list(self.ini_state[0].keys())
-        else:
-            if self.ini_state is not None:
-                self.ne = self.ini_state[list(self.ini_state.keys())[0]].shape[1]  # get the ensemble size from here
-            self.list_state = list(self.ini_state.keys())
+        self.data_types = list(data_df.columns)
+        self._labels = list(data_df.index)
+        self.l_prim = self._assimilated_positions(keys, len(self._labels))
 
-        assim_step = 0  # Assume simultaneous assimiation
-        assim_ind = [keys['obsname'], keys['assimindex'][assim_step]]
-        #assim_ind = [keys['obsname'], keys['assimindex']]
-        if isinstance(assim_ind[1], list):  # Check if prim. ind. is a list
-            self.l_prim = [int(x) for x in assim_ind[1]]
-            #self.l_prim = [int(x[0]) for x in assim_ind[1]]
-        else:  # Float
-            self.l_prim = [int(assim_ind[1])]
-
-        self.data_types = list(obs_data[0].keys())  # All data types
-        self.en_obs = {}
-        self.en_obs_vec = {}
-        self.en_time = {}
-        self.en_time_vec = {}
+        # Point data (one value per report point): (n_t, 1) arrays and the
+        # positions they came from. Vector data (n values per report point,
+        # e.g. seismic): concatenated over report points, plus the raw cells
+        # for the per-vintage coverage maps.
+        self.en_obs, self.en_var, self.en_time = {}, {}, {}
+        self.en_obs_vec, self.en_var_vec, self.en_time_vec = {}, {}, {}
+        self._obs_vector_cells = {}
         for typ in self.data_types:
-            self.en_obs[typ] = np.array(
-                [self.obs_data[ind][typ].flatten() for ind in self.l_prim if self.obs_data[ind][typ]
-                 is not None and sum(np.isnan(self.obs_data[ind][typ])) == 0 and self.obs_data[ind][typ].shape == (1,)])
-            l = [self.obs_data[ind][typ].flatten() for ind in self.l_prim if self.obs_data[ind][typ] is not None
-                 and sum(np.isnan(self.obs_data[ind][typ])) == 0
-                 and self.obs_data[ind][typ].shape[0] > 1]
-            if l:
-                self.en_obs_vec[typ] = np.expand_dims(np.concatenate(l), 1)
-            self.en_time[typ] = [ind for ind in self.l_prim if self.obs_data[ind][typ]
-                                 is not None and self.obs_data[ind][typ].shape == (1,)]
-            l = [ind for ind in self.l_prim if self.obs_data[ind][typ]
-                 is not None and self.obs_data[ind][typ].shape[0] > 1]
-            if l:
-                self.en_time_vec[typ] = l
+            self._collect_observations(typ, data_df, data_var_df)
 
-        # Check if the QA folder is generated
-        self.folder = 'QAQC' + os.sep
-        if not os.path.exists(self.folder):
-            os.mkdir(self.folder)  # if not generate
-
-        if 'localization' in self.keys:
-            self.localization = cov_regularization.localization(self.keys['localization'],
-                                                                self.keys['truedataindex'],
-                                                                self.keys['datatype'],
-                                                                self.keys['staticvar'],
-                                                                self.ne)
+        # Filled by set().
         self.pred_data = None
         self.state = None
-        self.en_fcst = {}
-        self.en_ml_fcst = {}
-        self.en_ml_fcst_vec = {}
-        self.en_fcst_vec = {}
         self.lam = None
+        self.en_fcst, self.en_fcst_vec, self._fcst_vector_cells = {}, {}, {}
 
-    # Set the predicted data and current state
+    # ------------------------------------------------------------------
+    # Adapting the frames
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _assimilated_positions(keys, n_points):
+        """Positions (into the report-point index) of the assimilated data.
+
+        ``assimindex`` is a list, or a list of lists for schemes that
+        assimilate in several steps; every listed position counts here.
+        """
+        assim = keys.get("assimindex")
+        if assim is None:
+            return list(range(n_points))
+        if not isinstance(assim, (list, tuple)):
+            return [int(assim)]
+        flat = []
+        for item in assim:
+            flat.extend(item if isinstance(item, (list, tuple)) else [item])
+        return [int(x) for x in flat]
+
+    @staticmethod
+    def _load_actnum(keys):
+        path = keys.get("actnum")
+        if not path:
+            return None
+        try:
+            return np.load(path)["actnum"].astype(bool)
+        except Exception:
+            return None
+
+    def _collect_observations(self, typ, data_df, data_var_df):
+        point, vector = [], []
+        for pos in self.l_prim:
+            label = self._labels[pos]
+            obs = _finite_array(data_df.loc[label, typ])
+            if obs is None:
+                continue
+            var = _finite_array(data_var_df.loc[label, typ]) if typ in data_var_df.columns else None
+            if var is None or var.size not in (1, obs.size):
+                self.logger.info(f"QAQC: no variance for {typ} at report point {label}; skipping it")
+                continue
+            var = np.broadcast_to(var, obs.shape)
+            (point if obs.size == 1 else vector).append((pos, obs, var))
+
+        self.en_obs[typ] = np.array([o for _, o, _ in point], dtype=float).reshape(-1, 1)
+        self.en_var[typ] = np.array([v for _, _, v in point], dtype=float).reshape(-1, 1)
+        self.en_time[typ] = [pos for pos, _, _ in point]
+        if vector:
+            self.en_obs_vec[typ] = np.concatenate([o for _, o, _ in vector])[:, None]
+            self.en_var_vec[typ] = np.concatenate([v for _, _, v in vector])[:, None]
+            self.en_time_vec[typ] = [pos for pos, _, _ in vector]
+            self._obs_vector_cells[typ] = vector
+
     def set(self, pred_data, state=None, lam=None):
-        self.pred_data = pred_data
-        for typ in self.data_types:
-            if hasattr(self, 'multilevel'):
-                self.en_ml_fcst[typ] = [np.array([self.pred_data[ind][l][typ].flatten()
-                                                  for ind in self.l_prim if sum(np.isnan(self.obs_data[ind][typ])) == 0
-                                                  and self.obs_data[ind][typ].shape == (1,)]) for l in
-                                        range(self.tot_level)]
-                # todo: for vector data
+        """Hand over the current predictions, state and damping parameter.
 
-                self.en_fcst[typ] = np.concatenate(self.en_ml_fcst[typ], axis=1)  # merge all levels
-            else:
-                self.en_fcst[typ] = np.array(
-                    [self.pred_data[ind][typ].flatten() for ind in self.l_prim if
-                     self.obs_data[ind][typ] is not None and
-                     sum(np.isnan(self.obs_data[ind][typ])) == 0
-                     and self.obs_data[ind][typ].shape == (1,)])
-                l = [self.pred_data[ind][typ] for ind in self.l_prim if
-                     self.obs_data[ind][typ] is not None
-                     and sum(np.isnan(self.obs_data[ind][typ])) == 0
-                     and self.obs_data[ind][typ].shape[0] > 1]
-                if l:
-                    self.en_fcst_vec[typ] = np.concatenate(l)
+        Parameters
+        ----------
+        pred_data : PETDataFrame
+            Predictions aligned with the observation frame; each cell an array
+            whose last axis is the ensemble.
+        state : dict, optional
+            Current state, ``{parameter: (n, ne) array}``.
+        lam : float, optional
+            The scheme's damping parameter (0 for schemes without one).
+        """
+        self.pred_data = pred_data
         self.state = state
         self.lam = lam
+        for typ in self.data_types:
+            rows = [np.asarray(pred_data.loc[self._labels[pos], typ], dtype=float).ravel()
+                    for pos in self.en_time[typ]]
+            self.en_fcst[typ] = (np.array(rows, dtype=float) if rows
+                                 else np.empty((0, self.ne or 0)))
+            cells = [np.asarray(pred_data.loc[self._labels[pos], typ], dtype=float)
+                     for pos in self.en_time_vec.get(typ, [])]
+            if cells:
+                self._fcst_vector_cells[typ] = cells
+                self.en_fcst_vec[typ] = np.concatenate(cells, axis=0)
 
-    def calc_coverage(self, line=None, field_dim=None, uxl = None, uil = None, contours = None, uxl_c = None, uil_c = None):
+    def _lumped(self, typ):
+        """Point and vector data of one type stacked: forecast (nd, ne), observations and variances (nd, 1)."""
+        parts = [(self.en_fcst.get(typ), self.en_obs.get(typ), self.en_var.get(typ)),
+                 (self.en_fcst_vec.get(typ), self.en_obs_vec.get(typ), self.en_var_vec.get(typ))]
+        parts = [(f, o, v) for f, o, v in parts if f is not None and f.size]
+        if not parts:
+            return None, None, None
+        return tuple(np.concatenate(block, axis=0) for block in zip(*parts))
+
+    def _save_figure(self, name):
+        plt.savefig(self.folder / f"{name}.png", bbox_inches="tight")
+        plt.close()
+
+    # ------------------------------------------------------------------
+    # Coverage
+    # ------------------------------------------------------------------
+    def calc_coverage(self, line=None, field_dim=None, uxl=None, uil=None, contours=None,
+                      uxl_c=None, uil_c=None):
+        """Check whether the observations lie inside the ensemble's forecast range.
+
+        For each point data type: a plot of the forecast ensemble over the
+        report points with the observations, red where an observation lies
+        above or below every member, and a log line with the count. For the
+        first seismic data type present: the importance-scaled 2-D coverage
+        maps, per vintage.
+
+        Parameters
+        ----------
+        line : int, optional
+            Also plot the 1-D coverage along this line of the seismic maps.
+        field_dim : tuple, optional
+            Grid dimensions of the seismic maps when no mask file is present.
+        uxl, uil : array-like, optional
+            Easting and northing coordinates of the map edges; default from a
+            ``seglines.mat`` in the working directory, else grid indices.
+        contours, uxl_c, uil_c : array-like, optional
+            A contour field and its coordinates to draw over the maps.
         """
-        Calculate the Data coverage for production and seismic data. For seismic data the plotting is based on the
-        importance-scaled coverage developed by Espen O. Lie from GeoCore.
+        self._require("pred_data")
+        for typ in self.data_types:
+            if typ in SEISMIC_TYPES or not self.en_obs[typ].size:
+                continue
+            fcst, obs = self.en_fcst[typ], self.en_obs[typ]
+            below = (obs < fcst).all(axis=1)          # observation under every member
+            above = (obs > fcst).all(axis=1)          # observation over every member
+            times = np.asarray(self.en_time[typ])
+            outside = int(below.sum() + above.sum())
+            self.logger.info(f"QAQC coverage {typ}: {outside} of {obs.size} observations outside the ensemble range")
 
-        Input:
-            line: if not None, plot 1d coverage
-            field_dim: if None, must import utm coordinates. Else give the grid
+            plt.figure()
+            plt.plot(times, fcst, c="0.35")
+            plt.plot(times, obs, "g*")
+            plt.plot(times[above], obs[above], "r*")
+            plt.plot(times[below], obs[below], "r*")
+            plt.title(f"{typ}: forecast range and observations")
+            self._save_figure(typ.replace(" ", "_"))
 
-        Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        """
+        seismic = [typ for typ in SEISMIC_TYPES if typ in self._obs_vector_cells]
+        if seismic:
+            self._seismic_coverage(seismic[0], line, field_dim, uxl, uil, contours, uxl_c, uil_c)
 
-        def _colorline(x, y, z=None, cmap='copper', norm=plt.Normalize(0.0, 1.0),
-                       linewidth=3, alpha=1.0):
-            """
-            http://nbviewer.ipython.org/github/dpsanders/matplotlib-examples/blob/master/colorline.ipynb
-            http://matplotlib.org/examples/pylab_examples/multicolored_line.html
-            Plot a colored line with coordinates x and y
-            Optionally specify colors in the array z
-            Optionally specify a colormap, a norm function and a line width
-            """
+    def _seismic_scaling(self):
+        scale = self.keys.get("scale")
+        if isinstance(scale, (list, tuple)) and len(scale) > 1:
+            return float(scale[1])
+        if isinstance(scale, (int, float)):
+            return float(scale)
+        return 1.0
 
-            # Default colors equally spaced on [0,1]:
-            if z is None:
-                z = np.linspace(0.0, 1.0, len(x))
-
-            # Special case if a single number:
-            # to check for numerical input -- this is a hack
-            if not hasattr(z, "__iter__"):
-                z = np.array([z])
-
-            z = np.asarray(z)
-
-            segments = _make_segments(x, y)
-            lc = mcoll.LineCollection(segments, array=z, cmap=cmap, norm=norm,
-                                      linewidth=linewidth, alpha=alpha)
-
-            ax = plt.gca()
-            ax.add_collection(lc)
-
-            return lc
-
-        def _make_segments(x, y):
-            """
-            Create list of line segments from x and y coordinates, in the correct format
-            for LineCollection: an array of the form numlines x (points per line) x 2 (x
-            and y) array
-            """
-
-            points = np.array([x, y]).T.reshape(-1, 1, 2)
-            segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            return segments
-
-        def _plot_coverage_1D(line, field_dim):
-            x = np.array([-1, -np.finfo(float).eps, 0, .5, 1, 1 + np.finfo(float).eps, 2])
-            d_ens = np.squeeze(data_reg[:, int(line), :])
-            d_real = np.squeeze(data_real_reg[:, int(line)])
-            scale = max(d_real)  # 2.5
-
-            r = np.array([0.1, 0.3, 0.8, 1.0, 0.8, 0.7, 0.5])
-            f = interp1d(x, r)
-            ri = f(3 * np.arange(256) / 255 - 1)
-            g = np.array([0.1, 0.3, 0.9, 1.0, 0.9, 0.4, 0.2])
-            f = interp1d(x, g)
-            gi = f(3 * np.arange(256) / 255 - 1)
-            b = np.array([0.4, 0.6, 0.8, 1.0, 0.8, 0.4, 0.2])
-            f = interp1d(x, b)
-            bi = f(3 * np.arange(256) / 255 - 1)
-
-            d_min = np.min(d_ens, axis=1)
-            d_max = np.max(d_ens, axis=1) + nl
-            sat = 2 * np.minimum((d_max + d_real) / scale, 0.5)
-            sat = (sat - nl) / (1 - nl)
-            sc = d_max - d_min
-
-            attr = (d_real - d_min) / sc
-            attr = np.minimum(np.maximum(attr, -1), 2)
-
-            try:
-                uxl = loadmat('seglines.mat')['uxl'].flatten()
-            except:
-                uxl = [0, field_dim[0]]
-
-            uxl = np.arange(uxl[0], uxl[-1], (uxl[-1] - uxl[0]) / data_real_reg.shape[0])
-            x = np.concatenate((uxl, np.flip(uxl)))
-            y = np.concatenate((d_min, np.flip(d_max)))
-
-            # plot not scaled by importance
-            fig = plt.figure()
-            ax = fig.add_subplot()
-            right_side = ax.spines["right"]
-            right_side.set_visible(False)
-            top_side = ax.spines["top"]
-            top_side.set_visible(False)
-            poly = pat.Polygon(np.column_stack((x, y)), closed=False, edgecolor='k', facecolor=np.array([.7, .7, .7]))
-            ax.add_patch(poly)
-            ln = _colorline(uxl, d_real, attr, None, plt.Normalize(-1, 2))
-            c = np.column_stack((ri, gi, bi))
-            cm = ListedColormap(c)
-            ln.set_cmap(cm)
-            plt.colorbar(ln)
-            plt.xlim(uxl[0] - np.finfo(float).eps, uxl[-1] + np.finfo(float).eps)
-            plt.ylim(0, scale)
-            plt.title('1D coverage plot not scaled by Importance')
-            filename = self.folder + 'coverage_1d_vint_' + str(vint)
-            plt.savefig(filename)
-            os.system('convert ' + filename + '.png' + ' -trim ' + filename + '.png')
-
-            # plot scaled by importance
-            fig = plt.figure()
-            ax = fig.add_subplot()
-            right_side = ax.spines["right"]
-            right_side.set_visible(False)
-            top_side = ax.spines["top"]
-            top_side.set_visible(False)
-            poly = pat.Polygon(np.column_stack((x, y)), closed=False, edgecolor='k', facecolor=np.array([.7, .7, .7]))
-            ax.add_patch(poly)
-            ln = _colorline(uxl, d_real, attr, None, plt.Normalize(-1, 2))
-            # y0 = np.column_stack((np.zeros(uxl.shape)+np.minimum(np.min(d_min), np.min(d_real)),
-            #                     np.zeros(uxl.shape)+np.maximum(np.max(d_max), np.max(d_real))))
-            alpha = 1 - sat
-            alpha = np.minimum(alpha, 1.0)
-            alpha = np.maximum(alpha, 0.0)
-            cw = ListedColormap(['White'])
-            for l in range(len(uxl)):
-                ln_imp = _colorline(uxl[l] * np.ones(2), np.array([d_min[l], d_max[l]]), alpha=alpha[l])
-                ln_imp.set_cmap(cw)
-            c = np.column_stack((ri, gi, bi))
-            cm = ListedColormap(c)
-            ln.set_cmap(cm)
-            plt.colorbar(ln)
-            plt.xlim(uxl[0] - np.finfo(float).eps, uxl[-1] + np.finfo(float).eps)
-            plt.ylim(0, scale)
-            plt.title('1D coverage plot scaled by Importance')
-            filename = self.folder + 'coverage_1d_importance_vint_' + str(vint)
-            plt.savefig(filename)
-            os.system('convert ' + filename + '.png' + ' -trim ' + filename + '.png')
-
-        for typ in [dat for dat in self.data_types if not dat in ['bulkimp', 'sim2seis', 'avo', 'grav']]:  # Only well data
-            if hasattr(self, 'multilevel'):  # calc for each level
-                plt.figure()
-                cover_low = [True for _ in self.en_obs[typ]]
-                cover_high = [True for _ in self.en_obs[typ]]
-                for l in range(self.tot_level):
-                    # Check coverage
-                    level_cover_low = [(el < self.en_ml_fcst[typ][l][ind]).all() for ind, el in
-                                       enumerate(self.en_obs[typ])]
-                    level_cover_high = [(el > self.en_ml_fcst[typ][l][ind]).all() for ind, el in
-                                        enumerate(self.en_obs[typ])]
-                    for ind, el in enumerate(level_cover_low):
-                        if not el:
-                            cover_low[ind] = False
-                        if not level_cover_high[ind]:
-                            cover_high[ind] = False
-                    plt.plot(self.en_time[typ], self.en_ml_fcst[typ][l], c=f'{l / self.tot_level}', label=f'Level {l}')
-                plt.plot(self.en_time[typ], self.en_obs[typ], 'g*')
-                plt.plot([self.en_time[typ][ind] for ind, el in enumerate(cover_high) if el],
-                         self.en_obs[typ][cover_high], 'r*')
-                plt.plot([self.en_time[typ][ind] for ind, el in enumerate(cover_low) if el],
-                         self.en_obs[typ][cover_low], 'r*')
-                # remove duplicate labels
-                handles, labels = plt.gca().get_legend_handles_labels()
-                labels, ids = np.unique(labels, return_index=True)
-                handles = [handles[i] for i in ids]
-                plt.legend(handles, labels, loc='best')
-                ######
-                plt.savefig(self.folder + typ.replace(' ', '_'))
-                plt.close()
-            else:
-                # Check coverage
-                cover_low = [(el < self.en_fcst[typ][ind]).all() for ind, el in enumerate(self.en_obs[typ])]
-                cover_high = [(el > self.en_fcst[typ][ind]).all() for ind, el in enumerate(self.en_obs[typ])]
-                # if sum(cover_low) > 1 or sum(cover_high) > 1:  # not covered
-                # TODO: log this with some text
-                # plot the missing coverage
-                plt.figure()
-                plt.plot(self.en_time[typ], self.en_fcst[typ], c='0.35')
-                plt.plot(self.en_time[typ], self.en_obs[typ], 'g*')
-                plt.plot([self.en_time[typ][ind] for ind, el in enumerate(cover_high) if el],
-                         self.en_obs[typ][cover_high], 'r*')
-                plt.plot([self.en_time[typ][ind] for ind, el in enumerate(cover_low) if el],
-                         self.en_obs[typ][cover_low], 'r*')
-                plt.savefig(self.folder + typ.replace(' ', '_'))
-                plt.close()
-
-        #  Plot the seismic data
-        data_sim = []
-        data = []
-        supported_data = ['sim2seis', 'bulkimp', 'avo', 'grav']
-        my_data = [dat for dat in supported_data if dat in self.data_types]
-        if len(my_data) == 0:
+    def _seismic_coverage(self, typ, line, field_dim, uxl, uil, contours, uxl_c, uil_c):
+        scaling = self._seismic_scaling()
+        observed = [obs / scaling for _, obs, _ in self._obs_vector_cells[typ]]
+        predicted = [cell / scaling for cell in self._fcst_vector_cells.get(typ, [])]
+        if len(predicted) != len(observed):
+            self.logger.info(f"QAQC coverage {typ}: predictions missing, skipping the seismic maps")
             return
-        else:
-            my_data = my_data[0]
-	    #my_data = my_data[1]
 
-        # get the data
-        seis_scaling = 1.0
-        if 'scale' in self.keys:
-            seis_scaling = self.keys['scale'][1]
-        for ind, t in enumerate(self.l_prim):
-            if self.obs_data[t][my_data] is not None and sum(np.isnan(self.obs_data[t][my_data])) == 0:
-                data_sim.append(self.obs_data[t][my_data] / seis_scaling)
-                data.append(self.pred_data[t][my_data] / seis_scaling)
-
-        # loop through all vintages
-        for vint in range(len(data_sim)):
-
-            # map to 2D
-            if not len(data_sim):
-                return
+        if uxl is None and uil is None:
             try:
-                mask = loadmat('mask_20.mat')[f'mask_{vint + 1}']
-                mask = mask.astype(bool).transpose()
-                data_real_reg = np.zeros(mask.shape)
-            except:
+                seglines = loadmat("seglines.mat")
+                uxl, uil = seglines["uxl"].flatten(), seglines["uil"].flatten()
+            except Exception:
+                uxl = uil = None
+
+        nl = 0.25
+        knots = np.array([-1, -np.finfo(float).eps, 0, .5, 1, 1 + np.finfo(float).eps, 2])
+        channels = [interp1d(knots, np.array(c)) for c in (
+            [0.1, 0.3, 0.8, 1.0, 0.8, 0.7, 0.5],
+            [0.1, 0.3, 0.9, 1.0, 0.9, 0.4, 0.2],
+            [0.4, 0.6, 0.8, 1.0, 0.8, 0.4, 0.2],
+        )]
+
+        for vint, (d_obs, d_pred) in enumerate(zip(observed, predicted)):
+            try:
+                mask = loadmat("mask_20.mat")[f"mask_{vint + 1}"].astype(bool).transpose()
+            except Exception:
+                if field_dim is None:
+                    self.logger.info("QAQC coverage: no mask_20.mat and no field_dim given; skipping the seismic maps")
+                    return
                 mask = np.ones(field_dim, dtype=bool)
-                data_real_reg = np.zeros(mask.shape)
-            data_real_reg[mask] = data_sim[vint]
-            ne = data[vint].shape[1]
-            data_reg = np.zeros(mask.shape + (ne,))
-            for member in range(ne):
-                data_reg[mask, member] = data[vint][:, member]
+            data_real_reg = np.zeros(mask.shape)
+            data_real_reg[mask] = d_obs
+            data_reg = np.zeros(mask.shape + (d_pred.shape[1],))
+            data_reg[mask] = d_pred
 
-            # generate coverage and plot
-            nl = 0.25
-            x = np.array([-1, -np.finfo(float).eps, 0, .5, 1, 1 + np.finfo(float).eps, 2])
+            d_min = data_reg.min(axis=2)
+            d_max = data_reg.max(axis=2) + nl
+            sat = 2 * np.minimum((d_max + data_real_reg) / np.max(d_max + data_real_reg), 0.5)
+            attr = np.clip((data_real_reg - d_min) / (d_max - d_min), -1, 2)
+            rgb = np.dstack([f(attr) for f in channels])
 
-            r = np.array([0.1, 0.3, 0.8, 1.0, 0.8, 0.7, 0.5])
-            g = np.array([0.1, 0.3, 0.9, 1.0, 0.9, 0.4, 0.2])
-            b = np.array([0.4, 0.6, 0.8, 1.0, 0.8, 0.4, 0.2])
+            x_edges = uxl if uxl is not None else [0, mask.shape[0]]
+            y_edges = uil if uil is not None else [0, mask.shape[1]]
+            extent = (x_edges[0], x_edges[-1], y_edges[-1], y_edges[0])
 
-            d_min = np.min(data_reg, axis=2)
-            d_max = np.max(data_reg, axis=2) + nl
-            sat = 2 * np.minimum((d_max + data_real_reg) / np.max(d_max.flatten() + data_real_reg.flatten()),
-                                 0.5)
-            sc = d_max - d_min
-
-            attr = (data_real_reg - d_min) / sc
-            attr = np.minimum(np.maximum(attr, -1), 2)
-
-            rgb = []
-            f = interp1d(x, r)
-            rgb.append(f(attr))
-            f = interp1d(x, g)
-            rgb.append(f(attr))
-            f = interp1d(x, b)
-            rgb.append(f(attr))
-            rgb = np.dstack(rgb)
-
-            if uxl is None and uil is None:
-                try:
-                    uxl = loadmat('seglines.mat')['uxl'].flatten()
-                    uil = loadmat('seglines.mat')['uil'].flatten()
-                except:
-                    uxl = [0, field_dim[0]]
-                    uil = [0, field_dim[1]]
-
-            extent = (uxl[0], uxl[-1], uil[-1], uil[0])
-            plt.figure()
-            plt.imshow(rgb, extent=extent)
-            if contours is not None and uil_c is not None and uxl_c is not None:
-                plt.contour(uxl_c, uil_c, contours[::-1, :], levels=1, colors='black')
-                plt.xlim(uxl[0], uxl[-1])
-                plt.ylim(uil[-1], uil[0])
-                plt.xlabel('Easting (km)')
-                plt.ylabel('Northing (km)')
-            plt.title('Coverage - not scaled by Importance - epsilon=' + str(nl))
-            filename = self.folder + 'coverage_vint_' + str(vint)
-            plt.savefig(filename)
-            os.system('convert ' + filename + '.png' + ' -trim ' + filename + '.png')
-
-            plt.figure()
-            rgb_scaled = np.uint8(rgb * 255)
-            hls = cv2.cvtColor(rgb_scaled, cv2.COLOR_RGB2HLS)
-            hls = hls / np.array([180, 255, 255])
-            hls[:, :, 1] = hls[:, :, 1] / (np.abs(sat - nl) / (1 - nl) * 1.5)
-            hls[:, :, 1] = np.minimum(hls[:, :, 1], 1.0)
-            hls = np.uint8(hls * np.array([180, 255, 255]))
-            rgb_scaled = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
-            rgb = rgb_scaled / 255
-            plt.imshow(rgb, extent=extent)
-            if contours is not None and uil_c is not None and uxl_c is not None:
-                plt.contour(uxl_c, uil_c, contours[::-1, :], levels=1, colors='black',  extent=extent)
-                plt.xlim(uxl[0], uxl[-1])
-                plt.ylim(uil[-1], uil[0])
-                plt.xlabel('Easting (km)')
-                plt.ylabel('Northing (km)')
-            plt.title('Coverage - scaled by Importance - epsilon=' + str(nl))
-            filename = self.folder + 'coverage_importance_vint_' + str(vint)
-            plt.savefig(filename)
-            os.system('convert ' + filename + '.png' + ' -trim ' + filename + '.png')
-            plt.close()
-
-            plt.figure()
-            plt.imshow(sat[::-1,:], extent=extent)
-            if contours is not None and uil_c is not None and uxl_c is not None:
-                plt.contour(uxl_c, uil_c, contours[::-1, :], levels=1, colors='black', extent=extent)
-                plt.xlim(uxl[0], uxl[-1])
-                plt.ylim(uil[-1], uil[0])
-                plt.xlabel('Easting (km)')
-                plt.ylabel('Northing (km)')
-            plt.title('Importance - epsilon=' + str(nl))
-            filename = self.folder + 'importance_vint_' + str(vint)
-            plt.savefig(filename)
-            os.system('convert ' + filename + '.png' + ' -trim ' + filename + '.png')
-
-            if line:
-                _plot_coverage_1D(line, field_dim)
-
-    def calc_kg(self, options=None):
-        """
-        Check/write individual gain for parameters.
-        Note form ES gain with an identity Cd... This can be improved
-
-        Visualization of the many of these parameters is problem-specific. In reservoir simulation cases, it is necessary
-        to write this to the simulation grid. While for other applications, one might want other visualization. Hence,
-        the method also depends on a simulator specific writer.
-
-        Input:
-        options: Settings for the kalman gain computations
-            - num_store: number of elements to store (default 10)
-            - unique_time: calculate for each time instance (default False)
-            - plot_all_kg: plot all the kalman gains for the field parameters, if not plot the num_store (default False)
-            - only_log: only write to logger; no plotting (default True)
-            - auto_ada_loc: use localization in computations (default True)
-            - write_to_resinsight: pipe results to ResInsight (default False)
-              (Note: this requires that ResInsight is open on the computer)
-
-        Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        """
-
-        # Stuff which needs to be defined in the initialization
-        # number of elements to store
-        if options is not None and 'num_store' in options:
-            num_store = options['num_store']
-        else:
-            num_store = 10
-        # calculate for each time instance
-        if options is not None and 'unique_time' in options:
-            unique_time = options['unique_time']
-        else:
-            unique_time = False
-        # plot all the kalman gains for the field parameters, if not plot the num_store
-        if options is not None and 'plot_all_kg' in options:
-            plot_all_kg = options['plot_all_kg']
-        else:
-            plot_all_kg = False
-        # only write to logger; no plotting
-        if options is not None and 'only_log' in options:
-            only_log = options['only_log']
-        else:
-            only_log = True
-        # use localization in computations
-        if 'localization' not in self.keys:
-            auto_ada_loc = False
-        elif options is not None and 'auto_ada_loc' in options:
-            auto_ada_loc = options['auto_ada_loc']
-        else:
-            auto_ada_loc = True
-        # write to resinsight
-        if options is not None and 'write_to_resinsight' in options:
-            write_to_resinsight = options['write_to_resinsight']
-        else:
-            write_to_resinsight = False
-
-        # check that we have prior info and sim class
-        if self.prior_info is None:
-            raise NameError('prior_info must be defined')
-        if self.lam is None:
-            raise NameError('lam must be defined')
-        if self.state is None:
-            raise NameError('state must be defined')
-
-        # initialize
-        max_kg_update = [0 for _ in range(num_store)]
-        max_mean_kg_update = [0 for _ in range(num_store)]
-        kg_max_max = [tuple() for _ in range(num_store)]
-        kg_max_mean = [tuple() for _ in range(num_store)]
-
-        # function to compute projection
-        def _calc_proj():
-            # do subspace inversion
-            u, s, v = np.linalg.svd(pert_pred, full_matrices=False)
-            # store 99 % of energy
-            ti = (np.cumsum(s) / sum(s)) <= 0.99
-            if sum(ti) == 0:
-                ti[0] = True
-            u, s, v = u[:, ti].copy(), s[ti].copy(), v[ti, :].copy()
-            _X2 = None
-            if sum(s):
-                ps_inv = np.diag([el_s ** (-1) for el_s in s])
-                X0 = (self.ne - 1) * np.dot(ps_inv, np.dot(u.T, (np.concatenate(t_var) *
-                                                                 np.dot(u, ps_inv).T).T))
-                Lamb, Z = np.linalg.eig(X0)
-                _X1 = np.dot(u, np.dot(ps_inv, Z))
-                _X2 = np.dot(np.dot(pert_pred.T, _X1), np.dot(np.linalg.inv((self.lam + 1) *
-                                                                            np.eye(Lamb.shape[0]) + Lamb), _X1.T))
-            return _X2
-
-        # function to compute kalman gain
-        def _calc_kalman_gain():
-            if num_cell > 1:
-                if actnum is None:
-                    idx = np.ones(self.state[param].shape[0], dtype=bool)
-                else:
-                    if num_cell == np.sum(actnum):
-                        idx = actnum  # 3d-parameter fields
-                    else:
-                        if self.prior_info:
-                            num_act_layer = int(self.prior_info[param]['nx'] * self.prior_info[param]['ny'])
-                            idx = actnum[:num_act_layer]  # this occurs for 2d-parameter fields
-                        else:
-                            raise NameError('prior_info must be defined')
-                _kg = np.zeros(idx.shape)
-                if auto_ada_loc and num_cell == np.sum(idx):
-                    proj_pred_data = np.dot(X2, delta_d)
-                    step = self.localization.auto_ada_loc(self.state[param], proj_pred_data,
-                                                          [param], **{'prior_info': self.prior_info})
-                    _kg[idx] = np.mean(step, axis=1)
-                else:
-                    _kg[idx] = np.dot(self.state[param], np.dot(X2, mean_residual)).flatten()
-            else:  # scalar
-                _kg = np.dot(np.dot(self.state[param], X2), mean_residual).flatten()
-
-            return _kg
-
-        # function to compute max values
-        def _populate_kg():
-            if actnum is None:
-                idx = np.ones(self.state[param].shape[0], dtype=bool)
-            else:
-                if num_cell == np.sum(actnum):
-                    idx = actnum  # 3d-parameter fields
-                else:
-                    if self.prior_info:
-                        num_act_layer = int(self.prior_info[param]['nx'] * self.prior_info[param]['ny'])
-                        idx = actnum[:num_act_layer]  # this occurs for 2d-parameter fields
-                    else:
-                        raise NameError('prior_info must be defined')
-            if len(np.where(abs(tmp[idx]).max() > np.array(max_kg_update))[0]):
-                indx = np.where(abs(tmp[idx]).max() > np.array(max_kg_update))[0][0]
-                max_kg_update.insert(indx, abs(tmp[idx]).max())
-                max_kg_update.pop()
-                kg_max_max.insert(indx, (typ, param, time))
-                kg_max_max.pop()
-            if len(np.where(abs(tmp[idx].mean()) > np.array(max_mean_kg_update))[0]):
-                indx = np.where(abs(tmp[idx].mean()) > np.array(max_mean_kg_update))[0][0]
-                max_mean_kg_update.insert(indx, abs(tmp[idx].mean()))
-                max_mean_kg_update.pop()
-                kg_max_mean.insert(indx, (typ, param, time))
-                kg_max_mean.pop()
-
-        # function to write to grid
-        def _plot_kg(_field=None):
-            if _field is None:  # assume scalar plot
+            def draw(image, title, name):
                 plt.figure()
-                plt.plot(self.en_time[typ], kg_single)
-                plt.savefig(self.folder + f'Kg_{param}_{typ}')
-                plt.close()
-            else:
-                if self.sim is None:
-                    raise NameError('sim must be defined')
-                if actnum is None:
-                    idx = np.ones(self.state[param].shape[0], dtype=bool)
-                else:
-                    if num_cell != np.sum(actnum):
-                        return  # TODO: implement plotting of surfaces
-                    if os.path.exists('actnum_ref.npz'):
-                        idx = np.load('actnum_ref.npz')['actnum']
-                    else:
-                        idx = actnum
-                kg = np.ma.array(data=tmp, mask=~idx)
-                #dim = (self.prior_info[param]['nx'], self.prior_info[param]['ny'], self.prior_info[param]['nz'])
-                dim = next((item[1] for item in self.prior_info[param] if item[0] == 'grid'), None)
-                input_time = None
-                if write_to_resinsight:
-                    if time is None:
-                        input_time = len(self.l_prim)
-                    else:
-                        input_time = time
-                deblank_typ = typ.replace(' ', '_')
-                if hasattr(self.sim, 'write_to_grid'):
-                    self.sim.write_to_grid(kg, f'{_field}_{param}_{deblank_typ}_{time}', self.folder, dim, input_time)
-                elif hasattr(self.sim.flow, 'write_to_grid'):
-                    self.sim.flow.write_to_grid(kg, f'{_field}_{param}_{deblank_typ}_{time}', self.folder, dim,
-                                                input_time)
-                else:
-                    print('You need to implement a writer in you simulator class!! \n')
+                plt.imshow(image, extent=extent)
+                if contours is not None and uil_c is not None and uxl_c is not None:
+                    plt.contour(uxl_c, uil_c, contours[::-1, :], levels=1, colors="black")
+                    plt.xlim(extent[0], extent[1])
+                    plt.ylim(extent[2], extent[3])
+                    plt.xlabel("Easting (km)")
+                    plt.ylabel("Northing (km)")
+                plt.title(f"{title} - epsilon={nl}")
+                self._save_figure(f"{name}_vint_{vint}")
 
-        # -- Main function --
-        # need actnum
-        actnum = None
-        if os.path.exists('actnum.npz'):
-            actnum = np.load('actnum.npz')['actnum']
-        if unique_time:
-            en_fcst = self.en_fcst
-            en_ml_fcst = self.en_ml_fcst
-            en_obs = self.en_obs
-            en_time = self.en_time
-        else:  # second dict overwrites the first if the same key is present
-            en_fcst = {**self.en_fcst, **self.en_fcst_vec}
-            en_ml_fcst = {**self.en_ml_fcst, **self.en_ml_fcst_vec}
-            en_obs = {**self.en_obs, **self.en_obs_vec}
-            en_time = {**self.en_time, **self.en_time_vec}
-        for typ in self.data_types:  # ['sim2seis', 'WOPR A-11']:
-            if unique_time:
+            draw(rgb, "Coverage - not scaled by Importance", "coverage")
+            # Importance scaling: darken the lightness channel where the
+            # ensemble spread is small relative to the signal.
+            hls = _rgb_to_hls(np.clip(rgb, 0, 1))
+            hls[..., 1] = np.minimum(hls[..., 1] / (np.abs(sat - nl) / (1 - nl) * 1.5), 1.0)
+            draw(np.clip(_hls_to_rgb(hls), 0, 1), "Coverage - scaled by Importance", "coverage_importance")
+            draw(sat[::-1, :], "Importance", "importance")
+
+            if line is not None:
+                self._coverage_line(int(line), vint, data_reg, data_real_reg, nl, channels, x_edges)
+
+    def _coverage_line(self, line, vint, data_reg, data_real_reg, nl, channels, x_edges):
+        d_ens = np.squeeze(data_reg[:, line, :])
+        d_real = np.squeeze(data_real_reg[:, line])
+        scale = max(d_real)
+        d_min = d_ens.min(axis=1)
+        d_max = d_ens.max(axis=1) + nl
+        sat = (2 * np.minimum((d_max + d_real) / scale, 0.5) - nl) / (1 - nl)
+        attr = np.clip((d_real - d_min) / (d_max - d_min), -1, 2)
+        colours = ListedColormap(np.column_stack([f(3 * np.arange(256) / 255 - 1) for f in channels]))
+        x = np.arange(x_edges[0], x_edges[-1], (x_edges[-1] - x_edges[0]) / data_real_reg.shape[0])
+        outline = np.column_stack((np.concatenate((x, x[::-1])), np.concatenate((d_min, d_max[::-1]))))
+
+        for scaled, name in ((False, "coverage_1d"), (True, "coverage_1d_importance")):
+            fig = plt.figure()
+            ax = fig.add_subplot()
+            ax.spines["right"].set_visible(False)
+            ax.spines["top"].set_visible(False)
+            ax.add_patch(pat.Polygon(outline, closed=False, edgecolor="k", facecolor=np.array([.7, .7, .7])))
+            segments = np.concatenate([np.array([x, d_real]).T.reshape(-1, 1, 2)[:-1],
+                                       np.array([x, d_real]).T.reshape(-1, 1, 2)[1:]], axis=1)
+            coloured = mcoll.LineCollection(segments, array=attr, cmap=colours, norm=plt.Normalize(-1, 2), linewidth=3)
+            ax.add_collection(coloured)
+            if scaled:
+                alpha = np.clip(1 - sat, 0.0, 1.0)
+                for i in range(len(x)):
+                    seg = mcoll.LineCollection([[(x[i], d_min[i]), (x[i], d_max[i])]], colors="white",
+                                               alpha=float(alpha[i]), linewidth=3)
+                    ax.add_collection(seg)
+            plt.colorbar(coloured)
+            plt.xlim(x[0], x[-1])
+            plt.ylim(0, scale)
+            plt.title(f"1D coverage plot {'' if scaled else 'not '}scaled by Importance")
+            self._save_figure(f"{name}_vint_{vint}")
+
+    # ------------------------------------------------------------------
+    # Kalman gain
+    # ------------------------------------------------------------------
+    def calc_kg(self, options=None):
+        """Rank the ES-style Kalman gain each data type would apply to each parameter.
+
+        For every data type, the gain of the ensemble mean is computed in the
+        subspace of the forecast anomalies with the scheme's damping
+        parameter (the ES/LM-EnRML form), per parameter. The largest gains by
+        maximum and by mean are logged, and optionally plotted or written to
+        the grid through the simulator.
+
+        Parameters
+        ----------
+        options : dict, optional
+            ``num_store`` (10): how many gains to keep in the ranked lists.
+            ``unique_time`` (False): one gain per report point instead of one
+            per data type over all its report points.
+            ``plot_all_kg`` (False): plot or write every field gain, not just
+            the ranked ones.
+            ``only_log`` (True): log only; no plots or grid files.
+            ``auto_ada_loc`` (True): apply the scheme's auto-adaptive
+            localization, when it has one, to field parameters.
+            ``write_to_resinsight`` (False): pass a time index to the grid writer.
+        """
+        opts = {"num_store": 10, "unique_time": False, "plot_all_kg": False, "only_log": True,
+                "auto_ada_loc": True, "write_to_resinsight": False, **(options or {})}
+        self._require("prior_info", "lam", "state")
+        localize = opts["auto_ada_loc"] and self.localization is not None
+        ranked = {"mean": [], "max": []}
+
+        for typ in self.data_types:
+            if opts["unique_time"]:
                 for param in self.list_state:
-                    kg_single = []
-                    for ind, time in enumerate(en_time[typ]):
-                        t_var = np.array(max([el[typ] for el in self.datavar if el[typ] is not None]))[
-                            np.newaxis]  # to be able to concantenate
-                        if not len(t_var):  # [self.datavar[ind][typ]]
-                            t_var = [1]
-                        if hasattr(self, 'multilevel'):
-                            self.ML_state = copy.deepcopy(self.state)
-                            delattr(self, 'state')
-                            tmp_kg = []
-                            for l in range(self.tot_level):
-                                pert_pred = (en_ml_fcst[typ][l][ind, :] - en_ml_fcst[typ][l][ind, :].mean())[np.newaxis,
-                                            :]
-                                mean_residual = (en_obs[typ][ind] - en_ml_fcst[typ][l][ind, :]).mean()
-                                mean_residual = mean_residual[np.newaxis, np.newaxis].flatten()
-                                delta_d = (en_obs[typ][ind] - en_ml_fcst[typ][l][ind, :self.ne])[np.newaxis, :]
-                                X2 = _calc_proj()
-                                self.state = self.ML_state[l]
-                                num_cell = self.state[param].shape[0]
-                                if X2 is None:  # cases with full collapse in one level
-                                    tmp_kg.append(np.zeros(num_cell))
-                                else:
-                                    tmp_kg.append(_calc_kalman_gain())
-                            tmp = sum([self.cov_wgt[i] * el for i, el in enumerate(tmp_kg)]) / sum(self.cov_wgt)
-                            num_cell = self.state[param].shape[0]
-                            self.state = copy.deepcopy(self.ML_state)
-                            delattr(self, 'ML_state')
+                    scalar_gains = []
+                    for ind, time in enumerate(self.en_time[typ]):
+                        fcst = self.en_fcst[typ][ind][None, :]
+                        obs, var = self.en_obs[typ][ind], self.en_var[typ][ind]
+                        gain = self._gain(param, fcst, obs[:, None], var, localize)
+                        if gain is None:
+                            continue
+                        if gain.size == 1:
+                            scalar_gains.append(gain.item())
                         else:
-                            pert_pred = (en_fcst[typ][ind, :self.ne] - en_fcst[typ][ind, :self.ne].mean())[np.newaxis, :]
-                            mean_residual = (en_obs[typ][ind] - en_fcst[typ][ind, :self.ne]).mean()
-                            mean_residual = mean_residual[np.newaxis, np.newaxis].flatten()
-                            delta_d = (en_obs[typ][ind] - en_fcst[typ][ind, :self.ne])[np.newaxis, :]
-                            X2 = _calc_proj()
-                            num_cell = self.state[param].shape[0]
-                            tmp = _calc_kalman_gain()
-                            num_cell = self.state[param].shape[0]
-
-                        if num_cell == 1:
-                            kg_single.append(tmp)
-                        else:
-                            _populate_kg()
-                            if not only_log and plot_all_kg:
-                                _plot_kg('Kg')
-
-                    if len(kg_single):
-                        _plot_kg()
-
+                            self._rank(ranked, gain, (typ, param, time), opts["num_store"])
+                            if not opts["only_log"] and opts["plot_all_kg"]:
+                                self._write_field(gain, param, f"Kg_{param}_{typ}_{time}", time, opts)
+                    if scalar_gains:
+                        plt.figure()
+                        plt.plot(self.en_time[typ], scalar_gains)
+                        plt.title(f"Kalman gain of {param} from {typ}")
+                        self._save_figure(f"Kg_{param}_{typ.replace(' ', '_')}")
             else:
-                t_var = [self.datavar[ind][typ] for ind in en_time[typ] if self.datavar[ind][typ] is not None]
-                if len(t_var) == 0:
+                fcst, obs, var = self._lumped(typ)
+                if fcst is None:
                     continue
-                if hasattr(self, 'multilevel'):
-                    self.ML_state = copy.deepcopy(self.state)
-                    delattr(self, 'state')
-                    for param in self.list_state:
-                        tmp_kg = []
-                        for l in range(self.tot_level):
-                            if len(en_ml_fcst[typ][l].shape) == 2:
-                                pert_pred = en_ml_fcst[typ][l] - np.dot(en_ml_fcst[typ][l].mean(axis=1)[:, np.newaxis],
-                                                                        np.ones((1, self.ml_ne[l])))
-                            delta_d = en_obs[typ] - en_ml_fcst[typ][l][:,:self.ne]
-                            mean_residual = (en_obs[typ] - en_ml_fcst[typ][l]).mean(axis=1)
-                            X2 = _calc_proj()
-                            self.state = self.ML_state[l]
-                            num_cell = self.state[param].shape[0]
-                            if num_cell > 1:
-                                time = None
-                                if X2 is None:  # cases with full collapse in one level
-                                    tmp_kg.append(np.zeros(num_cell))
-                                else:
-                                    tmp_kg.append(_calc_kalman_gain())
+                for param in self.list_state:
+                    if self.state[param].shape[0] == 1:
+                        continue
+                    gain = self._gain(param, fcst, obs, var, localize)
+                    if gain is None:
+                        continue
+                    self._rank(ranked, gain, (typ, param, None), opts["num_store"])
+                    if not opts["only_log"] and opts["plot_all_kg"]:
+                        self._write_field(gain, param, f"Kg-lump_{param}_{typ}", None, opts)
 
-                        tmp = sum([self.cov_wgt[i] * el for i, el in enumerate(tmp_kg)]) / sum(self.cov_wgt)
-                        _populate_kg()
-                        if not only_log and plot_all_kg:
-                            _plot_kg('Kg-lump_vector')
-                    self.state = copy.deepcopy(self.ML_state)
-                    delattr(self, 'ML_state')
-                else:
-                    # combine time instances
-                    if len(en_fcst[typ].shape) == 2:
-                        pert_pred = en_fcst[typ][:, :self.ne] - np.dot(en_fcst[typ][:, :self.ne].mean(axis=1)[:, np.newaxis],
-                                                          np.ones((1, self.ne)))
-                    delta_d = en_obs[typ] - en_fcst[typ][:, :self.ne]
-                    mean_residual = (en_obs[typ] - en_fcst[typ][:, :self.ne]).mean(axis=1)
-                    X2 = _calc_proj()
-                    for param in self.list_state:
-                        num_cell = self.state[param].shape[0]
-                        if num_cell > 1:
-                            time = None
-                            tmp = _calc_kalman_gain()
-                            _populate_kg()
-                            if not only_log and plot_all_kg:
-                                _plot_kg('Kg-lump_vector')
-
-        # write top 10 values to the log
         newline = "\n"
-        self.logger.info('Calculations complete. 10 largest Kg mean values are:' + newline
-                         + f'{newline.join(f"{el}" for el in kg_max_mean if el)}')
-        self.logger.info('Calculations complete. 10 largest Kg max values are:' + newline
-                         + f'{newline.join(f"{el}" for el in kg_max_max if el)}')
-        if not only_log and not plot_all_kg:
-            # need to form and plot/write the gains from kg_max_mean and kg_max_max
-            # start with kg_max_mean
-            for el_ind, el in enumerate(itertools.chain(kg_max_mean, kg_max_max)):
-                # add filter if there are not 10 values
-                if len(el):
-                    # test if we have some time-dependece
-                    if el[2] is not None:
-                        typ = el[0]
-                        param = el[1]
-                        time = el[2]
-                        time_str = '-' + str(time)
-                        ind = en_time[typ].index(time)
-                        pert_pred = (en_fcst[typ][ind, :] - en_fcst[typ][ind, :].mean())[np.newaxis, :]
-                        mean_residual = (en_obs[typ][ind] - en_fcst[typ][ind, :]).mean()[np.newaxis, np.newaxis]
-                        t_var = [self.datavar[ind][typ]]
-                    else:
-                        typ = el[0]
-                        param = el[1]
-                        time = len(self.l_prim)
-                        time_str = '-'
-                        pert_pred = en_fcst[typ][:, :self.ne] - np.dot(en_fcst[typ][:, :self.ne].mean(axis=1)[:, np.newaxis],
-                                                          np.ones((1, self.ne)))
-                        mean_residual = (en_obs[typ] - en_fcst[typ]).mean(axis=1)
-                        t_var = [self.datavar[ind][typ] for ind in en_time[typ] if self.datavar[ind][typ] is not None]
-                    X2 = _calc_proj()
-                    delta_d = en_obs[typ] - en_fcst[typ][:, :self.ne]
-                    num_cell = self.state[param].shape[0]
-                    tmp = _calc_kalman_gain()
-                    if el_ind < len(kg_max_mean):
-                        _plot_kg('Kg-mean' + time_str)
-                    else:
-                        _plot_kg('Kg-max' + time_str)
+        for kind in ("mean", "max"):
+            entries = newline.join(f"{key}: {value:.4g}" for value, key in ranked[kind])
+            self.logger.info(f"Calculations complete. {len(ranked[kind])} largest Kg {kind} values are:{newline}{entries}")
 
+        if not opts["only_log"] and not opts["plot_all_kg"]:
+            for kind in ("mean", "max"):
+                for _, (typ, param, time) in ranked[kind]:
+                    if time is None:
+                        fcst, obs, var = self._lumped(typ)
+                    else:
+                        ind = self.en_time[typ].index(time)
+                        fcst = self.en_fcst[typ][ind][None, :]
+                        obs, var = self.en_obs[typ][ind][:, None], self.en_var[typ][ind]
+                    gain = self._gain(param, fcst, obs, var, localize)
+                    if gain is not None:
+                        suffix = "" if time is None else f"-{time}"
+                        self._write_field(gain, param, f"Kg-{kind}{suffix}_{param}_{typ}", time, opts)
+
+    def _projection(self, pert, var):
+        """The (ne, nd) operator taking a data residual to ensemble weights.
+
+        Subspace form of ``C_md (C_dd + (1 + lam) C_d)^-1``: a truncated SVD
+        of the forecast anomalies, then an eigendecomposition of the data
+        covariance projected onto it. ``None`` if the ensemble has collapsed.
+        """
+        U, S, _ = at.truncSVD(pert, energy=0.99)
+        if S.size == 0 or not np.any(S):
+            return None
+        Sinv = 1.0 / S
+        X0 = (self.ne - 1) * ((Sinv[:, None] * U.T) @ (var[:, None] * U)) * Sinv[None, :]
+        Lamb, Z = np.linalg.eigh(X0)
+        X1 = (U * Sinv[None, :]) @ Z                                   # (nd, nr)
+        return (pert.T @ X1) / ((self.lam + 1) + Lamb)[None, :] @ X1.T  # (ne, nd)
+
+    def _gain(self, param, fcst, obs, var, localize):
+        """Gain of the ensemble mean of ``param`` from data with forecast ``fcst`` (nd, ne)."""
+        ne = min(self.ne, fcst.shape[1])
+        fcst = fcst[:, :ne]
+        pert = fcst - fcst.mean(axis=1, keepdims=True)
+        X2 = self._projection(pert, np.asarray(var, dtype=float).ravel())
+        if X2 is None:
+            return None
+        residual = obs - fcst                                          # (nd, ne)
+        state = self.state[param][:, :ne]
+        if localize and state.shape[0] > 1:
+            anomalies = state - state.mean(axis=1, keepdims=True)
+            projected = X2 @ residual                                  # (ne, ne)
+            taper = self.localization(X=anomalies, Y=projected, parameters=[param],
+                                      prior_info=self.prior_info)
+            return ((taper * anomalies) @ projected).mean(axis=1)
+        return state @ (X2 @ residual.mean(axis=1))
+
+    @staticmethod
+    def _rank(ranked, gain, key, keep):
+        for kind, value in (("max", float(np.abs(gain).max())), ("mean", float(abs(gain.mean())))):
+            ranked[kind].append((value, key))
+            ranked[kind].sort(key=lambda item: item[0], reverse=True)
+            del ranked[kind][keep:]
+
+    def _write_field(self, values, param, name, time, opts):
+        """Write a per-cell field to the grid through the simulator, if it can."""
+        writer = getattr(self.sim, "write_to_grid", None) or getattr(getattr(self.sim, "flow", None), "write_to_grid", None)
+        if writer is None:
+            self.logger.info(f"QAQC: no grid writer on the simulator; {name} not written")
+            return
+        info = self.prior_info[param]
+        dim = (info["nx"], info["ny"], info["nz"])
+        if self.actnum is not None and self.actnum.sum() == values.size:
+            data = np.zeros(self.actnum.shape)
+            data[self.actnum] = values
+            field = np.ma.array(data=data, mask=~self.actnum)
+        elif self.actnum is None:
+            field = np.ma.array(data=values, mask=np.zeros(values.shape, dtype=bool))
+        else:
+            return  # a surface parameter on a 3-D grid; no writer for that yet
+        input_time = (len(self.l_prim) if time is None else time) if opts.get("write_to_resinsight") else None
+        writer(field, name.replace(" ", "_"), str(self.folder), dim, input_time)
+
+    # ------------------------------------------------------------------
+    # Mahalanobis distance
+    # ------------------------------------------------------------------
     def calc_mahalanobis(self, combi_list=(1, None)):
+        """Rank the Mahalanobis distance between observations and the perturbed forecast.
+
+        After Oliver (2020). The forecast is perturbed with the observation
+        error (a fixed seed, so repeated calls agree), then each observation
+        is scored against it alone (level 1), in pairs (2) or triples (3).
+        The largest scores are logged; level 1 also draws cross-plots of the
+        worst pairs.
+
+        Parameters
+        ----------
+        combi_list : tuple
+            Pairs ``(level, combine)``. ``combine`` is ``None`` to score each
+            observation, or a string containing ``'time'`` or ``'vector'`` to
+            first project each data type's series onto its leading principal
+            component and score the data types.
         """
-        Calculate the mahalanobis distance as described in "Oliver, D. S. (2020). Diagnosing reservoir model deficiency
-        for model improvement. Journal of Petroleum Science and Engineering, 193(February).
-        https://doi.org/10.1016/j.petrol.2020.107367"
-
-        Input:
-        combi_list: list of levels and possible combination of datatypes. The list must be given as a tuple with pairs:
-            level int: defines which level. default = 1
-            combi_typ: defines how data are combined: Default is no combine.
-
-        Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        """
-
+        self._require("pred_data")
+        rng = np.random.default_rng(50)
         for combo in range(0, len(combi_list), 2):
             level = combi_list[combo]
-            if len(combi_list) > combo:
-                combi_type = combi_list[combo + 1]
+            combine = combi_list[combo + 1] if combo + 1 < len(combi_list) else None
+            self.logger.info(f"Starting level {level} calculations of Mahalanobis distance")
+
+            if combine is None:
+                types = [typ for typ in self.data_types if self.en_fcst.get(typ) is not None and self.en_fcst[typ].size]
+                if not types:
+                    return
+                fcst = np.concatenate([self.en_fcst[typ] for typ in types], axis=0)
+                obs = np.concatenate([self.en_obs[typ] for typ in types], axis=0)
+                var = np.concatenate([self.en_var[typ] for typ in types], axis=0)
+                labels = [(typ, pos) for typ in types for pos in self.en_time[typ]]
+                fcst_pert = fcst + np.sqrt(var) * rng.standard_normal(fcst.shape)
+            elif "time" in combine or "vector" in combine:
+                labels, rows, obs_rows = [], [], []
+                for typ in self.data_types:
+                    series = self.en_fcst.get(typ)
+                    if series is None or not series.size:
+                        continue
+                    pert = series + np.sqrt(self.en_var[typ]) * rng.standard_normal(series.shape)
+                    _, _, vt = np.linalg.svd((pert - pert.mean(axis=1, keepdims=True)).T, full_matrices=False)
+                    leading = vt[:1, :]                                  # (1, n_t)
+                    rows.append((leading @ pert).ravel())
+                    obs_rows.append((leading @ self.en_obs[typ]).ravel())
+                    labels.append(typ)
+                if not rows:
+                    return
+                fcst_pert, obs = np.array(rows), np.array(obs_rows)
             else:
-                combi_type = None
-
-            self.logger.info(f'Starting level {level} calculations of Mahalanobis distance')
-
-            # start by generating correct vectors and fixind the seed
-            np.random.seed(50)
-            en_fcst_pert = []
-            filt_data = []
-            if combi_type is None:  # look at all data individually
-                en_fcst = np.concatenate([self.en_fcst[typ] for typ in self.data_types if self.en_fcst[typ].size],
-                                         axis=0)
-                filt_data = [(typ, ind) for typ in self.data_types for ind in self.l_prim
-                             if self.obs_data[ind][typ] is not None and sum(np.isnan(self.obs_data[ind][typ])) == 0
-                             and self.obs_data[ind][typ].shape == (1,)]
-                en_obs = np.concatenate([self.en_obs[typ] for typ in self.data_types if self.en_obs[typ].size], axis=0)
-                en_var = np.array([self.datavar[ind][typ].flatten() for typ in self.data_types for ind in self.l_prim
-                                   if
-                                   self.obs_data[ind][typ] is not None and sum(np.isnan(self.obs_data[ind][typ])) == 0
-                                   and self.obs_data[ind][typ].shape == (1,)])
-
-                en_fcst_pert = en_fcst + np.sqrt(en_var[:, 0])[:, np.newaxis] * \
-                               np.random.randn(en_fcst.shape[0], en_fcst.shape[1])
-
-            else:  # some data should be defined as blocks. To get the correct measure we project the data onto the subspace
-                # spanned by the first principal component. The level 1, 2 and 3. Difference is then calculated in
-                # similar fashion as for the full data-space. have simple rules for generating combinations. All data are
-                # aquired at some time, at some position, and there might be multiple data types at the same time and
-                # position.
-                en_obs = []
-                if 'time' in combi_type or 'vector' in combi_type:
-                    tmp_fcst = []
-                    for typ in self.data_types:
-                        tmp_fcst.append([self.en_fcst[typ][ind, :self.ne][np.newaxis, :self.ne] for ind in self.l_prim
-                                         if self.obs_data[ind][typ] is not None and sum(
-                                np.isnan(self.obs_data[ind][typ])) == 0])
-                    filt_fcst = [x for x in tmp_fcst if len(x)]  # remove all empty lists
-                    filt_data = [list(self.data_types)[i] for i, x in enumerate(tmp_fcst) if len(x)]
-                    en_fcst_pert = []
-                    for i, dat in enumerate(filt_data):
-                        tmp_enfcst = np.concatenate(filt_fcst[i], axis=0)
-                        tmp_var = np.concatenate([self.datavar[ind][dat].flatten() for ind in self.l_prim
-                                                  if self.obs_data[ind][dat] is not None and sum(
-                                np.isnan(self.obs_data[ind][dat])) == 0])
-                        tmp_var = np.expand_dims(tmp_var, 1)
-                        tmp_fcst_pert = tmp_enfcst + np.sqrt(tmp_var[:, 0])[:, np.newaxis] * \
-                                        np.random.randn(tmp_enfcst.shape[0], tmp_enfcst.shape[1])
-                        X = tmp_fcst_pert - tmp_fcst_pert.mean(axis=1)[:, np.newaxis]
-                        u, s, v = np.linalg.svd(X.T, full_matrices=False)
-                        v_sing = v[:1, :]
-                        en_fcst_pert.append(np.dot(v_sing, tmp_fcst_pert).flatten())
-                        tmp_obs = np.concatenate([self.obs_data[ind][dat] for ind in self.l_prim if
-                                                  self.obs_data[ind][dat] is not None and
-                                                  sum(np.isnan(self.obs_data[ind][dat])) == 0])
-                        tmp_obs = np.expand_dims(tmp_obs, 1)
-                        en_obs.append(np.dot(v_sing, tmp_obs).flatten())
-
-                    en_fcst_pert = np.array(en_fcst_pert)
-                    en_obs = np.array(en_obs)
+                self.logger.info(f"Unknown combination {combine!r}; skipping")
+                continue
 
             if level == 1:
-                nD = len(en_fcst_pert)
-                scores = np.zeros(nD)
-                for i in range(nD):
-                    mean_fcst = np.mean(en_fcst_pert[i, :])
-                    ivar = 1. / np.var(en_fcst_pert[i, :])
-                    scores[i] = ivar * (en_obs[i, :] - mean_fcst) ** 2
-
-                num_scores = min(10, len(scores.flatten()))  # if there is less than 10 data
-                unsort_top10 = np.argpartition(scores.flatten(), -num_scores)[
-                               -num_scores:]  # this is fast but not sorted. Get 10 highest values
-                top10 = unsort_top10[np.argsort(scores[unsort_top10])[::-1]]  # sort in descending order
-                newline = "\n"
-                if combi_type is None:
-                    self.logger.info(f'Calculations complete. {num_scores} largest values are:' + newline
-                                     + f'{newline.join(f" data type: {filt_data[ind][0]}    time: {filt_data[ind][1]}    Score: {scores[ind]}" for ind in top10)}')
-
-                    # make cross-plot
-                    i1 = [top10[3], top10[3]]
-                    i2 = [top10[2], top10[0]]
-                    for ind in range(len(i1)):
-                        plt.figure()
-                        plt.plot(en_fcst_pert[i1[ind], :], en_fcst_pert[i2[ind], :], '.b')
-                        plt.plot(en_obs[i1[ind], :], en_obs[i2[ind], :], '.r')
-                        plt.xlabel(str(filt_data[i1[ind]][0]) + ', time ' + str(filt_data[i1[ind]][1]))
-                        plt.ylabel(str(filt_data[i2[ind]][0]) + ', time ' + str(filt_data[i2[ind]][1]))
-                        plt.savefig(
-                            self.folder + 'crossplot_' + filt_data[i1[ind]][0].replace(' ', '_') + '_t' +
-                            str(filt_data[i1[ind]][1]) + '-' + filt_data[i2[ind]][0].replace(
-                                ' ', '_') + '_t' + str(filt_data[i2[ind]][1]))
-                        plt.close()
-                else:
-                    self.logger.info(f'Calculations complete. {num_scores} largest values are:' + newline
-                                     + f'{newline.join(f" data type: {filt_data[ind]}    Score: {scores[ind]}" for ind in top10)}')
-
-                    # make cross-plot
-                    i1 = [top10[0], top10[1]]
-                    i2 = [top10[1], top10[3]]
-                    for ind in range(len(i1)):
-                        plt.figure()
-                        plt.plot(en_fcst_pert[i1[ind], :], en_fcst_pert[i2[ind], :], '.b')
-                        plt.plot(en_obs[i1[ind], :], en_obs[i2[ind], :], '.r')
-                        plt.xlabel(str(filt_data[i1[ind]]) + ' (proj)')
-                        plt.ylabel(str(filt_data[i2[ind]]) + ' (proj)')
-                        plt.savefig(
-                            self.folder + 'crossplot_' + str(filt_data[i1[ind]]).replace(' ', '_') + '-' +
-                            str(filt_data[i2[ind]]).replace(' ', '_'))
-                        plt.close()
-
-            elif level == 2:
-                nD = len(en_fcst_pert)
-                scores = np.zeros((nD, nD))
-                for i in range(nD):
-                    for j in range(nD):
-                        if i != j:
-                            ne = en_fcst_pert.shape[1]
-                            z = np.concatenate((en_obs[i, :], en_obs[j, :]), axis=0)
-                            X = np.vstack((en_fcst_pert[i, :], en_fcst_pert[j, :]))
-                            mean_fcst = np.mean(X, axis=1)
-                            diff_fcst = X - mean_fcst[:, np.newaxis]
-                            C_fcst = np.dot(diff_fcst, diff_fcst.T) / (ne - 1)
-                            inv_C = np.linalg.inv(C_fcst)
-                            res = z - mean_fcst
-                            term1 = np.dot(res, inv_C)
-                            scores[i, j] = np.dot(term1, res) / 2
-                        else:
-                            mean_fcst = np.mean(en_fcst_pert[i, :])
-                            ivar = 1. / np.var(en_fcst_pert[i, :])
-                            scores[i, j] = ivar * (en_obs[i, :] - mean_fcst) ** 2
-
-                num_scores = min(20, len(scores.flatten()))
-                unsort_top10 = np.argpartition(scores.flatten(), -num_scores)[
-                               -num_scores:]  # this is fast but not sorted. Get 20 highest values, select every other.
-                top10 = unsort_top10[np.argsort(scores.flatten()[unsort_top10])[
-                                     ::-2]]  # sort in descending order. Will be duplicates select every other.
-                newline = "\n"
-                if combi_type is None:
-                    self.logger.info(f'Calculations complete. {int(num_scores / 2)} largest values are:' + newline
-                                     + f'{newline.join(f" data type 1: {filt_data[np.where(scores == scores.flatten()[ind])[0][0]][0]}    time 1: {filt_data[np.where(scores == scores.flatten()[ind])[0][0]][1]} data type 2: {filt_data[np.where(scores == scores.flatten()[ind])[1][0]][0]}    time 2: {filt_data[np.where(scores == scores.flatten()[ind])[1][0]][1]}    Score: {scores.flatten()[ind]}" for ind in top10)}')
-
-                else:
-                    self.logger.info(f'Calculations complete. {int(num_scores / 2)} largest values are:' + newline
-                                     + f'{newline.join(f" data type 1: {filt_data[np.where(scores == scores.flatten()[ind])[0][0]]}    data type 2: {filt_data[np.where(scores == scores.flatten()[ind])[1][0]]}   Score: {scores.flatten()[ind]}" for ind in top10)}')
-
-            elif level == 3:
-                nD = len(en_fcst_pert)
-                scores = np.zeros((nD, nD, nD))
-                for i in range(nD):
-                    for j in range(nD):
-                        for k in range(nD):
-                            if i != j != k:
-                                ne = en_fcst_pert.shape[1]
-                                z = np.concatenate((self.en_obs[i, :], self.en_obs[j, :], self.en_obs[k, :]), axis=0)
-                                X = np.vstack((en_fcst_pert[i, :], en_fcst_pert[j, :], en_fcst_pert[k, :]))
-                                mean_fcst = np.mean(X, axis=1)
-                                diff_fcst = X - mean_fcst[:, np.newaxis]
-                                C_fcst = np.dot(diff_fcst, diff_fcst.T) / (ne - 1)
-                                inv_C = np.linalg.inv(C_fcst)
-                                res = z - mean_fcst
-                                term1 = np.dot(res, inv_C)
-                                scores[i, j] = np.dot(term1, res) / 2
-                            else:
-                                mean_fcst = np.mean(en_fcst_pert[i, :])
-                                ivar = 1. / np.var(en_fcst_pert[i, :])
-                                scores[i, j] = ivar * (self.en_obs[i, :] - mean_fcst) ** 2
+                scores = (obs[:, 0] - fcst_pert.mean(axis=1)) ** 2 / fcst_pert.var(axis=1)
+                top = np.argsort(scores)[::-1][:10]
+                self.logger.info("Calculations complete. Largest values are:\n" + "\n".join(
+                    f" data: {labels[i]}    Score: {scores[i]:.4g}" for i in top))
+                self._crossplots(top, fcst_pert, obs, labels, combine)
+            elif level in (2, 3):
+                self._joint_scores(level, fcst_pert, obs, labels)
             else:
-                print('Current level is not implemented')
+                self.logger.info(f"Mahalanobis level {level} is not implemented")
 
+    def _joint_scores(self, level, fcst_pert, obs, labels):
+        """Mahalanobis distance of every pair (level 2) or triple (3) of data."""
+        n = len(fcst_pert)
+        ne = fcst_pert.shape[1]
+        scores = {}
+        combos = ([(i, j) for i in range(n) for j in range(i + 1, n)] if level == 2
+                  else [(i, j, k) for i in range(n) for j in range(i + 1, n) for k in range(j + 1, n)])
+        for idx in combos:
+            X = fcst_pert[list(idx)]
+            mean = X.mean(axis=1)
+            diff = X - mean[:, None]
+            cov = diff @ diff.T / (ne - 1)
+            res = obs[list(idx), 0] - mean
+            try:
+                scores[idx] = float(res @ np.linalg.solve(cov, res)) / 2
+            except np.linalg.LinAlgError:
+                continue
+        top = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:10]
+        self.logger.info(f"Calculations complete. Largest level-{level} values are:\n" + "\n".join(
+            f" data: {tuple(labels[i] for i in idx)}    Score: {score:.4g}" for idx, score in top))
+
+    def _crossplots(self, top, fcst_pert, obs, labels, combine):
+        if len(top) < 2:
+            return
+        pairs = [(top[0], top[1])] if len(top) < 4 else [(top[3], top[2]), (top[3], top[0])]
+        for a, b in pairs:
+            plt.figure()
+            plt.plot(fcst_pert[a], fcst_pert[b], ".b")
+            plt.plot(obs[a], obs[b], ".r")
+            plt.xlabel(str(labels[a]) + (" (proj)" if combine else ""))
+            plt.ylabel(str(labels[b]) + (" (proj)" if combine else ""))
+            self._save_figure("crossplot_" + f"{labels[a]}-{labels[b]}".replace(" ", "_").replace("'", "")
+                              .replace("(", "").replace(")", "").replace(",", "_t"))
+
+    # ------------------------------------------------------------------
+    # Update statistics
+    # ------------------------------------------------------------------
     def calc_da_stat(self, options=None):
+        """Log how far each parameter group moved from the prior.
+
+        Per group: the mean prior and current standard deviation, and the
+        percentage of parameters whose mean moved by more than one, two and
+        three prior standard deviations.
+
+        Parameters
+        ----------
+        options : dict, optional
+            ``write_to_file`` (False): also write a field of these flags
+            (-3..3) to the grid through the simulator.
         """
-        Calculate statistics for the updated parameters. The persentage of parameters that have updates larger than one,
-        two and three standard deviations (calculated from the initial ensemble) are flagged.
-
-        Input:
-        options: Settings for statistics
-            - write_to_file: write results to .grdecl file (default False)
-
-        Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
-        """
-
-        if options is not None and 'write_to_file' in options:
-            write_to_file = options['write_to_file']
-        else:
-            write_to_file = False
-
-        actnum = None
-        if os.path.exists('actnum.npz'):
-            actnum = np.load('actnum.npz')['actnum']
-
-        newline = '\n'
-        log_str = 'Statistics for updated parameters. Initial and final std, and percent larger than 1,2,3 initial std:'
+        self._require("state")
+        write = bool(options and options.get("write_to_file"))
+        lines = ["Statistics for updated parameters. Initial and final std, and percent larger than 1,2,3 initial std:"]
         for key in self.list_state:
-            if hasattr(self, 'multilevel'):
-                tot_init_state = np.concatenate([el[key] for el in self.ini_state], axis=1)
-                tot_state = np.concatenate([el[key] for el in self.state], axis=1)
-                initial_mean = np.mean(tot_init_state, axis=1)
-                final_mean = np.mean(tot_state, axis=1)
-                S = np.std(tot_init_state, axis=1)
-                ES = np.append(np.mean(S), np.mean(np.std(tot_state, axis=1)))
-            else:
-                initial_mean = np.mean(self.ini_state[key], axis=1)
-                final_mean = np.mean(self.state[key], axis=1)
-                S = np.std(self.ini_state[key], axis=1)
-                ES = np.append(np.mean(S), np.mean(np.std(self.state[key], axis=1)))
-            M = final_mean - initial_mean
-            N = np.zeros(3)
-            N[0] = np.sum(np.abs(M) > S)
-            N[1] = np.sum(np.abs(M) > 2 * S)
-            N[2] = np.sum(np.abs(M) > 3 * S)
-            P = N * 100 / len(M)
-            log_str += newline + 'Group ' + key + ' ' + str(ES) + ', ' + str(P)
+            initial, current = self.ini_state[key], self.state[key]
+            std0 = initial.std(axis=1)
+            moved = current.mean(axis=1) - initial.mean(axis=1)
+            stds = (float(std0.mean()), float(current.std(axis=1).mean()))
+            pct = tuple(float(100 * np.mean(np.abs(moved) > k * std0)) for k in (1, 2, 3))
+            lines.append(f"Group {key}: std {stds[0]:.4g} -> {stds[1]:.4g}; "
+                         f"{pct[0]:.1f}% / {pct[1]:.1f}% / {pct[2]:.1f}% beyond 1 / 2 / 3 std")
+            if write and moved.size > 1:
+                flags = np.zeros(moved.shape)
+                for k in (1, 2, 3):
+                    flags[moved > k * std0] = k
+                    flags[moved < -k * std0] = -k
+                self._write_field(flags, key, f"da_stat_{key}", None, {})
+        self.logger.info("\n".join(lines))
 
-            if write_to_file:
-                if actnum is None:
-                    if hasattr(self, 'multilevel'):
-                        idx = np.ones(self.state[0][key].shape[0], dtype=bool)
-                    else:
-                        idx = np.ones(self.state[key].shape[0], dtype=bool)
-                else:
-                    idx = actnum
-                if M.size == np.sum(idx) and M.size > 1:  # we have a grid parameter
-                    tmp = np.zeros(M.shape)
-                    tmp[M > S] = 1
-                    tmp[M > 2 * S] = 2
-                    tmp[M > 3 * S] = 3
-                    tmp[M < -S] = -1
-                    tmp[M < -2 * S] = -2
-                    tmp[M < -3 * S] = -3
-                    data = np.zeros(idx.shape)
-                    data[idx] = tmp
-                    field = np.ma.array(data=data, mask=~idx)
-                    dim = (self.prior_info[key]['nx'], self.prior_info[key]['ny'], self.prior_info[key]['nz'])
-                    #dim = next((item[1] for item in self.prior_info[key] if item[0] == 'grid'), None)
-                    input_time = None
-                    if hasattr(self.sim, 'write_to_grid'):
-                        self.sim.write_to_grid(field, f'da_stat_{key}', self.folder, dim, input_time)
-                    elif hasattr(self.sim.flow, 'write_to_grid'):
-                        self.sim.flow.write_to_grid(field, f'da_stat_{key}', self.folder, dim, input_time)
-                    else:
-                        print('You need to implement a writer in you simulator class!! \n')
-
-        self.logger.info(log_str)
+    def _require(self, *names):
+        """Raise if any of the named inputs is still unset (``set()`` provides all but ``prior_info``)."""
+        missing = [name for name in names if getattr(self, name) is None]
+        if missing:
+            hint = "" if missing == ["prior_info"] else "; call set() first"
+            raise ValueError(f"QAQC needs {', '.join(missing)}{hint}")

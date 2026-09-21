@@ -3,3 +3,10 @@
 # import os
 # home = os.path.expanduser("~") # os independent home
 # __path__.append(os.path.join(home,'4DSEIS_private/4DSEIS-packages/update_schemes'))
+from .core import *
+from .enkf import *
+from .enrml import *
+from .es import *
+from .esmda import *
+from .multilevel import *
+from . import analysis

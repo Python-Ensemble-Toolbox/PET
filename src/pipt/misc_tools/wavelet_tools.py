@@ -5,12 +5,11 @@ Copyright (c) 2019-2022 NORCE, All Rights Reserved. 4DSEIS
 """
 import pywt
 import numpy as np
-import sys
 from copy import deepcopy
-import warnings
 
 
 class SparseRepresentation:
+    """Wavelet compression of one seismic vintage. Thresholding the observed vintage fixes the leading coefficients; later calls reduce any vintage to those."""
 
     # Initialize
     def __init__(self, options):
@@ -32,6 +31,7 @@ class SparseRepresentation:
     # Function for image compression. If the function is called without threshold, then the leading indices must
     # be defined in the class. Typically, this is done by running the compression on true data with a given threshold.
     def compress(self, data, th_mult=None):
+        """Compress ``data`` (the masked grid, flattened). With ``th_mult`` the coefficients are thresholded and the leading indices (re)defined; without it the stored indices select them. Returns ``(compressed, wdec_rec)``."""
         if ('inactive_value' not in self.options) or (self.options['inactive_value'] is None):
             self.options['inactive_value'] = np.mean(data)
         signal = np.zeros(self.num_grid)
@@ -120,8 +120,7 @@ class SparseRepresentation:
                         current_threshold = est_noise_level**2 / \
                             np.sqrt(np.abs(std_data**2 - est_noise_level**2))
                     else:
-                        print('Thresholding rule not implemented')
-                        sys.exit(1)
+                        raise ValueError(f"Thresholding rule {self.options['threshold_rule']!r} is not implemented")
                     current_threshold = th_mult * current_threshold
                     if level == 0:
                         self.threshold[level] = current_threshold
@@ -196,8 +195,7 @@ class SparseRepresentation:
             compressed_data = np.append(self.ca_leading_coeff, self.cd_leading_coeff)
         else:
             if self.ca_leading_index is None or self.cd_leading_index is None:
-                print('Leading indices not defined')
-                sys.exit(1)
+                raise RuntimeError('Leading indices not defined: compress() must run before reconstruct()')
             compressed_data = np.append(
                 ca_in_vec[self.ca_leading_index], cd_in_vec[self.cd_leading_index])
 
@@ -220,14 +218,14 @@ class SparseRepresentation:
 
     # Reconstruct the current compressed dataset.
     def reconstruct(self, wdec_rec):
+        """The masked, flattened vintage rebuilt from the retained wavelet coefficients."""
 
         if wdec_rec is None:
-            print('No signal to reconstruct')
-            sys.exit(1)
+            raise ValueError('No signal to reconstruct')
 
         # reconstruct from wavelet coefficients
         data_rec = pywt.waverecn(wdec_rec, self.options['wname'], 'symmetric')
-        data_rec = data_rec[tuple(slice(0, s) for s in self.options['dim'])] 
+        data_rec = data_rec[tuple(slice(0, s) for s in self.options['dim'])]
 
         data_rec = data_rec.flatten(order=self.options['order'])
         data_rec = data_rec[self.options['mask']]

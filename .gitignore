@@ -147,3 +147,6 @@ docs-generated/
 
 # mergetoolfiles
 *.orig
+
+# Stray test artifact
+PET-test-log

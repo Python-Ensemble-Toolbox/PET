@@ -1,3 +1,4 @@
+"""External penalty function for constrained optimisation."""
 import numpy as np
 
 def epf(r, c_eq=0, c_iq=0):
@@ -8,5 +9,5 @@ def epf(r, c_eq=0, c_iq=0):
 
     We assume that the ensemble members are stacked as columns.
     """
-    
+
     return r*0.5*( np.sum(c_eq**2, axis=0) + np.sum(np.maximum(-c_iq,0)**2, axis=0) )

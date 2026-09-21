@@ -4,78 +4,11 @@ be used by several optimization schemes. If some method is only applicable to th
 implementing, leave it in that class.
 """
 import numpy as np
-from scipy.linalg import block_diag
 import os
 from datetime import datetime
-from copy import deepcopy
 
 from scipy.optimize import OptimizeResult
 
-
-def aug_optim_state(state, list_state):
-    """
-    Augment the state variables to get one augmented array.
-
-    Parameters
-    ----------
-    state : dict
-        Dictionary of state variables for optimization. OBS: 1D arrays!
-    list_state : list
-        Fixed list of keys in the state dictionary.
-
-    Returns
-    -------
-    aug_state : numpy.ndarray
-        Augmented 1D array of state variables.
-    """
-    # Start with ensemble of first state variable
-    aug = state[list_state[0]]
-
-    # Loop over the next states (if exists)
-    for i in range(1, len(list_state)):
-        aug = np.hstack((aug, state[list_state[i]]))
-
-    # Return the augmented array
-    return aug
-
-
-def update_optim_state(aug_state, state, list_state):
-    """
-    Extract the separate state variables from an augmented state array.
-
-    It is assumed that the augmented state array is made in the aug_optim_state method, hence this is the reverse method.
-
-    Parameters
-    ----------
-    aug_state : numpy.ndarray
-        Augmented state array.
-    state : dict
-        Dictionary of state variables for optimization.
-    list_state : list
-        Fixed list of keys in the state dictionary.
-
-    Returns
-    -------
-    state : dict
-        State dictionary updated with aug_state.
-    """
-
-    # Loop over all entries in list_state and extract an array with same number of rows as the key in state
-    # determines from aug and replace the values in state[key].
-    # Init. a variable to keep track of which row in 'aug' we start from in each loop
-    aug_row = 0
-    for _, key in enumerate(list_state):
-        # Find no. rows in state[key] to determine how many rows from aug to extract
-        no_rows = state[key].shape[0]
-
-        # Extract the rows from aug and update 'state[key]'
-        state[key] = aug_state[aug_row:aug_row + no_rows]
-
-        # Update tracking variable for row in 'aug'
-        aug_row += no_rows
-
-    # Return
-    return state
 
 def get_list_element(list, element):
     """
@@ -137,85 +70,6 @@ def toggle_ml_state(state, ml_ne):
 
     return new_state
 
-def corr2BlockDiagonal(state, corr):
-    """
-    Makes the correlation matrix block diagonal. The blocks are the state varible types.
-
-    Parameters
-    ----------
-    state: dict
-        Current control state, including state names
-
-    corr : array_like
-        Correlation matrix, of shape (d, d)
-
-    Returns
-    -------
-    corr_blocks : list
-        block matrices, one for each variable type
-
-    """
-
-    statenames = list(state.keys())
-    corr_blocks = []
-    for name in statenames:
-        dim = state[name].size
-        corr_blocks.append(corr[:dim, :dim])
-        corr = corr[dim:, dim:]
-    return corr_blocks
-
-
-def time_correlation(a, state, n_timesteps, dt=1.0):
-    """
-    Constructs correlation matrix with time correlation
-    using an autoregressive model.
-
-    $$ Corr(t_1, t_2) = a^{|t_1 - t_2|} $$
-
-    Assumes that each varaible in state is time-order such that
-    `x = [x1, x2,..., xi,..., xn]`, where `i` is the time index, 
-    and `xi` is d-dimensional.
-
-    Parameters
-    -------------------------------------------------------------
-    a : float
-        Correlation coef, in range (0, 1).
-
-    state : dict
-        Control state (represented in a dict).
-    
-    n_timesteps : int
-        Number of time-steps to correlate for each component.
-    
-    dt : float or int
-        Duration between each time-step. Default is 1.
-
-    Returns
-    -------------------------------------------------------------
-    out : numpy.ndarray
-        Correlation matrix with time correlation    
-    """
-    dim_states = [int(state[name].size/n_timesteps) for name in list(state.keys())]
-    blocks     = []
-
-    # Construct correlation matrix
-    # m: variable type index  
-    # i: first time index
-    # j: second time index
-    # k: first dim index
-    # l: second dim index
-    for m in dim_states:
-        corr_single_block = np.zeros((m*n_timesteps, m*n_timesteps))
-        for i in range(n_timesteps):
-            for j in range(n_timesteps):
-                for k in range(m):
-                    for l in range(m):
-                       corr_single_block[i*m + k, j*m + l] = (k==l)*a**abs(dt*(i-j))
-        blocks.append(corr_single_block)
-
-    return block_diag(*blocks)
-
-
 def cov2corr(cov):
     """
     Transfroms a covaraince matrix to a correlation matrix
@@ -233,27 +87,6 @@ def cov2corr(cov):
     std  = np.sqrt(np.diag(cov))
     corr = np.divide(cov, np.outer(std, std))
     return corr
-
-
-def corr2cov(corr, std):
-    """
-    Transfroms a correlation matrix to a covaraince matrix
-
-    Parameters
-    ----------
-    corr : array_like
-        The correlation matrix, of shape (d,d).
-
-    std : array_like
-        Array of the standard deviations, of shape (d, ).
-
-    Returns
-    -------
-    out : numpy.ndarray
-        The covaraince matrix, of shape (d,d)
-    """
-    cov = np.multiply(corr, np.outer(std, std))
-    return cov
 
 
 def get_sym_pos_semidef(a):
@@ -300,70 +133,17 @@ def clip_state(x, bounds):
         The state after truncation
     """
 
-    any_not_none = any(any(item) for item in bounds)
-    if any_not_none:
-        lb = np.array(bounds)[:, 0]
-        lb = np.where(lb is None, -np.inf, lb)
-        ub = np.array(bounds)[:, 1]
-        ub = np.where(ub is None, -np.inf, ub)
-        x = np.clip(x, lb, ub)
-    return x
+    if bounds is None or len(bounds) == 0:
+        return x
+    # None means "no bound on this side". The previous version tested
+    # `lb is None` on a whole array (always False), defaulted the *upper*
+    # bound to -inf, and skipped clipping altogether when every bound was 0.
+    lb = np.array([-np.inf if lo is None else lo for lo, _ in bounds], dtype=float)
+    ub = np.array([np.inf if hi is None else hi for _, hi in bounds], dtype=float)
+    return np.clip(x, lb, ub)
 
 
-def get_optimize_result(obj):
-    """
-    Collect optimize results based on requested
-
-    Parameters
-    ----------
-    obj : popt.loop.optimize.Optimize
-        An instance of an optimization class
-
-    Returns
-    -------
-    save_dict : scipy.optimize.OptimizeResult
-        The requested optimization results
-    """
-
-    # Initialize dictionary of variables to save
-    save_dict = OptimizeResult({'success': True, 'x': obj.xk, 'fun': np.mean(obj.fk),
-                                'nit':  obj.iteration, 'nfev': obj.nfev, 'njev': obj.njev})
-    if hasattr(obj, 'epf') and obj.epf:
-        save_dict['epf_iteration'] = obj.epf_iteration
-    if hasattr(obj, 'method') and obj.method:
-        save_dict['method'] = obj.method
-    elif 'method' in obj.options:
-        save_dict['method'] = obj.options['method']
-    if 'save_folder' in obj.options:
-        save_dict['save_folder'] = obj.options['save_folder']
-
-    if 'savedata' in obj.options:
-
-        # Make sure "SAVEDATA" gives a list
-        if isinstance( obj.options['savedata'], list):
-            savedata = obj.options['savedata']
-        else:
-            savedata = [ obj.options['savedata']]
-
-        if 'args' in savedata:
-            for a, arg in enumerate(obj.args):
-                save_dict[f'args[{a}]'] = arg
-      
-        # Loop over variables to store in save list
-        for save_typ in savedata:
-            if 'xk' in save_typ:
-                continue  # mean_state is alwaysed saved as 'x'
-            if save_typ in locals():
-                save_dict[save_typ] = eval('{}'.format(save_typ))
-            elif hasattr( obj, save_typ):
-                save_dict[save_typ] = eval(' obj.{}'.format(save_typ))
-            else:
-                print(f'Cannot save {save_typ}!\n\n')
-
-    return save_dict
-
-
-def save_optimize_results(intermediate_result):
+def save_optimize_results(intermediate_result, folder=None):
     """
     Save optimize results
 
@@ -377,7 +157,11 @@ def save_optimize_results(intermediate_result):
         intermediate_result = OptimizeResult({'x': intermediate_result})
 
     # Make folder (if it does not exist)
-    if 'save_folder' in intermediate_result:
+    if folder is not None:
+        save_folder = folder
+        if not os.path.exists(save_folder):
+            os.makedirs(save_folder)
+    elif 'save_folder' in intermediate_result:
         save_folder = intermediate_result['save_folder']
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
@@ -392,7 +176,7 @@ def save_optimize_results(intermediate_result):
 
     # Save the variables
     if 'epf_iteration' in intermediate_result:
-        np.savez(save_folder + '/optimize_result_{0}_{1}'.format(str(intermediate_result['epf_iteration']), suffix), 
+        np.savez(save_folder + '/optimize_result_{0}_{1}'.format(str(intermediate_result['epf_iteration']), suffix),
                  **intermediate_result)
     else:
         np.savez(save_folder + '/optimize_result_{0}'.format(suffix), **intermediate_result)

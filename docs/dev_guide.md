@@ -1,127 +1,148 @@
 # Developer guide
 
-## Writing documentation
+## Repository layout
 
-The documentation is built with `mkdocs`.
+PET is one repository holding two toolboxes on a shared foundation. Every
+package lives under `src/`.
 
-- It should be written in [the syntax of markdown](https://www.markdownguide.org/cheat-sheet/).
-- The syntax is further augmented by [several pymdown plugins](https://squidfunk.github.io/mkdocs-material/reference/).
-- **Docstrings** are processed as above, but should also
-  declare parameters and return values in the [style of numpy](https://mkdocstrings.github.io/griffe/reference/docstrings/#numpydoc-style),
-  and `>>>` markers must follow the "Examples" section.
+| Package | Role |
+| --- | --- |
+| `ensemble` | The foundation both toolboxes build on: the base ensemble (prior generation, forecast orchestration), checkpoint/restart, logging. It must not import `pipt` or `popt` at module level; `tests/test_import_hygiene.py` enforces this. |
+| `pipt` | Data assimilation. Schemes in `update_schemes/`, analysis flavours in `update_schemes/analysis/`, the assimilation ensemble in `ensembles/`, localization in `localization/`, numerical helpers in `misc_tools/`. |
+| `popt` | Optimisation. Optimizers in `optimization_methods/`, the ensembles that estimate gradients in `ensembles/`, cost functions in `cost_functions/`. |
+| `misc` | Data structures (`PETDataFrame` as the table view, `DataLayout`/`PredictedData` for the data matrices, `StateLayout` for the state's variable rows), the observed-data reader, and vendored Eclipse grid and output readers used by external simulator wrappers. |
+| `input_output` | Config parsing (`.toml`, `.yaml`, and the legacy `.pipt`/`.popt` text format) and report-point handling. |
+| `simulator` | Small analytical simulators used by the tests and tutorials. Reservoir simulators live in the external SimulatorWrap repository. |
+| `pet_cli` | The `pet` command: `validate`, `convert`, `migrate`, `version`. |
 
-!!! note
-    You can preview the rendered html docs by running
-    ```sh
-    mkdocs serve
-    ```
+### How a run is put together
 
-    - Temporarily disable `mkdocs-jupyter` in `mkdocs.yml` to speed up build reloads.
-    - Set `validation: unrecognized_links: warn` to get warnings about linking issues.
+The [architecture page](architecture.md) describes the layers and contracts in
+full and the [configuration reference](configuration.md) every key; this is
+the short version.
 
-A summary of how to add cross-reference links is given below.
+A **scheme** (`pipt.update_schemes.core.AssimilationScheme`) owns the
+iteration loop, the convergence checks and the checkpointing. It holds an
+**ensemble** collaborator (`pipt.ensembles.AssimilationEnsemble`) that owns
+the state realisations, the observed data and the forward simulator, and it
+binds an **analysis** object (`pipt.update_schemes.analysis`) that computes the
+update step from the state, predicted-data and perturbed-observation matrices.
+Which flavours a scheme supports is declared on the class in
+`COMPATIBLE_ANALYSES`; the registry (`pipt.update_schemes.registry`) derives
+every selectable `(scheme, analysis)` pair from those tables. Every scheme
+also accepts a ready-made `ensemble=`, so two schemes can share one prior
+and a test can hand in a stand-in. Localization strategies are selected from
+`pipt.localization.LOCALIZATIONS` by the config's `name`; a new one is a
+call to `register_localization`. The two notebooks under *Extending PIPT* in
+the tutorials walk through adding an analysis and adding a scheme.
 
-### Linking to pages
+A forward simulator is anything satisfying `ensemble.protocols.ForwardSimulator`:
+an `input_dict` and a `run_fwd_sim(state, member_index)` method, plus the
+optional hooks the protocol's docstring lists. The analytical models in
+`simulator/` are the smallest complete examples.
 
-You should use relative page links, including the `.md` extension.
-For example, `[link label](sibling-page.md)`.
-
-The following works, but does not get validated! `[link label](../sibling-page)`
-
-!!! hint "Why not absolute links?"
-
-    The downside of relative links is that if you move/rename source **or** destination,
-    then they will need to be changed, whereas only the destination needs be watched
-    when using absolute links.
-
-    Previously, absolute links were not officially supported by MkDocs, meaning "not modified at all".
-    Thus, if made like so `[label](/PET/references)`,
-    i.e. without `.md` and including `/PET`,
-    then they would **work** (locally with `mkdocs serve` and with GitHub hosting).
-    Since [#3485](https://github.com/mkdocs/mkdocs/pull/3485) you can instead use `[label](/references)`
-    i.e. omitting `PET` (or whatever domain sub-dir is applied in `site_url`)
-    by setting `mkdocs.yml: validation: absolute_links: relative_to_docs`.
-    A different workaround is the [`mkdocs-site-url` plugin](https://github.com/OctoPrint/mkdocs-site-urls).
-
-    !!! tip "Either way"
-        It will not be link that your editor can follow to the relevant markdown file
-        (unless you create a symlink in your file system root?)
-        nor will GitHub's internal markdown rendering manage to make sense of it,
-        so my advise is not to use absolute links.
-
-### Linking to headers/anchors
-
-Thanks to the `autorefs` plugin,
-links to **headings** (including page titles) don't even require specifying the page path!
-Syntax: `[visible label][link]` i.e. double pairs of _brackets_. Shorthand: `[link][]`.
-!!! info
-    - Clearly, non-unique headings risk being confused with others in this way.
-    - The link (anchor) must be lowercase!
-
-This facilitates linking to
-
-- **API (code reference)** items.
-  For example, ``[`da_methods.ensemble`][]``,
-  where the backticks are optional (makes the link _look_ like a code reference).
-- **References**. For example ``[`bocquet2016`][]``,
-
-### Docstring injection
-
-Use the following syntax to inject the docstring of a code object.
-
-```markdown
-::: da_methods.ensemble
-```
-
-But we generally don't do so manually.
-Instead it's taken care of by the reference generation via `docs/gen_ref_pages.py`.
-
-### Including other files
-
-The `pymdown` extension ["snippets"](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/#snippets-notation)
-enables the following syntax to include text from other files.
-
-`--8<-- "/path/from/project/root/filename.ext"`
-
-### Adding to the examples
-
-Example scripts are very useful, and contributions are very desirable.  As well
-as showcasing some feature, new examples should make sure to reproduce some
-published literature results.  After making the example, consider converting
-the script to the Jupyter notebook format (or vice versa) so that the example
-can be run on Colab without users needing to install anything (see
-`docs/examples/README.md`). This should be done using the `jupytext` plug-in (with
-the `lightscript` format), so that the paired files can be kept in synch.
-
-### Bibliography
-
-In order to add new references,
-insert their bibtex into `docs/bib/refs.bib`,
-then run `docs/bib/bib2md.py`
-which will format and add entries to `docs/references.md`
-that can be cited with regular cross-reference syntax, e.g. `[bocquet2010a][]`.
-
-### Hosting
-
-The above command is run by a GitHub Actions workflow whenever
-the `master` branch gets updated.
-The `gh-pages` branch is no longer being used.
-Instead [actions/deploy-pages](https://github.com/actions/deploy-pages)
-creates an artefact that is deployed to Github Pages.
+`popt` has the same shape: an optimizer
+(`popt.optimization_methods.optimizer_base.OptimizerBase`) owns its loop and is
+handed `fun`/`jac`/`hess` callables, typically the methods of an ensemble from
+`popt.ensembles`. A new optimizer implements `update_step()`, which commits an
+improving point with `_commit_step(x, f, jac=..., hess=...)` and returns a
+`StepReport`, and `log_columns()` for its row of the log. The base evaluates
+the starting point, runs the callback, records and saves the result, logs,
+and checks function, state and projected-gradient convergence.
 
 ## Tests
 
-The test suite is orchestrated using `pytest`. Both in **CI** and locally.
-I.e. you can run the tests simply by the command
+The suite is `pytest`, configured in `pyproject.toml` and run in CI on
+Python 3.10 to 3.12.
 
 ```sh
-pytest
+pytest                    # everything, about two minutes
+pytest -m "not slow"      # skip the three end-to-end pipeline tests
+pytest --cov=src          # with line coverage (pytest-cov is in the dev extra)
+ruff check src tests      # lint; CI fails on findings
 ```
 
-It will discover all [appropriately named tests](https://docs.pytest.org)
-in the source (see the `tests` dir).
+Every test starts in its own temporary directory (`tests/conftest.py`), so a
+test may write files freely without touching the repository.
 
-Use (for example) `pytest --doctest-modules some_file.py` to
-*also* run any example code **within** docstrings.
+`tests/assimilation/test_numerical_characterisation.py` pins the numbers every
+shipped `(scheme, analysis)` pair produces on a small Van der Pol case. A
+refactor that is meant to preserve behaviour should leave it green. When a
+change to the numbers is intended, regenerate the reference deliberately and
+say so in the CHANGELOG:
 
-We should also soon make use of a config file (for example `pyproject.toml`) for `pytest`.
+```sh
+python tests/assimilation/test_numerical_characterisation.py --regenerate
+```
+
+## Changelog
+
+User-visible changes are recorded in `CHANGELOG.md`, following
+[Keep a Changelog](https://keepachangelog.com/). A change that alters results
+gets an entry that names the change and states that the reference was
+regenerated for it.
+
+## Writing documentation
+
+The documentation is built with `mkdocs` and the Material theme.
+
+- Pages are [Markdown](https://www.markdownguide.org/cheat-sheet/), augmented
+  by [several pymdown extensions](https://squidfunk.github.io/mkdocs-material/reference/).
+- **Docstrings** are rendered by `mkdocstrings`. Declare parameters and return
+  values in the [numpy style](https://mkdocstrings.github.io/griffe/reference/docstrings/#numpydoc-style),
+  and put `>>>` examples under an "Examples" heading.
+
+!!! note
+    Preview the rendered site with
+    ```sh
+    mkdocs serve
+    ```
+    Temporarily disable `mkdocs-jupyter` in `mkdocs.yml` to speed up reloads,
+    and set `validation: unrecognized_links: warn` to surface broken links.
+
+### Linking to pages
+
+Use relative page links including the `.md` extension, for example
+`[link label](sibling-page.md)`; these are validated by the build. Absolute
+links are not, and neither GitHub's Markdown rendering nor an editor can follow
+them, so avoid them.
+
+### Linking to headers and API items
+
+Thanks to the `autorefs` plugin, a heading anywhere in the site can be linked
+without its page path: `[visible label][anchor]`, or the shorthand
+`[anchor][]`. Anchors are lowercase. This also covers
+
+- **API items**, for example ``[`pipt.update_schemes.esmda.ESMDA`][]``, and
+- **references**, for example ``[`chen2013`][]``.
+
+### Docstring injection
+
+`::: pipt.update_schemes.esmda` injects a module's rendered docstrings. This
+is rarely written by hand: `docs/gen_ref_pages.py` generates one such page per
+module under `src/` at build time, which is what the *Reference* section is.
+
+### Including other files
+
+The `pymdown` ["snippets"](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/#snippets-notation)
+extension includes text from another file:
+`--8<-- "path/from/project/root/filename.ext"`. The home page includes
+`README.md` this way.
+
+### Tutorials
+
+Tutorials are Jupyter notebooks under `docs/tutorials/`, listed in
+`docs/tutorials/README.md`. The build renders their stored outputs and does
+not execute them (`execute: false`): the reservoir cases need the OPM `flow`
+simulator through the external `subsurface` package.
+
+### Bibliography
+
+Add new references as BibTeX to `docs/bib/refs.bib`, then run
+`docs/bib/bib2md.py`, which formats them into `docs/references.md` so they can
+be cited with the cross-reference syntax, e.g. `[chen2013][]`.
+
+## Hosting
+
+`.github/workflows/deploy-docs.yml` builds the site and publishes it to GitHub
+Pages with `mhausenblas/mkdocs-deploy-gh-pages` whenever `main` is updated.

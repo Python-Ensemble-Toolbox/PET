@@ -1,147 +1,151 @@
 """Parse config files."""
-from misc import read_input_csv as ricsv
-from copy import deepcopy
-from input_output.organize import Organize_input
+from input_output.config import is_dataassim, normalize as normalize_config
+from pathlib import Path
 import tomli
 import tomli_w
 import yaml
 from yaml.loader import FullLoader
 import numpy as np
+import os
 
 
 def read(filename: str):
     ''' Read configuration file. Supported formats are toml, .yaml, .pipt and .popt.'''
-    if filename.endswith('.pipt') or filename.endswith('.popt'):
-        return read_txt(filename)
-    elif filename.endswith('.yaml'):
-        return read_yaml(filename)
-    elif filename.endswith('.toml'):
+    if Path(filename).suffix.lower() == ".toml":
         return read_toml(filename)
+    elif Path(filename).suffix.lower() in [".yaml", ".yml"]:
+        return read_yaml(filename)
+    elif Path(filename).suffix.lower() in [".pipt", ".popt"]:
+        return read_txt(filename)
     else:
         raise ValueError('File format not supported. Supported formats are toml, .yaml, .pipt, .popt')
 
 
-def convert_txt_to_yaml(init_file):
-    # Read .pipt or .popt file
-    pr, fwd = read_txt(init_file)
-
-    # Write dictionaries to yaml file with same base file name
-    new_file = change_file_extension(init_file, 'yaml')
-    with open(new_file, 'wb') as f:
-        if 'daalg' in pr:
-            yaml.dump({'dataassim': pr, 'fwdsim': fwd}, f)
-        else:
-            yaml.dump({'optim': pr, 'fwdsim': fwd}, f)
-
-
-def read_yaml(init_file):
+def read_yaml(filepath: str):
     """
-    Read .yaml input file, parse and return dictionaries for PIPT/POPT.
+    Read and parse a .yaml configuration file for PIPT/POPT.
 
-    Parameters
-    ----------
-    init_file : str
-        .yaml file
+    The YAML file should contain one or more of the following top-level keys:
+    - 'dataassim' (dict): Data assimilation configuration
+    - 'optim' (dict): Optimization configuration
+    - 'fwdsim' (dict): Forward simulation configuration
+    - 'ensemble' (dict, optional): Ensemble configuration
 
     Returns
     -------
-    keys_da : dict
-        Parsed keywords from dataassim
-    keys_fwd : dict
-        Parsed keywords from fwdsim
+    tuple
+        (keys_pr, keys_fwd, keys_en)
+        - keys_pr: dict, parsed 'dataassim' or 'optim' section (empty if not present)
+        - keys_fwd: dict, parsed 'fwdsim' section (empty if not present)
+        - keys_en: dict, parsed 'ensemble' section (empty if not present)
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist.
+    ValueError
+        If the YAML file is missing required sections.
+    yaml.YAMLError
+        If the YAML file is invalid.
     """
-    # Make a !ndarray tag to convert a sequence to np.array
+    if not os.path.isfile(filepath):
+        raise FileNotFoundError(f"YAML file '{filepath}' does not exist.")
+
+    # Register a custom constructor for !ndarray if needed
     def ndarray_constructor(loader, node):
         array = loader.construct_sequence(node)
         return np.array(array)
-
-    # Add constructor to yaml with tag !ndarray
     yaml.add_constructor('!ndarray', ndarray_constructor)
 
-    # Read yaml file
-    with open(init_file, 'rb') as fid:
-        y = yaml.load(fid, Loader=FullLoader)
+    with open(filepath, "rb") as f:
+        try:
+            config = yaml.load(f, Loader=FullLoader)
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Error parsing YAML file '{filepath}': {e}")
 
-    # Check for ensemble
-    if 'ensemble' in y.keys():
-        keys_en = y['ensemble']
-        check_mand_keywords_en(keys_en)
-    else:
-        keys_en = {}
+    if not isinstance(config, dict):
+        raise ValueError(f"YAML file '{filepath}' does not contain a valid dictionary at the top level.")
 
-    # Check for dataassim
-    if 'dataassim' in y.keys():
-        keys_pr = y['dataassim']
-        check_mand_keywords_da(keys_pr)
-    elif 'optim' in y.keys():
-        keys_pr = y['optim']
-        check_mand_keywords_opt(keys_pr)
-    else:
-        keys_pr = {}
-    
-    if 'fwdsim' in y.keys():
-        keys_fwd = y['fwdsim']
-    else:
-        keys_fwd = {}
+    # Extract sections
+    cfg_ens = config.get("ensemble", {})
+    cfg_sim = config.get("fwdsim") or config.get("simulator") or {}
+    cfg_prb = config.get("dataassim") or config.get("optim") or {}
 
-    # Organize keywords
-    org = Organize_input(keys_pr, keys_fwd, keys_en)
-    org.organize()
+    return normalize_config(cfg_prb, cfg_sim, cfg_ens)
 
-    return org.get_keys_pr(), org.get_keys_fwd(), org.get_keys_en()
+
+def read_toml(filepath: str):
+    """
+    Read and parse a .toml configuration file for PIPT/POPT.
+
+    The TOML file should contain one or more of the following top-level keys:
+    - 'dataassim' (dict): Data assimilation configuration
+    - 'optim' (dict): Optimization configuration
+    - 'fwdsim' (dict): Forward simulation configuration
+    - 'ensemble' (dict, optional): Ensemble configuration
+
+    Returns
+    -------
+    tuple
+        (keys_pr, keys_fwd, keys_en)
+        - keys_pr: dict, parsed 'dataassim' or 'optim' section (empty if not present)
+        - keys_fwd: dict, parsed 'fwdsim' section (empty if not present)
+        - keys_en: dict, parsed 'ensemble' section (empty if not present)
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist.
+    ValueError
+        If the TOML file is missing required sections.
+    tomli.TOMLDecodeError
+        If the TOML file is invalid.
+    """
+    if not os.path.isfile(filepath):
+        raise FileNotFoundError(f"TOML file '{filepath}' does not exist.")
+
+    with open(filepath, 'rb') as f:
+        try:
+            config = tomli.load(f)
+        except tomli.TOMLDecodeError as e:
+            raise tomli.TOMLDecodeError(f"Error parsing TOML file '{filepath}': {e}")
+
+    if not isinstance(config, dict):
+        raise ValueError(f"TOML file '{filepath}' does not contain a valid dictionary at the top level.")
+
+    # Extract sections
+    cfg_ens = config.get("ensemble", {})
+    cfg_sim = config.get("fwdsim") or config.get("simulator") or {}
+    cfg_prb = config.get("dataassim") or config.get("optim") or {}
+
+    return normalize_config(cfg_prb, cfg_sim, cfg_ens)
 
 
 def convert_txt_to_toml(init_file):
+    """Write a legacy ``.pipt``/``.popt`` file as ``<name>.toml`` next to it."""
     # Read .pipt or .popt file
-    pr, fwd = read_txt(init_file)
+    pr, fwd, _ = read_txt(init_file)
 
     # Write dictionaries to toml file with same base file name
     new_file = change_file_extension(init_file, 'toml')
     with open(new_file, 'wb') as f:
-        if 'daalg' in pr:
+        if is_dataassim(pr):
             tomli_w.dump({'dataassim': pr, 'fwdsim': fwd}, f)
         else:
             tomli_w.dump({'optim': pr, 'fwdsim': fwd}, f)
 
+def convert_txt_to_yaml(init_file):
+    """Write a legacy ``.pipt``/``.popt`` file as ``<name>.yaml`` next to it."""
+    # Read .pipt or .popt file
+    pr, fwd, _ = read_txt(init_file)
 
-def read_toml(init_file):
-    """
-    Read .toml configuration file, parse and output dictionaries for PIPT/POPT
-
-    Parameters
-    ----------
-    init_file : str
-        toml configuration file
-    """
-    # Read
-    with open(init_file, 'rb') as fid:
-        t = tomli.load(fid)
-
-    # Check for dataassim and fwdsim
-    if 'ensemble' in t.keys():
-        keys_en = t['ensemble']
-        check_mand_keywords_en(keys_en)
-    else:
-        keys_en = {}
-    if 'optim' in t.keys():
-        keys_pr = t['optim']
-        check_mand_keywords_opt(keys_pr)
-    elif 'dataassim' in t.keys():
-        keys_pr = t['dataassim']
-        check_mand_keywords_da(keys_pr)
-    else:
-        keys_pr = {}
-    if 'fwdsim' in t.keys():
-        keys_fwd = t['fwdsim']
-    else:
-        raise KeyError
-
-    # Organize keywords
-    org = Organize_input(keys_pr, keys_fwd, keys_en)
-    org.organize()
-
-    return org.get_keys_pr(), org.get_keys_fwd(), org.get_keys_en()
-
+    # Write dictionaries to yaml file with same base file name
+    new_file = change_file_extension(init_file, 'yaml')
+    with open(new_file, 'w') as f:
+        if is_dataassim(pr):
+            yaml.dump({'dataassim': pr, 'fwdsim': fwd}, f)
+        else:
+            yaml.dump({'optim': pr, 'fwdsim': fwd}, f)
 
 def read_txt(init_file):
     """
@@ -195,20 +199,12 @@ def read_txt(init_file):
 
     # Assign the keys and values to different dictionaries depending on whether we have data assimilation (DATAASSIM)
     # or optimization (OPTIM). FWDSIM info is always assigned to keys_fwd
-    keys_pr = None
-    if pr_part == 'dataassim':
-        keys_pr = parse_keywords(clean_lines_pr)
-        check_mand_keywords_da(keys_pr)
-    elif pr_part == 'optim':
-        keys_pr = parse_keywords(clean_lines_pr)
-        check_mand_keywords_opt(keys_pr)
+    keys_pr = parse_keywords(clean_lines_pr) if pr_part in ('dataassim', 'optim') else None
     keys_fwd = parse_keywords(clean_lines_fwd)
-    check_mand_keywords_fwd(keys_fwd)
-
-    org = Organize_input(keys_pr, keys_fwd)
-    org.organize()
-
-    return org.get_keys_pr(), org.get_keys_fwd()
+    # Three sections, like the other readers; the text format keeps the
+    # ensemble's keys in DATAASSIM, so the third is empty. What is missing is
+    # reported by `pet validate` and when the run is built, not asserted here.
+    return normalize_config(keys_pr, keys_fwd, None)
 
 
 def read_clean_file(init_file):
@@ -265,6 +261,86 @@ def remove_empty_lines(lines):
     return lines_clean
 
 
+def _coerce_keyword_rows(rows):
+    """
+    Convert the raw text rows following a keyword into a typed value.
+
+    ``rows`` is a list of the raw (whitespace/tab-separated) strings that
+    followed a keyword in the init. file. Depending on how many rows there
+    are, and whether their tokens parse as numbers, the result is a float or
+    string scalar, a 1D list, or a 2D list. Numeric parsing is attempted
+    first (scalar, then 1D, then 2D); if that fails at every level the value
+    is treated as string data instead.
+    """
+    if len(rows) == 1:
+        row = rows[0]
+        if len(row.split()) == 1:
+            try:
+                return float(row)
+            except Exception:
+                pass
+        try:
+            return [float(x) for x in row.split()]
+        except Exception:
+            pass
+        tokens = row.split('\t')
+        if len(tokens) == 1:
+            return row.strip().lower()
+        return [x.rstrip('\n').lower() for x in tokens if x != '']
+
+    # Multiple rows: try a flat 1D float list (one float per row) first...
+    try:
+        return [float(x) for x in rows]
+    except Exception:
+        pass
+
+    # ...then a 2D float list (each row is one or more whitespace-separated floats)...
+    try:
+        return [[float(x) for x in col.split()] for col in rows]
+    except Exception:
+        pass
+
+    # ...and finally fall back to string data: one column per row becomes a 1D
+    # list of strings, multiple (tab-separated) columns become a 2D list.
+    one_col = all(len(row.split('\t')) == 1 for row in rows)
+    if one_col:
+        return [x.rstrip('\n').lower() for x in rows]
+    return [[x.rstrip('\n').lower() for x in col.split('\t') if x != ''] for col in rows]
+
+
+def _promote_token(token):
+    """Convert a string token to a float or list of floats where possible, else leave it unchanged."""
+    try:
+        return float(token)
+    except Exception:
+        pass
+    try:
+        return [float(x) for x in token.split()]
+    except Exception:
+        return token
+
+
+def _promote_numeric_strings(keys):
+    """
+    Retroactively convert list values that were parsed as pure strings back to
+    numbers, where every entry (or sub-entry) actually parses as a float.
+
+    ``_coerce_keyword_rows`` only recognizes a row block as numeric if *all*
+    of its rows parse as floats, so a keyword with a mix of numeric and
+    string rows ends up stored as strings. This fixes up such keywords
+    entry-by-entry after the fact.
+    """
+    for value in keys.values():
+        if not isinstance(value, list):
+            continue
+        if isinstance(value[0], list):
+            for row in value:
+                if all(isinstance(x, str) for x in row):
+                    row[:] = [_promote_token(x) for x in row]
+        elif all(isinstance(x, str) for x in value):
+            value[:] = [_promote_token(x) for x in value]
+
+
 def parse_keywords(lines):
     """
     Here we parse the lines in the init. file to a Python dictionary. The keys of the dictionary is the keywords
@@ -282,122 +358,19 @@ def parse_keywords(lines):
     keys : dict
         Dictionary with all info. from the init. file.
     """
-    # Init. the dictionary
     keys = {}
+    for line in lines:
+        if not line:  # Empty list corresponds to an empty line in the file
+            continue
+        keyword = line[0].strip().lower()
+        keys[keyword] = _coerce_keyword_rows(line[1:])
 
-    # Loop over all input keywords and store in the dictionary.
-    for i in range(len(lines)):
-        if lines[i] != []:  # Check for empty list (corresponds to empty line in file)
-            try:  # Try first to store the info. in keyword as float in a 1D list
-                # A scalar, which we store as scalar...
-                if len(lines[i][1:]) == 1 and len(lines[i][1:][0].split()) == 1:
-                    keys[lines[i][0].strip().lower()] = float(lines[i][1:][0])
-                else:
-                    keys[lines[i][0].strip().lower()] = [float(x) for x in lines[i][1:]]
-            except:
-                try:  # Store as float in 2D list
-                    if len(lines[i][1:]) == 1:  # Check if it is actually a 1D array disguised as 2D
-                        keys[lines[i][0].strip().lower()] = \
-                            [float(x) for x in lines[i][1:][0].split()]
-                    else:  # if not store as 2D list
-                        keys[lines[i][0].strip().lower()] = \
-                            [[float(x) for x in col.split()] for col in lines[i][1:]]
-                except:  # Keyword contains string(s), not floats
-                    if len(lines[i][1:]) == 1:  # If 1D list
-                        # If it is a scalar store as single input
-                        if len(lines[i][1:][0].split('\t')) == 1:
-                            keys[lines[i][0].strip().lower()] = lines[i][1:][0].strip().lower()
-                        else:  # Store as 1D list
-                            keys[lines[i][0].strip().lower()] = \
-                                [x.rstrip('\n').lower()
-                                 for x in lines[i][1:][0].split('\t') if x != '']
-                    else:  # It is a 2D list
-                        # Check each row in 2D list. If it is single column (i.e., one string per row),
-                        # we make it a 1D list of strings; if not, we make it a 2D list of strings.
-                        one_col = True
-                        for j in range(len(lines[i][1:])):
-                            if len(lines[i][1:][j].split('\t')) > 1:
-                                one_col = False
-                                break
-                        if one_col is True:  # Only one column
-                            keys[lines[i][0].strip().lower()] = \
-                                [x.rstrip('\n').lower() for x in lines[i][1:]]
-                        else:  # Store as 2D list
-                            keys[lines[i][0].strip().lower()] = \
-                                [[x.rstrip('\n').lower() for x in col.split('\t') if x != '']
-                                    for col in lines[i][1:]]
-
-    # Need to check if there are any only-string-keywords that actually contains floats, and convert those to
-    # floats (the above loop only handles pure float or pure string input, hence we do a quick fix for mixed
-    # lists here)
-    # Loop over all keys in dict. and check every "pure" string keys for floats
-    for i in keys:
-        if isinstance(keys[i], list):  # Check if key is a list
-            if isinstance(keys[i][0], list):  # Check if it is a 2D list
-                for j in range(len(keys[i])):  # Loop over all sublists
-                    # Check sublist for strings
-                    if all(isinstance(x, str) for x in keys[i][j]):
-                        for k in range(len(keys[i][j])):  # Loop over enteries in sublist
-                            try:  # Try to make float
-                                keys[i][j][k] = float(keys[i][j][k])  # Scalar
-                            except:
-                                try:  # 1D array
-                                    keys[i][j][k] = [float(x)
-                                                     for x in keys[i][j][k].split()]
-                                except:  # If it is actually a string, pass over
-                                    pass
-            else:  # It is a 1D list
-                # Check if list only contains strings
-                if all(isinstance(x, str) for x in keys[i]):
-                    for j in range(len(keys[i])):  # Loop over all entries in list
-                        try:  # Try to make float
-                            keys[i][j] = float(keys[i][j])
-                        except:
-                            try:
-                                keys[i][j] = [float(x) for x in keys[i][j].split()]
-                            except:  # If it is actually a string, pass over
-                                pass
-
-    # Return dict.
+    _promote_numeric_strings(keys)
     return keys
 
 
-def check_mand_keywords_fwd(keys_fwd):
-    """Check for mandatory keywords in `FWDSIM` part, and output error if they are not present"""
-
-    # Mandatory keywords in FWDSIM
-    assert 'parallel' in keys_fwd, 'PARALLEL not in FWDSIM!'
-    assert 'datatype' in keys_fwd, 'DATATYPE not in FWDSIM!'
-
-
-def check_mand_keywords_da(keys_da):
-    """Check for mandatory keywords in `DATAASSIM` part, and output error if they are not present"""
-
-    # Mandatory keywords in DATAASSIM
-    assert 'truedataindex' in keys_da, 'TRUEDATAINDEX not in DATAASSIM!'
-    assert 'assimindex' in keys_da, 'ASSIMINDEX not in DATAASSIM!'
-    assert 'truedata' in keys_da, 'TRUEDATA not in DATAASSIM!'
-    assert 'datavar' in keys_da, 'DATAVAR not in DATAASSIM!'
-    assert 'obsname' in keys_da, 'OBSNAME not in DATAASSIM!'
-    assert 'energy' in keys_da, 'ENERGY not in DATAASSIM!'
-
-
-def check_mand_keywords_opt(keys_opt):
-    """Check for mandatory keywords in `OPTIM` part, and output error if they are not present"""
-pass
-
-
-def check_mand_keywords_en(keys_en):
-    """Check for mandatory keywords in `ENSEMBLE` part, and output error if they are not present"""
-
-    # Mandatory keywords in ENSEMBLE
-    assert 'ne' in keys_en, 'NE not in ENSEMBLE!'
-    assert ('state' in keys_en) or ('controls' in keys_en), 'STATE or CONTROLS not in ENSEMBLE!'
-    if 'importstaticvar' not in keys_en:
-        assert filter(list(keys_en.keys()),
-                      'prior_*') != [], 'No PRIOR_<STATICVAR> in DATAASSIM'
-
 def change_file_extension(filename, new_extension):
+    """``filename`` with its extension replaced by ``new_extension``."""
     if '.' in filename:
         name, old_extension = filename.rsplit('.', 1)
         new_filename = name + '.' + new_extension

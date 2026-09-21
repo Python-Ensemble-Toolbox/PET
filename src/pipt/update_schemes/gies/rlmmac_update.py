@@ -1,12 +1,10 @@
 """EnRML (IES) without the prior increment term."""
 
 import numpy as np
-from copy import deepcopy
-import copy as cp
-from scipy.linalg import solve, solve_banded, cholesky, lu_solve, lu_factor, inv
-import pickle
+from scipy.linalg import solve
 import pipt.misc_tools.analysis_tools as at
-from pipt.misc_tools.cov_regularization import _calc_loc
+import pipt.misc_tools.extract_tools as extract
+from pipt.localization.local_analysis import _calc_loc
 
 class rlmmac_update():
     """
@@ -26,7 +24,7 @@ class rlmmac_update():
             ti = (np.cumsum(s_d) / sum(s_d)) <= self.trunc_energy
             u_d, s_d, v_d = u_d[:, ti].copy(), s_d[ti].copy(), v_d[ti, :].copy()
         if 'localization' in self.keys_da:
-            if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+            if extract.is_enabled(self.keys_da.get('emp_cov', False)):
                 if len(self.scale_data.shape) == 1:
                     E_hat = np.dot(np.expand_dims(self.scale_data ** (-1),
                                    axis=1), np.ones((1, self.ne))) * self.E
@@ -66,7 +64,7 @@ class rlmmac_update():
 
                 # Mean state and perturbation matrix
                 mean_state = np.mean(aug_state, 1)
-                if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+                if extract.is_enabled(self.keys_da.get('emp_cov', False)):
                     pert_state = (self.state_scaling**(-1))[:, None] * (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
                                                                                            np.ones((1, self.ne))))
                 else:
@@ -91,7 +89,7 @@ class rlmmac_update():
                     # if no distance, do full update
                     weight = np.ones((aug_state.shape[0], X.shape[1]))
                 mean_state = np.mean(aug_state, 1)
-                if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+                if extract.is_enabled(self.keys_da.get('emp_cov', False)):
                     pert_state = (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
                                                      np.ones((1, self.ne))))
                 else:
@@ -108,7 +106,7 @@ class rlmmac_update():
                 try:
                     self.step = weight.multiply(
                         np.dot(pert_state, X)).dot(scaled_delta_data)
-                except:
+                except Exception:
                     self.step = (weight*(np.dot(pert_state, X))).dot(scaled_delta_data)
 
             elif sum(['dist_loc' in el for el in f]) >= 1:
@@ -116,7 +114,7 @@ class rlmmac_update():
                                                                               for elem in self.assim_index[1]],
                                                         self.list_states, self.ne, self.prior_info, data_size)
                 mean_state = np.mean(aug_state, 1)
-                if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+                if extract.is_enabled(self.keys_da.get('emp_cov', False)):
                     pert_state = (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
                                                      np.ones((1, self.ne))))
                 else:
@@ -145,9 +143,9 @@ class rlmmac_update():
                             count += 1
 
                 well = [w for w in
-                        set([el[0] for el in self.localization.loc_info.keys() if type(el) == tuple])]
+                        set([el[0] for el in self.localization.loc_info.keys() if isinstance(el, tuple)])]
                 times = [t for t in set(
-                    [el[1] for el in self.localization.loc_info.keys() if type(el) == tuple])]
+                    [el[1] for el in self.localization.loc_info.keys() if isinstance(el, tuple)])]
                 tot_dat_index = {}
                 for uniq_well in well:
                     tmp_index = []
@@ -155,7 +153,7 @@ class rlmmac_update():
                         if (uniq_well, t) in act_data_list:
                             tmp_index.append(act_data_list[(uniq_well, t)])
                     tot_dat_index[uniq_well] = tmp_index
-                if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+                if extract.is_enabled(self.keys_da.get('emp_cov', False)):
                     emp_cov = True
                 else:
                     emp_cov = False
@@ -175,13 +173,13 @@ class rlmmac_update():
         else:
             # Mean state and perturbation matrix
             mean_state = np.mean(aug_state, 1)
-            if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+            if extract.is_enabled(self.keys_da.get('emp_cov', False)):
                 pert_state = (self.state_scaling**(-1))[:, None] * (aug_state - np.dot(np.resize(mean_state, (len(mean_state), 1)),
                                                                                        np.ones((1, self.ne))))
             else:
                 pert_state = (self.state_scaling**(-1)
                               )[:, None] * np.dot(aug_state, self.proj)
-            if 'emp_cov' in self.keys_da and self.keys_da['emp_cov'] == 'yes':
+            if extract.is_enabled(self.keys_da.get('emp_cov', False)):
                 if len(self.scale_data.shape) == 1:
                     E_hat = np.dot(np.expand_dims(self.scale_data ** (-1),
                                    axis=1), np.ones((1, self.ne))) * self.E
