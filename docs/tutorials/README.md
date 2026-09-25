@@ -4,8 +4,9 @@ Here are some tutorials.
 
 ## Running PIPT and POPT
 
-- [`tutorial_pipt.ipynb`](pipt/TinyBox/tutorial_pipt): Tutorial for running PIPT
-- [`tutorial_popt.ipynb`](popt/5Spot/tutorial_popt): Tutorial for running POPT
+- [`tutorial_pipt.ipynb`](pipt/tutorial_pipt): Tutorial for running PIPT
+- [`tutorial_pipt.ipynb`](popt/tutorial_popt): Tutorial for running POPT
+- [EnIF and EnIF-MDA](enif.md): Information-filter analyses and parameter graphs
 
 ## Data structures
 

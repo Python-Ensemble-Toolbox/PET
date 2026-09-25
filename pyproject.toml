@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PET"
-version = "1.0"
+version = "0.2"
 description = "Python Ensemble Toolbox"
 authors = [
   { name = "Data assimilation and optimization group" }
@@ -15,15 +15,15 @@ maintainers = [
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.15"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
@@ -33,7 +33,10 @@ dependencies = [
     "h5py",
     "tqdm",
     "PyWavelets",
-    "geostat @ git+https://github.com/Python-Ensemble-Toolbox/Geostatistics@3f9f0c876815db140fae3404d322892190cb6728",
+    "psutil",
+    "geostat @ git+https://github.com/Python-Ensemble-Toolbox/Geostatistics@main",
+    "graphite-maps>=0.0.11,<0.1",
+    "pytest",
     "pandas",
     "p_tqdm",
     "tomli",
