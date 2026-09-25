@@ -2,10 +2,8 @@
 # Imports
 import numpy as np  # Misc. numerical tools
 import os  # Misc. system tools
-import sys
-import scipy.stats as sc  # Extended numerical tools
 from copy import copy, deepcopy
-from multiprocessing import Process, Pipe  # To be able to run Python methods in background
+from multiprocessing import Process  # To be able to run Python methods in background
 import time  # To wait a bit before loading files
 
 import h5py  # To load matlab .mat files
@@ -50,6 +48,7 @@ class lin_1d:
         self.keys = {}
 
     def setup_fwd_run(self, **kwargs):
+        """Store the keyword arguments as attributes before a forecast."""
         self.__dict__.update(kwargs)  # parse kwargs input into class attributes
         assimIndex = [i for i in range(len(self.l_prim))]
         trueOrder = self.true_order
@@ -65,6 +64,7 @@ class lin_1d:
             self.true_prim = [trueOrder[0], [trueOrder[1]]]
 
     def run_fwd_sim(self, state, member_i, del_folder=True):
+        """Observe the state at the model's positions; one dict per report point."""
         inv_param = state.keys()
         for prim_ind in self.l_prim:
             for dat in self.all_data_types:
@@ -73,7 +73,10 @@ class lin_1d:
                     tmp_val.append(state[para][self.true_prim[1][prim_ind]])
                 self.pred_data[prim_ind][dat] = np.array(tmp_val)
 
-        return self.pred_data
+        # A fresh list per member: the serial forecast keeps every member's
+        # output, and handing back the shared attribute made them all alias
+        # the last one evaluated.
+        return deepcopy(self.pred_data)
 
 
 class nonlin_onedimmodel:
@@ -102,6 +105,7 @@ class nonlin_onedimmodel:
         self.l_prim = [int(i) for i in range(len(self.true_prim[1]))]
 
     def setup_fwd_run(self, **kwargs):
+        """Store the keyword arguments as attributes before a forecast."""
         self.__dict__.update(kwargs)  # parse kwargs input into class attributes
         assimIndex = [i for i in range(len(self.l_prim))]
         trueOrder = self.true_order
@@ -117,6 +121,7 @@ class nonlin_onedimmodel:
             self.true_prim = [trueOrder[0], [trueOrder[1]]]
 
     def run_fwd_sim(self, state, member_i, del_folder=True):
+        """Evaluate the nonlinear model on the state; one dict per report point."""
         # Fwd. model given by Chen & Oliver, Computat. Geosci., 17(4), p. 689-703, 2013.
         inv_param = state.keys()
         for prim_ind in self.l_prim:
@@ -127,7 +132,10 @@ class nonlin_onedimmodel:
                         (7 / 12) * (state[para] ** 3) - (7 / 2) * (state[para] ** 2) + 8 * state[para])
                 self.pred_data[prim_ind][dat] = np.array(tmp_val)
 
-        return self.pred_data
+        # A fresh list per member: the serial forecast keeps every member's
+        # output, and handing back the shared attribute made them all alias
+        # the last one evaluated.
+        return deepcopy(self.pred_data)
 
 
 class sevenmountains:
@@ -328,8 +336,7 @@ class sevenmountains:
             for i in range(n):
                 d[i] = func(control[0][i], control[1][i])
         else:
-            print('\033[1;31mERROR: Input to objective function has wrong dimension.\033[1;m')
-            sys.exit(1)
+            raise ValueError('Input to objective function has wrong dimension.')
         # # Calc. data
         # d = -self.m ** 2
 
@@ -379,6 +386,7 @@ class sevenmountains:
     # Create static method since the following function does not use 'self'
     @staticmethod
     def get_obj_func(obj_func_name, data_info=None, member=None):
+        """Objective value read from the results of one member (``En_<member>/``) or of a single run."""
         # Ensemble runs
         if member is not None:
             filename = 'En_' + str(member) + os.sep
@@ -435,6 +443,7 @@ class sevenmountains:
 
 
 class noSimulation:
+    """A simulator that does nothing: the state itself is the prediction, for objectives that need no forward model."""
 
     def __init__(self, input_dict):
         # parse information from the input.
@@ -443,6 +452,7 @@ class noSimulation:
         self.true_order = None
 
     def setup_fwd_run(self, **kwargs):
+        """Store the keyword arguments as attributes."""
         # do whatever initialization you need.
         # Useful to initialize the self.pred_data variable.
         # self.pred_data is a list of dictionaries. Where each list element represents
@@ -451,6 +461,7 @@ class noSimulation:
         self.__dict__.update(kwargs)  # parse kwargs input into class attributes
 
     def run_fwd_sim(self, state, member):
+        """Return the state as the prediction."""
         # run simulator. Called from the main function using p_map from p_tqdm package.
         # Return pred_data if run is successfull, False if run failed.
         return [state]

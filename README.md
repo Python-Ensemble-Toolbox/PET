@@ -19,7 +19,7 @@ and EnIF-MDA with their dependencies.
 Before installing ensure you have python3 pre-requisites. On a Debian system run:
 
 ```
-sudo upt-get update
+sudo apt-get update
 sudo apt-get install python3
 sudo apt-get install python3-pip
 sudo apt-get install python3-venv
@@ -44,12 +44,6 @@ python3 -m venv venv-PET
 source venv-PET/bin/activate
 ```
 
-Some additional features might be not part of your default installation and need to be set in the Python (virtual) environment manually:
-
-```
-python3 -m pip install wheel
-```
-
 If you do not install PET inside a virtual environment,
 you may have to include the `--user` option in the following
 (to install to your local Python site packages, usually located in `~/.local`).
@@ -63,6 +57,76 @@ python3 -m pip install -e .
 - The dot is needed to point to the current directory.
 - The `-e` option installs PET such that changes to it take effect immediately
   (without re-installation).
+
+To also install the tools needed for running tests and linting locally:
+
+```sh
+python3 -m pip install -e ".[dev]"
+```
+
+## Documentation
+
+The [configuration reference](docs/configuration.md) lists every key of the
+`dataassim`, `ensemble`, `optim` and `simulator` sections; the
+[architecture page](docs/architecture.md) explains how a run is put together
+and where a new scheme, analysis, localization, optimizer or simulator goes.
+
+## Command-line interface
+
+Installing PET also installs a `pet` command for working with config files:
+
+```sh
+pet validate my_config.toml   # check a config file for missing/invalid keys
+pet convert my_case.pipt      # convert a legacy .pipt/.popt file to .toml (or --to yaml)
+pet migrate my_config.toml    # update a config file to the current schema
+pet version                   # print the installed PET version
+```
+
+### Config schema change: `daalg` becomes `scheme`
+
+The analysis flavour is a parameter of an algorithm, not a separate algorithm,
+so the two-element `daalg` key has been replaced by a single `scheme` key:
+
+```toml
+# before                              # after
+[dataassim]                           [dataassim]
+daalg = ["esmda", "esmda"]            scheme = "esmda"
+analysis = "approx"                   analysis = "approx"
+```
+
+`pet migrate` performs this rewrite in place, keeping the original as
+`<config>.bak`. Use `--dry-run` to preview. Loading a config that still uses
+`daalg` raises an error pointing at the command. For a legacy `.pipt`/`.popt`
+file, convert first and then migrate:
+
+```sh
+pet convert my_case.pipt && pet migrate my_case.toml
+```
+
+The same change is reflected in the Python API, where one constructor per
+algorithm now takes the flavour as an argument:
+
+```python
+from pipt import ESMDA, available_schemes
+
+scheme = ESMDA(cfg_da, cfg_en, sim)   # flavour comes from the config's `analysis`
+result = scheme.run_assimilation()    # the scheme owns its iteration loop
+
+available_schemes()   # every valid (scheme, analysis) pair
+```
+
+`analysis=` overrides the config when passed. `ESMDA.assimilate(cfg_da, cfg_en,
+sim)` is the one-line form for when the scheme object is not needed afterwards;
+it returns the same `AssimilationResult`, whose `x` is the posterior ensemble.
+
+The eighteen per-flavour classes this used to produce (`esmda_approx`,
+`lmenrml_full`, ...) are gone: each was a one-line subclass pinning the
+flavour a constructor argument already expresses. Use `ESMDA(..., analysis=
+"approx")` and friends instead.
+
+Running a data-assimilation or optimization job itself is still done from a
+Python driver script that wires up your forward simulator/cost function -- see
+the tutorials below.
 
 ## Examples
 

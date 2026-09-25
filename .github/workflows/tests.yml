@@ -4,7 +4,6 @@
 # - Compute test coverage and submit to coveralls.io
 # - Also config for macOS and/or Windows
 # - Also config for conda
-# - Lint
 
 name: CI tests
 
@@ -19,6 +18,19 @@ on:
       - '*'
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install ruff
+      run: python -m pip install ruff
+    - name: Run ruff
+      run: ruff check src tests
+
   bundled:
 
     runs-on: ubuntu-latest
@@ -28,15 +40,15 @@ jobs:
         python-version: ["3.12", "3.13", "3.14"]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip setuptools
-        python -m pip install -e .
+        python -m pip install -e ".[dev]"
     - name: Launch tests
       run: |
-        pytest
+        pytest --cov=src --cov-report=term

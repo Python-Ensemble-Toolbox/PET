@@ -1,14 +1,16 @@
-import subprocess
+"""Suite-wide fixtures.
+
+PET's ensembles and optimizers write to the current working directory by
+default: ``En_*`` folders, ``prior_ensemble.npz``, ``ASSIM.log``/``OPTIM.log``,
+restart files. Until that default changes, every test starts in its own
+temporary directory so nothing lands in the repository or wherever pytest was
+launched. Tests that need a particular layout still call ``monkeypatch.chdir``
+or ``os.chdir`` themselves; this fixture only sets the starting point.
+"""
 
 import pytest
-import shutil
 
-@pytest.fixture(scope="session")
-def temp_examples_dir(request, tmp_path_factory):
-    """Clone PET Examples repo to a temp dir. Return its path."""
-    pth = tmp_path_factory.mktemp("temp_dir")
-    subprocess.run(["git", "clone", "--depth", "1", "--branch", "examples-dev",
-                    "https://github.com/Python-Ensemble-Toolbox/Examples.git", pth],
-                   check=True)
-    yield pth
-    shutil.rmtree(str(pth))
+
+@pytest.fixture(autouse=True)
+def _run_in_tmp_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)

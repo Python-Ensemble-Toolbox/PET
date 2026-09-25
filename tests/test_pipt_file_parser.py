@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from input_output.read_config import read_clean_file, remove_empty_lines, parse_keywords
 
@@ -10,7 +11,8 @@ class TestPiptInit(unittest.TestCase):
 
     def setUp(self):
         # Read "parser_input.pipt" and parse with core methods in read_txt
-        lines = read_clean_file('tests/parser_input.pipt')
+        parser_input = Path(__file__).with_name('parser_input.pipt')
+        lines = read_clean_file(str(parser_input))
         clean_lines = remove_empty_lines(lines)
         self.keys = parse_keywords(clean_lines)
 

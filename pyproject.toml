@@ -4,7 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PET"
-version = "1.0"
 description = "Python Ensemble Toolbox"
 authors = [
   { name = "Data assimilation and optimization group" }
@@ -13,15 +12,24 @@ maintainers = [
   { name = "Kristian Fossum", email = "krfo@norceresearch.no" },
   { name = "Rolf J. Lorentzen", email = "rolo@norceresearch.no" }
 ]
-license = { file = "LICENSE.txt" }
+license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
     "h5py",
-    "mako",
     "tqdm",
     "PyWavelets",
     "psutil",
@@ -30,17 +38,21 @@ dependencies = [
     "pytest",
     "pandas",
     "p_tqdm",
-    #"mat73",
-    "opencv-python",
-    #"rips",
     "tomli",
     "tomli-w",
     "pyyaml",
-    #"scikit-learn",
-    #"pylops"
+    "sympy",
 ]
 
+[project.scripts]
+pet = "pet_cli.__main__:main"
+
 [project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
 doc = [
     "mkdocs-material",
     "mkdocstrings",
@@ -61,3 +73,29 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: end-to-end assimilation with a parallel forecast; deselect with -m 'not slow'",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # line length is handled by formatting, not a hard error
+    "F403",  # star imports are used intentionally to flatten package namespaces
+    "F405",
+    "E741",  # single-letter names (l, I, ...) are idiomatic in this numerical/linear-algebra codebase
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # intentional namespace re-exports
+"src/misc/grdecl.py" = ["E722", "E741", "F821"]  # vendored parser; F821 is dead Python-2-only code
+"src/misc/ecl.py" = ["E722", "E741"]
+"src/misc/grid/sector.py" = ["E722", "E741"]
+"src/misc/grid/unstruct.py" = ["F841"]  # untested legacy grid parser; allocations look WIP, not dead code

@@ -104,7 +104,7 @@ class OpenBlasSingleThread:
         if len(self.num_threads):
             os.environ['OMP_NUM_THREADS'] = self.num_threads
         else:
-            os.environ.unsetenv('OMP_NUM_THREADS')
+            os.environ.pop('OMP_NUM_THREADS', None)
 
         # Reset Process context
         ctx._default_context = self.ctx
@@ -230,15 +230,15 @@ class CmgRunEnvironment:
         if len(self.path):
             os.environ['PATH'] = self.path
         else:
-            os.environ.unsetenv('PATH')
+            os.environ.pop('PATH', None)
 
         if len(self.ld_path):
             os.environ['LD_LIBRARY_PATH'] = self.ld_path
         else:
-            os.environ.unsetenv('LD_LIBRARY_PATH')
+            os.environ.pop('LD_LIBRARY_PATH', None)
 
         # We unset the CMG license server path
-        os.environ.unsetenv('CMG_LIC_HOST')
+        os.environ.pop('CMG_LIC_HOST', None)
 
         # Reset Process context
         ctx._default_context = self.ctx
@@ -265,7 +265,7 @@ class OPMRunEnvironment:
         """
         self.filename = filename
         self.suffix = suffix
-        if type(matchstring) != list:
+        if not isinstance(matchstring, list):
             self.mstring = list(matchstring)
         else:
             self.mstring = matchstring
@@ -318,7 +318,7 @@ class OPMRunEnvironment:
                     # TODO: not do time.sleep()
                     # time.sleep(0.1)
                     member = True
-        if member == False:
+        if not member:
             return False
         return True
 
@@ -388,7 +388,7 @@ class FlowRockRunEnvironment:
             if self.filename.split(os.sep)[1] in os.listdir(self.filename.split(os.sep)[0]):
                 member = True
 
-        if member == False:
+        if not member:
             sys.exit(1)
 
         return False

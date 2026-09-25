@@ -19,8 +19,7 @@ import numpy.ma
 import os
 import os.path
 import re
-from six.moves import range  # pylint: disable=redefined-builtin, import-error
-import six
+import io
 import sys
 
 
@@ -1113,7 +1112,7 @@ def _fast_index_mem(base_dir, fname, mem, skip, index):
 
 # definition of special characters that can be compared directly to the
 # contents of the memory-map. notice that this is the inverse of the
-# six.byte2int function that is used further below when manipulating a
+# byte indexing (``b' '[0]``) that is used further below when manipulating a
 # bytearray copy.
 if sys.version_info[0] < 3:
     _SP = b' '
@@ -1339,7 +1338,7 @@ def _sec_mat_mem(mem, bgn, end, dtype, usecols):
 
     # let the library do the heavy lifting of this section; it is just an
     # array without any special formatting (anymore)
-    with ctx.closing(six.BytesIO(buf)) as src:
+    with ctx.closing(io.BytesIO(buf)) as src:
         data = numpy.loadtxt(src, dtype=dtype, usecols=usecols)
 
     return data
@@ -1370,9 +1369,9 @@ def _read_specgrid(mem, sec_tbl):
     return spec[::-1]
 
 
-_CR = six.byte2int(b'\r')
-_LF = six.byte2int(b'\n')
-_WS = six.byte2int(b' ')
+_CR = b'\r'[0]
+_LF = b'\n'[0]
+_WS = b' '[0]
 
 
 def _strip_newline(data):
@@ -1536,7 +1535,7 @@ def _read_multi(wrapper_name, mem):
     Parameters
     ----------
     wrapper_name : str
-        Name of the file containing the inclusion wrapper. This file is only 
+        Name of the file containing the inclusion wrapper. This file is only
         interesting because the name of the dimensions file is constructed based on it.
     mem : mmap.mmap
         Handle to memory-mapping of the wrapper file.

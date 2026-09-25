@@ -1,102 +1,144 @@
 """
 ES type schemes
 """
-from pipt.update_schemes.enkf import enkf_approx
-from pipt.update_schemes.enkf import enkf_full
-from pipt.update_schemes.enkf import enkf_subspace
+from pipt.update_schemes.enkf import EnKF
 
 import numpy as np
-from copy import deepcopy
-from pipt.misc_tools import analysis_tools as at
 
 
-class esMixIn():
+class ES(EnKF):
+    """Ensemble Smoother (ES).
+
+    Assimilates all observations simultaneously in a single update, rather than
+    sequentially in time as the filter does. It is :class:`EnKF` specialised to
+    one data group, and shares its analysis step; only the iteration budget and
+    the misfit bookkeeping differ.
+
+    A single conditioning step is cheap but can over-correct when the model is
+    strongly non-linear. :class:`ESMDA` addresses this by spreading the same
+    update over several inflated steps.
+
+    Parameters
+    ----------
+    keys_da : dict
+        Parsed ``dataassim`` configuration. Besides the keys every scheme
+        reads -- ``data``, ``datavar``, ``obsname``, ``truedataindex`` -- the
+        ones this scheme acts on are listed under Notes.
+    keys_en : dict
+        Parsed ``ensemble`` configuration: ensemble size ``ne``, the ``state``
+        variable names, and the ``prior_<name>`` blocks describing each.
+    sim : object
+        Forward simulator instance, e.g. ``simulator.opm.flow``.
+    analysis : {'approx', 'full', 'subspace'}, optional
+        Analysis flavour, i.e. how the ensemble-approximated sensitivity is
+        inverted. Defaults to the ``analysis`` key in ``keys_da``, falling back
+        to ``'approx'``. The flavours differ in cost and in how they handle a
+        rank-deficient ensemble; they solve the same update equation.
+
+    Attributes
+    ----------
+    ensemble : pipt.ensembles.AssimilationEnsemble
+        Collaborator holding the state realisations, observed data and
+        simulator. Its state is exposed as properties on the scheme, so
+        ``scheme.enX`` and ``scheme.keys_da`` read straight through.
+    analysis : pipt.update_schemes.analysis.AnalysisBase
+        The bound analysis object. Note the constructor takes ``analysis`` as
+        a *name* and this attribute holds the resulting object, the way
+        ``Model(optimizer="adam").optimizer`` is an optimizer instance.
+    analysis_name : str
+        The flavour name that was resolved, e.g. ``'approx'``.
+    iteration : int
+        Accepted iterations completed so far.
+    data_misfit, prior_data_misfit : float
+        Current and initial mean data misfit.
+
+    Notes
+    -----
+    ``assimindex`` is flattened to a single group at construction, so the
+    ordering that matters for :class:`EnKF` has no effect here.
+
+    Because there is only one step, the ``full`` flavour coincides with
+    ``approx`` -- the prior-increment term they differ over is only reached
+    when iterating -- so :attr:`EnKF.COMPATIBLE_ANALYSES`, inherited
+    unchanged here, points ``"full"`` at the cheaper ``approx`` analysis.
+
+    Examples
+    --------
+    >>> result = ES.assimilate(keys_da, keys_en, flow(keys_sim))
+    >>> result.nit
+    1
+
+    References
+    ----------
+    Evensen, *Data Assimilation: The Ensemble Kalman Filter* [`evensen2009a`][].
+
+    See Also
+    --------
+    EnKF : Sequential form of the same update.
+    ESMDA : Spreads the conditioning over several inflated steps.
     """
-    This is the straightforward ES analysis scheme. We treat this as a all-data-at-once EnKF step, hence the
-    calc_analysis method here is identical to that in the `enkf` class. Since, for the moment, ASSIMINDEX is parsed in a
-    specific manner (or more precise, single rows and columns in the PIPT init. file is parsed to a 1D list), a
-    `Simultaneous` 'loop' had to be implemented, and `es` will use this to do the inversion. Maybe in the future, we can
-    make the `enkf` class do simultaneous updating also. The consequence of all this is that we inherit BOTH `enkf` and
-    `Simultaneous` classes, which is convenient. The `Simultaneous` class is inherited to set up the correct inversion
-    structure and `enkf` is inherited to get `calc_analysis`, so we do not have to implement it again.
-    """
 
-    def __init__(self, keys_da, keys_en, sim):
+    def __init__(self, keys_da, keys_en, sim, analysis=None, ensemble=None):
+        """Build the ensemble from the config (or take the one given) and bind the analysis.
+
+        See the class docstring for the parameters.
         """
-        The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
-        `pipt.input_output.pipt_init.ReadInitFile`.
-        """
-        # Pass init. file to Simultaneous parent class (Python searches parent classes from left to right).
-        super().__init__(keys_da, keys_en, sim)
+        super().__init__(keys_da, keys_en, sim, analysis=analysis, ensemble=ensemble)
 
-        if self.restart is False:
-            # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
-            # are given as in the Simultaneous loop.
-            self.check_assimindex_simultaneous()
+        # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
+        # are given as in the Simultaneous loop.
+        self.ensemble.check_assimindex_simultaneous()
 
-            # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
-            # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
-            self.max_iter = 2
+        # A single all-data-at-once update.
+        self.maxiter = 1
 
-    def check_convergence(self):
+    def check_convergence(self) -> bool:
+        """ES takes a single all-data-at-once step; nothing stops early."""
+        return False
+
+    def score_and_commit(self):
         """
         Calculate the "convergence" of the method. Important to
         """
-        self.prev_data_misfit = self.prior_data_misfit
+        self.prev_data_misfit_mean = self.prior_data_misfit_mean
         # only calulate for the final (posterior) estimate
-        if self.iteration == len(self.keys_da['assimindex']):
-            assim_index = [self.keys_da['obsname'], list(
-                np.concatenate(self.keys_da['assimindex']))]
-            list_datatypes = self.list_datatypes
-            obs_data_vector, pred_data = at.aug_obs_pred_data(self.obs_data, self.pred_data, assim_index,
-                                                              list_datatypes)
-
-            data_misfit = at.calc_objectivefun(
-                self.enObs, pred_data, self.scale_data)
-            self.data_misfit = np.mean(data_misfit)
+        if self.iteration + 1 == len(self.keys_da['assimindex']):
+            data_misfit = self.score()
+            self.ensemble_misfit = data_misfit
+            self.data_misfit_mean = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
 
         else:  # sequential updates not finished. Misfit is not relevant
-            self.data_misfit = self.prior_data_misfit
+            self.data_misfit_mean = self.prior_data_misfit_mean
 
         # Logical variables for conv. criteria
-        why_stop = {'rel_data_misfit': 1 - (self.data_misfit / self.prev_data_misfit),
-                    'data_misfit': self.data_misfit,
-                    'prev_data_misfit': self.prev_data_misfit}
+        why_stop = {'rel_data_misfit': 1 - (self.data_misfit_mean / self.prev_data_misfit_mean),
+                    'data_misfit': self.data_misfit_mean,
+                    'prev_data_misfit': self.prev_data_misfit_mean}
 
-        if self.data_misfit == self.prev_data_misfit:
+        # Update state ensemble. This is unconditional, as it is in every other
+        # scheme: the analysis result lives in enX_temp and is worthless until
+        # promoted. It used to sit inside the equal-misfit branch below, which
+        # is essentially never taken -- prev_data_misfit is the prior misfit and
+        # data_misfit is the posterior one -- so ES returned its prior ensemble
+        # unchanged while logging a reduced misfit.
+
+        if self.data_misfit_mean == self.prev_data_misfit_mean:
             self.logger.info(
                 f'ES update {self.iteration} complete!')
-            self.enX = deepcopy(self.enX_temp)
-            self.enX_temp = None
         else:
-            if self.data_misfit < self.prior_data_misfit:
-                self.logger.info(
-                    f'ES update complete! Objective function decreased from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
+
+            # Reduction
+            if self.data_misfit_mean < self.prior_data_misfit_mean:
+                dF = (self.prev_data_misfit_mean - self.data_misfit_mean)/self.prev_data_misfit_mean * 100
+                self.logger('ES update complete!')
+                msg = f'Data Misfit reduced by {dF:.1f} %: {self.prev_data_misfit_mean:0.1f} --> {self.data_misfit_mean:0.1f}.'
+                self.logger(msg)
+
+            # Increase
             else:
                 self.logger.info(
-                    f'ES update complete! Objective function increased from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
-        # Return conv = False, why_stop var.
-        return False, True, why_stop
+                    f'ES update complete! Objective function increased from {self.prior_data_misfit_mean:0.1f} to {self.data_misfit_mean:0.1f}.')
 
-
-class es_approx(esMixIn, enkf_approx):
-    """
-    Mixin of ES class and approximate update
-    """
-    pass
-
-
-class es_full(esMixIn, enkf_full):
-    """
-    mixin of ES class and full update.
-    Note that since we do not iterate there is no difference between is full and approx.
-    """
-    pass
-
-
-class es_subspace(esMixIn, enkf_subspace):
-    """
-    mixin of ES class and subspace update.
-    """
-    pass
+        self.why_stop = why_stop
+        return why_stop

@@ -3,84 +3,226 @@ ES-MDA type schemes
 """
 
 # External imports
-import scipy.linalg as scilinalg
 from copy import deepcopy
 import numpy as np
-from geostat.decomp import Cholesky
+from misc.sampling import gen_real
 
 # Internal imports
-from pipt.loop.ensemble import Ensemble
+from pipt.update_schemes.core import AssimilationScheme, StepReport, restart_options
+from pipt.update_schemes.analysis.approx import approx_update
+from pipt.update_schemes.analysis.full import full_update
+from pipt.update_schemes.analysis.subspace import subspace_update
+from pipt.update_schemes.analysis.subspace2 import subspace2_update
 import pipt.misc_tools.analysis_tools as at
-import pipt.misc_tools.ensemble_tools as entools
-import pipt.misc_tools.data_tools as dtools
 
-# import update schemes
-from pipt.update_schemes.update_methods_ns.approx_update import approx_update
-from pipt.update_schemes.update_methods_ns.full_update import full_update
-from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
-from pipt.update_schemes.update_methods_ns.subspace2_update import subspace2_update
+__all__ = ['ESMDA']
 
-class esmdaMixIn(Ensemble):
+class ESMDA(AssimilationScheme):
+    """Ensemble Smoother with Multiple Data Assimilation (ES-MDA).
+
+    An iterative ensemble smoother that assimilates all data repeatedly over a
+    fixed number of steps, inflating the data-error covariance at each one so
+    that the repeated conditioning does not over-fit. With inflation factors
+    :math:`\\alpha_i` satisfying :math:`\\sum_i 1/\\alpha_i = 1`, each step applies
+
+    .. math::
+
+        m \\leftarrow m + C_{md} (C_{dd} + \\alpha_i C_d)^{-1} (d_{obs} - g(m))
+
+    with the observations re-perturbed as
+    :math:`d_{obs} = d_{true} + \\sqrt{\\alpha_i} C_d^{1/2} Z`.
+
+    The schedule is fixed rather than convergence-driven, so a run normally
+    ends by exhausting its steps and reports ``success=False``. That is the
+    expected outcome, not a failure.
+
+    Parameters
+    ----------
+    keys_da : dict
+        Parsed ``dataassim`` configuration. Besides the keys every scheme
+        reads -- ``data``, ``datavar``, ``obsname``, ``truedataindex`` -- the
+        ones this scheme acts on are listed under Notes.
+    keys_en : dict
+        Parsed ``ensemble`` configuration: ensemble size ``ne``, the ``state``
+        variable names, and the ``prior_<name>`` blocks describing each.
+    sim : object
+        Forward simulator instance, e.g. ``simulator.opm.flow``.
+    analysis : {'approx', 'full', 'subspace'}, optional
+        Analysis flavour, i.e. how the ensemble-approximated sensitivity is
+        inverted. Defaults to the ``analysis`` key in ``keys_da``, falling back
+        to ``'approx'``. The flavours differ in cost and in how they handle a
+        rank-deficient ensemble; they solve the same update equation.
+
+    Attributes
+    ----------
+    ensemble : pipt.ensembles.AssimilationEnsemble
+        Collaborator holding the state realisations, observed data and
+        simulator. Its state is exposed as properties on the scheme, so
+        ``scheme.enX`` and ``scheme.keys_da`` read straight through.
+    analysis : pipt.update_schemes.analysis.AnalysisBase
+        The bound analysis object. Note the constructor takes ``analysis`` as
+        a *name* and this attribute holds the resulting object, the way
+        ``Model(optimizer="adam").optimizer`` is an optimizer instance.
+    analysis_name : str
+        The flavour name that was resolved, e.g. ``'approx'``.
+    iteration : int
+        Accepted iterations completed so far.
+    data_misfit, prior_data_misfit : float
+        Current and initial mean data misfit.
+
+    Notes
+    -----
+    Configured through the ``mda`` block of ``keys_da``:
+
+    ``tot_assim_steps``
+        Number of assimilation steps, e.g. ``3``.
+    ``inflation_param``
+        Inflation factors, one per step, e.g. ``[3, 3, 3]``. Their reciprocals
+        must sum to 1, which is asserted at construction. Defaults to
+        ``tot_assim_steps`` repeated, which satisfies the constraint.
+
+    Examples
+    --------
+    >>> result = ESMDA.assimilate(keys_da, keys_en, flow(keys_sim))
+    >>> result.nit
+    3
+
+    References
+    ----------
+    Emerick and Reynolds, *Ensemble smoother with multiple data assimilation*
+    [`emerick2013a`][].
+
+    See Also
+    --------
+    ES : Single-step smoother; ES-MDA with one assimilation step.
+    LMEnRML : Iterates to convergence instead of on a fixed schedule.
     """
-    This is the implementation of the ES-MDA algorithm given in [`emerick2013a`][].
-    This algorithm have been implemented mostly to
-    illustrate how a algorithm using the Mda loop can be implemented.
-    """
 
-    def __init__(self, keys_da, keys_en, sim):
+    #: Ensemble class this scheme composes. Subclasses needing a specialised
+    #: collaborator -- the multilevel variant, for instance -- override it
+    #: rather than duplicating the constructor.
+
+    COMPATIBLE_ANALYSES = {
+        "approx": approx_update,
+        "full": full_update,
+        "subspace": subspace_update,
+        "subspace2": subspace2_update,
+    }
+
+    # The perturbed observations are redrawn every step (from the ensemble's
+    # stream, whose state travels with the ensemble); the misfit is scored
+    # against the un-inflated draw taken at construction (`enObs_conv`).
+    RESTART_ATTRIBUTES = ("enObs", "enObs_conv", "scale_data")
+
+    def __init__(self, keys_da, keys_en, sim, analysis=None, ensemble=None):
+        """Build the ensemble from the config (or take the one given) and bind the analysis.
+
+        See the class docstring for the parameters; ``ensemble`` is a
+        ready-made collaborator to run on instead of building one.
         """
-        The class is initialized by passing the keywords and simulator object upwards in the hierarchy.
+        # The collaborator is handed to the scheme base, which adopts the
+        # ensemble's own logger, so the log output is unchanged.
+        ensemble = self.build_ensemble(keys_da, keys_en, sim, ensemble)
+        # Zero tolerances switch off the base class's generic convergence
+        # criteria; this scheme decides in check_convergence(). See
+        # AssimilationScheme's `misfit_tol`/`step_tol` docs for why.
+        super().__init__(ensemble, misfit_tol=0.0, step_tol=0.0, **restart_options(ensemble.keys_da))
 
-        Parameters
-        ----------
-        keys_da['mda'] : dict
-            - tot_assim_steps: total number of iterations in MDA, e.g., 3
-            - inflation_param: covariance inflation factors, e.g., [2, 4, 4]
+        # The analysis flavour is a parameter of the algorithm, not a different
+        # algorithm, so it selects an analysis object rather than a class.
+        self.bind_analysis(self.resolve_analysis(analysis, ensemble.keys_da))
 
-        keys_en : dict
+        self.prev_data_misfit_mean = None
 
-        sim : callable
-        """
-        # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da, keys_en, sim)
+        # A specialised ensemble may already have established these -- the
+        # multilevel one partitions enX into per-level blocks and sets both
+        # itself. Only fill
+        # them in when the collaborator has not.
+        if getattr(self.ensemble, 'prior_enX', None) is None:
+            self.ensemble.prior_enX = deepcopy(self.enX)
+        if getattr(self.ensemble, 'list_states', None) is None:
+            self.ensemble.list_states = list(self.idX)
+        self.ensemble.list_datatypes = self.keys_da['datatype']
 
-        self.prev_data_misfit = None
+        # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
+        # are given as in the Simultaneous loop.
+        #self.check_assimindex_simultaneous()
+        #self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
+        #self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
 
-        if self.restart is False:
-            self.prior_enX = deepcopy(self.enX)
-            self.list_states = list(self.idX.keys())
+        # One update per assimilation step of the MDA schedule.
+        self.maxiter = len(self._ext_assim_steps())
+        self.iteration = 0
+        # Mirrored so ensemble-side helpers that consult the iteration
+        # counter (e.g. data screening in perturb_observations) agree with
+        # the scheme's, which is the one the loop advances.
+        self.ensemble.iteration = 0
 
-            # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
-            # are given as in the Simultaneous loop.
-            self.check_assimindex_simultaneous()
-            self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
+        self.lam = 0  # set LM lamda to zero as we are doing one full update.
+        if 'energy' in self.keys_da:
+            # initial energy (Remember to extract this)
+            self.trunc_energy = self.keys_da['energy']
+            if self.trunc_energy > 1:  # ensure that it is given as percentage
+                self.trunc_energy /= 100.
+        else:
+            self.trunc_energy = 0.98
 
-            # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
-            # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
-            self.max_iter = len(self._ext_assim_steps())+1
-            self.iteration = 0
+        # Get the perturbed observations and observation scaling
+        self.vecObs = self.ensemble.obs_vector
+        self.enObs = self.ensemble.perturb_observations(self.vecObs)
+        self.enObs_conv = deepcopy(self.enObs)
 
-            self.lam = 0  # set LM lamda to zero as we are doing one full update.
-            if 'energy' in self.keys_da:
-                # initial energy (Remember to extract this)
-                self.trunc_energy = self.keys_da['energy']
-                if self.trunc_energy > 1:  # ensure that it is given as percentage
-                    self.trunc_energy /= 100.
-            else:
-                self.trunc_energy = 0.98
-
-            # Get the perturbed observations and observation scaling
-            self.vecObs, self.enObs = self.set_observations()
-            self.enObs_conv = deepcopy(self.enObs)
-
-            # Get state scaling and svd of scaled prior
-            self._ext_scaling()
+        # Get state scaling and svd of scaled prior
+        self.ensemble._ext_scaling()
 
         # Extract the inflation parameter from MDA keyword
         self.alpha = self._ext_inflation_param()
 
-        self.prev_data_misfit = None
+        self.prev_data_misfit_mean = None
+
+    # ------------------------------------------------------------------
+    # AssimilationScheme contract
+    # ------------------------------------------------------------------
+    def update_step(self) -> StepReport:
+        """Run one ES-MDA assimilation step.
+
+        Computes the inflated analysis, forecasts the trial state, then scores
+        the resulting misfit and promotes the state. Scoring after the forecast
+        is what lets outlier replacement, which runs in between, feed into the
+        number the scheme sees.
+
+        Returns
+        -------
+        bool
+            Always ``True``. ES-MDA takes a fixed number of inflated steps and
+            never rejects one. The ``success`` flag it logs compares the misfit
+            against the previous iteration and is a *reporting* signal only --
+            returning it here would make the base class discard accepted steps.
+        """
+        self.calc_analysis()
+        self.after_analysis()
+        state = self.run_forecast(self.enX_proposal)
+        self.score_and_commit()
+        return StepReport(accepted=True, misfit=self.ensemble_misfit,
+                          state=state)
+
+    def check_convergence(self) -> bool:
+        """ES-MDA runs its full schedule of inflated steps; nothing stops early."""
+        return False
+
+    def score(self, pred_data=None):
+        """Data misfit against the *un-inflated* perturbed observations.
+
+        ``enObs`` is redrawn each step with the covariance inflated by
+        ``alpha[iteration]``, so scoring against it would compare every
+        iteration to a different yardstick. ``enObs_conv`` is the copy taken
+        before any inflation, which is what makes the misfit trajectory
+        comparable across the schedule.
+        """
+        pred = self.pred_data if pred_data is None else pred_data
+        return at.calc_objectivefun(
+            self.enObs_conv, self._as_matrix(pred), self.cov_data
+        )
 
     def calc_analysis(self):
         r"""
@@ -107,174 +249,93 @@ class esmdaMixIn(Ensemble):
 
         where $N_a$ being the total number of assimilation steps.
         """
-        # Get Ensemble of predicted data
-        _, self.enPred = at.aug_obs_pred_data(
-            self.obs_data,
-            self.pred_data,
-            self.assim_index,
-            self.list_datatypes
+        # Get Ensemble matrix of predicted data
+        self.enPred = self.pred_data.matrix
+
+        # The prior misfit used to be computed here, behind an `iteration == 0`
+        # branch. The base scores it through `score()` before the loop now,
+        # early enough for the iteration-0 artifacts to record it.
+        self.data_random_state = deepcopy(np.random.get_state())
+        self.enObs, self.scale_data = gen_real(
+            self.vecObs,
+            self.alpha[self.iteration] * self.cov_data,
+            self.ne,
+            rng=self.ensemble.rng,
+            return_chol=True
         )
-
-        # Initialize GeoStat class for generating realizations
-        generator = Cholesky() 
-
-        if self.iteration == 1:  # first iteration
-
-            # Calculate the prior data misfit
-            data_misfit = at.calc_objectivefun(
-                pert_obs=self.enObs,
-                pred_data=self.enPred,
-                Cd=self.cov_data
-            )
-
-            # Store the (mean) data misfit (also for conv. check)
-            self.prior_data_misfit = np.mean(data_misfit)
-            self.prior_data_misfit_std = np.std(data_misfit)
-            self.data_misfit = np.mean(data_misfit)
-            self.data_misfit_std = np.std(data_misfit)
-            self.ensemble_misfit = data_misfit
-
-            # Log initial data misfit
-            self.log_update(prior_run=True)
-            self.data_random_state = deepcopy(np.random.get_state())
-            
-            self.enObs, self.scale_data = generator.gen_real(
-                self.vecObs,
-                self.alpha[self.iteration - 1] * self.cov_data,
-                self.ne,
-                return_chol=True
-            )
-            self.E = np.dot(self.enObs, self.proj)
-
-        else:
-            self.data_random_state = deepcopy(np.random.get_state())
-            self.enObs, self.scale_data = generator.gen_real(
-                self.vecObs,
-                self.alpha[self.iteration - 1] * self.cov_data,
-                self.ne,
-                return_chol=True
-            )
-            self.E = np.dot(self.enObs, self.proj)
+        self.E = np.dot(self.enObs, self.proj)
 
         if 'localanalysis' in self.keys_da:
-            self.local_analysis_update()
+            self.ensemble.local_analysis_update()
+            # The one path that still writes ensemble.enX_temp, which nothing
+            # reads now -- so take its result explicitly.
+            proposed = getattr(self.ensemble, "enX_temp", None)
+            self.enX_proposal = self.enX if proposed is None else proposed
         else:
 
             # Check for adjoint
             if hasattr(self, 'adjoints'):
-                enAdj = dtools.merge_dataframes(self.adjoints)
-                enAdj = dtools.dataframe_to_matrix(enAdj) # Shape (nd, nx, ne)
+                enAdj = self.adjoints   # (nd, nx, ne), None without adjoints
             else:
                 enAdj = None
 
-            # Perform the update
-            self.update(
-                enX = self.enX, 
-                enY = self.enPred, 
-                enE = self.enObs, 
+            # Perform the update. The proposal is scheme-local, handed to
+            # run_forecast and then reported back; the ensemble is only
+            # written when the loop commits it.
+            self.enX_proposal = self.propose_state(self.update(
+                enX = self.enX,
+                enY = self.enPred,
+                enE = self.enObs,
                 # kwargs
                 prior = self.prior_enX,
                 enAdj = enAdj
-            )
-
-            # Update the state ensemble and weights
-            if hasattr(self, 'step'):
-                self.enX_temp = self.enX + self.step
-                # This is the vector update following e.g. Evensen et al 2019 update for subspace
-            if hasattr(self, 'w_step'):
-                self.W = self.current_W + self.w_step
-                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W / np.sqrt(self.ne - 1)))
-                # This is the matrix update following e.g. Raanes et al 2019 update for subspace
-            if hasattr(self, 'W_step'):
-                self.W = self.current_W + self.W_step
-                X_p = self.prior_enX @ self.proj * np.sqrt(self.ne - 1)
-                self.enX_temp = np.mean(self.prior_enX, axis=1, keepdims=True) + np.dot(X_p, self.W)
-
-            if hasattr(self, 'sqrt_w_step'):
-                self.w = self.current_w + self.sqrt_w_step
-                Us, Ss, VsT = np.linalg.svd(self.S, full_matrices=False)
-                eps = 1e-8 * Ss[0]  # e.g., 1e-8 * largest
-                s_inv = 1.0 / np.sqrt(np.maximum(Ss, eps))
-                S_inv = np.diag(s_inv)
-                self.W = Us @ S_inv @ Us.T
-                X_p = self.prior_enX @ self.proj * np.sqrt(self.ne - 1)
-                x = np.mean(self.prior_enX, axis=1) + X_p @ self.w
-                self.enX_temp = np.repeat(x[:, None], self.ne, axis=1) + np.dot(X_p, self.W)
+            ))
 
 
             # Ensure limits are respected
-            limits = {key: self.prior_info[key].get('limits', (None, None)) for key in self.idX.keys()}
-            self.enX_temp = entools.clip_matrix(self.enX_temp, limits, self.idX)
+            limits = {key: self.prior_info[key].get('limits', (None, None)) for key in self.idX}
+            self.state_layout.clip(self.enX_proposal, limits)
 
-    def check_convergence(self):
-        """
-        Check if LM-EnRML have converged based on evaluation of change sizes of objective function, state and damping
-        parameter.
+    def score_and_commit(self):
+        """Score the forecast that followed the analysis, then commit the step.
+
+        Was the second half of ``check_convergence``: ES-MDA never actually
+        tested for convergence there, it recomputed the misfit, logged the
+        iteration and promoted ``enX_temp``. Under the new contract the
+        convergence question lives in :meth:`check_convergence` and this keeps
+        the bookkeeping.
 
         Returns
         -------
-        bool
-            Logic variable telling if algorithm has converged
         dict
-            Dict. with keys corresponding to conv. criteria, with logical variable telling which of them that has been
-            met
+            The ``why_stop`` record, also stored on ``self.why_stop``.
         """
 
-        self.prev_data_misfit = self.data_misfit
+        self.prev_data_misfit_mean = self.data_misfit_mean
         self.prev_data_misfit_std = self.data_misfit_std
 
-        # Get Ensemble of predicted data
-        _, enPred = at.aug_obs_pred_data(
-            self.obs_data,
-            self.pred_data,
-            self.assim_index,
-            self.list_datatypes
-        )
-
-        data_misfit = at.calc_objectivefun(self.enObs_conv, enPred, self.cov_data)
-        self.data_misfit = np.mean(data_misfit)
+        data_misfit = self.score()
+        self.data_misfit_mean     = np.mean(data_misfit)
         self.data_misfit_std = np.std(data_misfit)
+        self.ensemble_misfit = data_misfit
 
         # Logical variables for conv. criteria
-        why_stop = {'rel_data_misfit': 1 - (self.data_misfit / self.prev_data_misfit),
-                    'data_misfit': self.data_misfit,
-                    'prev_data_misfit': self.prev_data_misfit}
+        why_stop = {'rel_data_misfit': 1 - (self.data_misfit_mean / self.prev_data_misfit_mean),
+                    'data_misfit': self.data_misfit_mean,
+                    'prev_data_misfit': self.prev_data_misfit_mean}
 
-        # Log update results
-        success = self.data_misfit < self.prev_data_misfit
-        self.log_update(success=success)
-        
-        # Return conv = False, why_stop var.
-        # Update state ensemble
-        self.enX = deepcopy(self.enX_temp)
-        self.enX_temp = None
+        # Promote the trial state. Written through the ensemble so the next
+        # forecast and any external reader see it.
         if hasattr(self, 'W'):
             self.current_W = deepcopy(self.W)
 
-        return False, True, why_stop
+        self.why_stop = why_stop
+        return why_stop
 
-    def log_update(self, success=None, prior_run=False):
-        '''
-        Log the update results in a formatted table.
-        '''
-        iteration_str = f'{0 if prior_run else self.iteration}/{self.max_iter}'
-        
-        log_data = {
-            "Iteration": iteration_str,
-            "Status": "Success" if (prior_run or success) else "Failed",
-            "Data Misfit": self.data_misfit
-        }
-        
-        if not prior_run:
-            if success:
-                log_data["Reduction (%)"] = 100 * (1 - self.data_misfit / self.prev_data_misfit)
-            else:
-                log_data["Increase (%)"] = 100 * (self.data_misfit / self.prev_data_misfit - 1)
-        else:
-            log_data["Reduction (%)"] = 'N/A'
-        
-        self.logger(**log_data)
-            
+    def log_columns(self, prior_run: bool = False) -> dict:
+        """ES-MDA reports the inflation factor for the step just taken."""
+        return {"α": "" if prior_run else self.alpha[self.iteration]}
+
     def _ext_inflation_param(self):
         r"""
         Extract the data covariance inflation parameter from the MDA keyword in DATAASSIM part. Also, we check that
@@ -293,36 +354,25 @@ class esmdaMixIn(Ensemble):
         """
         try:
             mda_opts = dict(self.keys_da['mda'])
-        except:
+        except Exception:
             mda_opts = dict([self.keys_da['mda']])
 
         # Check if INFLATION_PARAM has been provided, and if so, extract the value(s). If not, we set alpha to the
         # default value equal to the tot. no. assim. steps
         if 'inflation_param' in mda_opts:
-            # Extract value
             alpha_tmp = mda_opts['inflation_param']
+            alpha = alpha_tmp if isinstance(alpha_tmp, list) else [alpha_tmp] * len(self._ext_assim_steps())
 
-            # If one value is given, we copy it to all assim. steps. If multiple values are given, we check the
-            # number of parameters corresponds to tot. no. assim. steps
-            if not isinstance(alpha_tmp, list):  # Single input
-                alpha = [alpha_tmp] * len(self._ext_assim_steps())  # Copy value
-
-            else:
-                assert len(alpha_tmp) == len(self._ext_assim_steps()), 'Number of parameters given in INFLATION_PARAM in MDA does ' \
-                    'not match the total number of assimilation steps given by ' \
-                    'TOT_ASSIM_STEPS in same keyword!'
-
-                # Inflation parameters for each assimilation step given directly
-                alpha = alpha_tmp
-
-        else:  # Give alpha by default value
-            alpha = [len(self._ext_assim_steps())] * len(self._ext_assim_steps())
+            assert len(alpha) == len(self._ext_assim_steps()), \
+            'Number of INFLATION_PARAM values does not match TOT_ASSIM_STEPS!'
+        else:
+            n_steps = len(self._ext_assim_steps())
+            alpha = [n_steps] * n_steps
 
         # Check if alpha fulfills the criterion to machine precision
-        assert 1 - np.finfo(float).eps <= sum([(1 / x) for x in alpha]) <= 1 + np.finfo(float).eps, \
-            'The sum of the inverse of the inflation parameters given in INFLATION_PARAM does not add up to 1!'
+        assert 1 - np.finfo(float).eps <= sum(1/x for x in alpha) <= 1 + np.finfo(float).eps, \
+            'Sum of inverse inflation parameters does not add up to 1!'
 
-        # Return inflation parameter
         return alpha
 
     def _ext_assim_steps(self):
@@ -349,129 +399,15 @@ class esmdaMixIn(Ensemble):
         """
         try:
             mda_opts = dict(self.keys_da['mda'])
-        except:
+        except Exception:
             mda_opts = dict([self.keys_da['mda']])
 
-    
+
         # Check if 'max_iter' has been given; if not, give error (mandatory in ITERATION)
         try:
             assim_steps = list(range(int(mda_opts['tot_assim_steps'])))
         except KeyError:
             raise AssertionError('TOT_ASSIM_STEPS has not been given in MDA!')
 
-        # If it is a restart run, we remove simulations already done
-        if self.restart is True:
-            # List simulations we already have done. Do this by checking pred_data.
-            # OBS: Minus 1 here do to the aborted simulation is also not None.
-            # TODO: Relying on loop_ind may not be the best strategy (?)
-            sim_done = list(range(self.loop_ind))
-
-            # Update list of assim. steps by removing simulations we have done
-            assim_steps = [ind for ind in assim_steps if ind not in sim_done]
-
         # Return list assim. steps
         return assim_steps
-
-
-class esmda_approx(esmdaMixIn, approx_update):
-    pass
-
-
-class esmda_full(esmdaMixIn, full_update):
-    pass
-
-
-class esmda_subspace(esmdaMixIn, subspace_update):
-    pass
-
-class esmda_subspace2(esmdaMixIn, subspace2_update):
-    pass
-
-
-class esmda_geo(esmda_approx):
-    """
-    This is the implementation of the ES-MDA-GEO algorithm from [1]. The main analysis step in this algorithm is the
-    same as the standard ES-MDA algorithm (implemented in the `es_mda` class). The difference between this and the
-    standard algorithm is the calculation of the inflation factor. Also see [`rafiee2017`][].
-    """
-
-    def __init__(self, keys_da):
-        """
-        The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
-        `pipt.input_output.pipt_init.ReadInitFile`.
-        """
-        # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da)
-
-        # Within
-        self.alpha = [None] * self.tot_assim
-
-    def _calc_inflation_factor(self, pert_preddata, cov_data, energy=99):
-        """
-        We calculate the inflation factor, follow the procedure laid out in Algorithm 1 in [1].
-
-        Parameters
-        ----------
-        pert_preddata : ndarray
-            Predicted data (fwd. run) ensemble matrix perturbed with its mean
-        cov_data : ndarray
-            Data covariance matrix
-        energy : float, optional
-            Percentage of energy kept in (T)SVD decompostion of 'sensitivity' matrix (default is 99%)
-
-        Returns
-        -------
-        alpha : float
-            Inflation factor
-        beta : float
-            Geometric factor
-        """
-        # Need the square-root of the data covariance matrix
-        if np.count_nonzero(cov_data - np.diagonal(cov_data)) == 0:
-            l = np.sqrt(cov_data)  # only variance (diagonal) term
-        else:
-            # Cholesky decomposition
-            l = scilinalg.cholesky(cov_data)  # cov. matrix has off-diag. terms
-
-        # Calculate the 'sensitivity' matrix:
-        sens = (1 / np.sqrt(self.ne - 1)) * np.dot(l, pert_preddata)
-
-        # Perform SVD on sensitivtiy matrix
-        _, s_d, _ = np.linalg.svd(sens, full_matrices=False)
-
-        # If no. measurements is more than ne - 1, we only keep ne - 1 sing. val.
-        if sens.shape[0] >= self.ne:
-            s_d = s_d[:-1].copy()
-
-        # If energy is less than 100 we truncate the SVD matrices
-        if energy < 100:
-            ti = (np.cumsum(s_d) / sum(s_d)) * 100 <= energy
-            s_d = s_d[ti].copy()
-
-        # Calc average singular value
-        avg_s_d = s_d.mean()
-
-        # The inflation factor is chosen as the maximum of the average singular value (squared) and max. no. of
-        # iterations
-        alpha = np.max((avg_s_d ** 2, self.tot_assim))
-
-        # We calculate the geometric (reduction) factor (called 'common ratio' in the article). The formula is given
-        # as (1 - beta**-n) / (1 - beta**-1) = alpha (it is actually incorrect in the article, and should be as
-        # written here), with n=tot. assim. steps. Rewritten:
-        #
-        # (1-alpha)*beta**n + alpha*beta**(n-1) - 1 = 0
-        #
-        # This is of course a nasty polynomial root problem, but we use Numpy.roots, extract the real
-        # root less than 1, and hope for the best :p
-        root_coeff = np.zeros(self.tot_assim + 1)
-        root_coeff[0] = 1 - alpha  # first coeff. in polynomial
-        root_coeff[1] = alpha  # sec. coeff in polynomial
-        root_coeff[-1] = -1
-        roots = np.roots(root_coeff)
-
-        # Most likely the first root will be 1, and the second one will be the one we want. Due to numerical
-        # imprecision, the first root will not be exactly one, so we us Numpy.min to get the second root.
-        beta = np.min([x.real for x in roots if x.imag == 0 and x.real < 1])
-
-        # Return inflation and geometric factor
-        return alpha, beta

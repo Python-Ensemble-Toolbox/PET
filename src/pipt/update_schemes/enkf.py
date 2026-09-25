@@ -3,244 +3,264 @@ EnKF type schemes
 """
 # External imports
 import numpy as np
-from scipy.linalg import solve
 from copy import deepcopy
-from geostat.decomp import Cholesky                     # Making realizations
+from misc.sampling import gen_real
 
 # Internal imports
-from pipt.loop.ensemble import Ensemble
+from pipt.update_schemes.core import AssimilationScheme, StepReport, restart_options
+from pipt.update_schemes.analysis.approx import approx_update
+from pipt.update_schemes.analysis.subspace import subspace_update
 # Misc. tools used in analysis schemes
-from pipt.misc_tools import analysis_tools as at
-import pipt.misc_tools.ensemble_tools as entools
-
-from pipt.update_schemes.update_methods_ns.approx_update import approx_update
-from pipt.update_schemes.update_methods_ns.full_update import full_update
-from pipt.update_schemes.update_methods_ns.subspace_update import subspace_update
+import pipt.misc_tools.extract_tools as extract
 
 
-class enkfMixIn(Ensemble):
+
+class EnKF(AssimilationScheme):
+    """Ensemble Kalman Filter (EnKF).
+
+    Assimilates data sequentially, updating the state once per group of
+    observations in the order given by ``assimindex``. Each update applies the
+    Kalman equations with the covariances approximated from the ensemble:
+
+    .. math::
+
+        m \\leftarrow m + C_{md} (C_{dd} + C_d)^{-1} (d_{obs} - g(m))
+
+    There is no damping and no rejection: every step is accepted, and the run
+    ends once the data groups are exhausted.
+
+    Parameters
+    ----------
+    keys_da : dict
+        Parsed ``dataassim`` configuration. Besides the keys every scheme
+        reads -- ``data``, ``datavar``, ``obsname``, ``truedataindex`` -- the
+        ones this scheme acts on are listed under Notes.
+    keys_en : dict
+        Parsed ``ensemble`` configuration: ensemble size ``ne``, the ``state``
+        variable names, and the ``prior_<name>`` blocks describing each.
+    sim : object
+        Forward simulator instance, e.g. ``simulator.opm.flow``.
+    analysis : {'approx', 'full', 'subspace'}, optional
+        Analysis flavour, i.e. how the ensemble-approximated sensitivity is
+        inverted. Defaults to the ``analysis`` key in ``keys_da``, falling back
+        to ``'approx'``. The flavours differ in cost and in how they handle a
+        rank-deficient ensemble; they solve the same update equation.
+
+    Attributes
+    ----------
+    ensemble : pipt.ensembles.AssimilationEnsemble
+        Collaborator holding the state realisations, observed data and
+        simulator. Its state is exposed as properties on the scheme, so
+        ``scheme.enX`` and ``scheme.keys_da`` read straight through.
+    analysis : pipt.update_schemes.analysis.AnalysisBase
+        The bound analysis object. Note the constructor takes ``analysis`` as
+        a *name* and this attribute holds the resulting object, the way
+        ``Model(optimizer="adam").optimizer`` is an optimizer instance.
+    analysis_name : str
+        The flavour name that was resolved, e.g. ``'approx'``.
+    iteration : int
+        Accepted iterations completed so far.
+    data_misfit, prior_data_misfit : float
+        Current and initial mean data misfit.
+
+    Notes
+    -----
+    ``assimindex`` determines the grouping and ordering of the sequential
+    updates. If all data are to be assimilated in a single step, use :class:`ES`,
+    which is this scheme specialised to one group.
+
+    ``energy`` sets the fraction of singular values retained in the truncated
+    SVD (default 0.98); values above 1 are read as percentages.
+
+    Every data group is assimilated exactly once, so the prior-increment term
+    that distinguishes ``full`` from ``approx`` is never reached: ``"full"``
+    is pointed at the same class as ``"approx"`` in
+    :attr:`COMPATIBLE_ANALYSES`. :class:`ES` inherits this.
+
+    Examples
+    --------
+    >>> result = EnKF.assimilate(keys_da, keys_en, flow(keys_sim))
+
+    References
+    ----------
+    Evensen, *Data Assimilation: The Ensemble Kalman Filter* [`evensen2009a`][].
+
+    See Also
+    --------
+    ES : All-data-at-once form of the same update.
     """
-    Straightforward EnKF analysis scheme implementation. The sequential updating can be done with general grouping and
-    ordering of data. If only one-step EnKF is to be done, use `es` instead.
-    """
 
-    def __init__(self, keys_da, keys_en, sim):
+    # Neither this class nor ES revisit a data group, so the prior-increment
+    # term "full" adds over "approx" never applies -- the two produce
+    # identical output (pinned by the characterisation suite), just through
+    # more expensive machinery for "full". Rather than special-case that in
+    # code, "full" is simply pointed at the same class as "approx" here.
+    COMPATIBLE_ANALYSES = {
+        "approx": approx_update,
+        "full": approx_update,
+        "subspace": subspace_update,
+    }
+
+    RESTART_ATTRIBUTES = ("enObs", "enObs_conv", "scale_data")
+
+    def __init__(self, keys_da, keys_en, sim, analysis=None, ensemble=None):
+        """Build the ensemble from the config and bind the analysis.
+
+        See the class docstring for the parameters.
         """
-        The class is initialized by passing the PIPT init. file upwards in the hierarchy to be read and parsed in
-        `pipt.input_output.pipt_init.ReadInitFile`.
-        """
-        # Pass the init_file upwards in the hierarchy
-        super().__init__(keys_da, keys_en, sim)
+        # Build the collaborator, then hand it to the scheme base -- which
+        # adopts the ensemble's own logger, so log output is unchanged.
+        ensemble = self.build_ensemble(keys_da, keys_en, sim, ensemble)
+        # Zero tolerances switch off the base class's generic convergence
+        # criteria; this scheme decides in check_convergence(). See
+        # AssimilationScheme's `misfit_tol`/`step_tol` docs for why.
+        super().__init__(ensemble, misfit_tol=0.0, step_tol=0.0, **restart_options(ensemble.keys_da))
 
-        self.prev_data_misfit = None
+        # Flavour is a parameter, so it selects an analysis object not a class.
+        self.bind_analysis(self.resolve_analysis(analysis, ensemble.keys_da))
 
-        if self.restart is False:
-            self.prior_enX = deepcopy(self.enX)
-            self.list_states = list(self.idX.keys())
+        self.prev_data_misfit_mean = None
 
-            # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
-            # are given as in the Simultaneous loop.
-            self.check_assimindex_simultaneous()
+        self.ensemble.prior_enX = deepcopy(self.enX)
+        self.ensemble.list_states = list(self.idX.keys())
 
-            self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
-            self.list_datatypes, self.list_act_datatypes = at.get_list_data_types(self.obs_data, self.assim_index)
+        # At the moment, the iterative loop is threated as an iterative smoother an thus we check if assim. indices
+        # are given as in the Simultaneous loop.
+        self.ensemble.check_assimindex_simultaneous()
+
+        self.ensemble.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][0]]
+        self.ensemble.list_datatypes = self.keys_da['datatype']
 
 
-            # Extract no. assimilation steps from MDA keyword in DATAASSIM part of init. file and set this equal to
-            # the number of iterations pluss one. Need one additional because the iter=0 is the prior run.
-            self.max_iter = len(self.keys_da['assimindex'])+1
-            self.iteration = 0
-            self.lam = 0  # set LM lamda to zero as we are doing one full update.
+        # One update per assimilation index.
+        self.maxiter = len(self.keys_da['assimindex'])
+        self.iteration = 0
+        # Mirrored for ensemble-side helpers that consult it.
+        self.ensemble.iteration = 0
+        self.lam = 0  # set LM lamda to zero as we are doing one full update.
 
-            if 'energy' in self.keys_da:
-                # initial energy (Remember to extract this)
-                self.trunc_energy = self.keys_da['energy']
-                if self.trunc_energy > 1:  # ensure that it is given as percentage
-                    self.trunc_energy /= 100.
-            else:
-                self.trunc_energy = 0.98
+        if 'energy' in self.keys_da:
+            # initial energy (Remember to extract this)
+            self.trunc_energy = self.keys_da['energy']
+            if self.trunc_energy > 1:  # ensure that it is given as percentage
+                self.trunc_energy /= 100.
+        else:
+            self.trunc_energy = 0.98
 
-            # Get the perturbed observations and observation scaling
-            self.vecObs, self.enObs = self.set_observations()
-            self.enObs_conv = deepcopy(self.enObs)
-
-            self._ext_scaling()
+        # Get the perturbed observations and observation scaling
+        self.vecObs = self.ensemble.obs_vector
+        self.enObs = self.ensemble.perturb_observations(self.vecObs)
+        self.ensemble._ext_scaling()
 
     def calc_analysis(self):
         """
         Calculate the analysis step of the EnKF procedure. The updating is done using the Kalman filter equations, using
         svd for numerical stability. Localization is available.
         """
-        # If this is initial analysis we calculate the objective function for all data. In the final convergence check
-        # we calculate the posterior objective function for all data
-        if not hasattr(self, 'prior_data_misfit'):
-            assim_index = [self.keys_da['obsname'], list(
-                np.concatenate(self.keys_da['assimindex']))]
-            list_datatypes, list_active_dataypes = at.get_list_data_types(
-                self.obs_data, assim_index)
-            # if not hasattr(self, 'cov_data'):
-            #     self.full_cov_data = at.gen_covdata(
-            #         self.datavar, assim_index, list_datatypes)
-            # else:
-            #     self.full_cov_data = self.cov_data
-
-            # #obs_data_vector, pred_data = at.aug_obs_pred_data(
-            # #    self.obs_data, self.pred_data, assim_index, list_datatypes)
-            
-            _, enPred = at.aug_obs_pred_data(
-                self.obs_data, 
-                self.pred_data, 
-                assim_index, 
-                list_datatypes
-            )
-
-            # # Generate realizations of the observed data
-            # generator = Cholesky()  # Initialize GeoStat class for generating realizations
-            # self.enObs = generator.gen_real(
-            #     vecObs, 
-            #     self.full_cov_data, 
-            #     self.ne
-            # )
-
-            # Calc. misfit for the initial iteration
-            data_misfit = at.calc_objectivefun(self.enObs, enPred, self.scale_data)
-
-            # Store the (mean) data misfit (also for conv. check)
-            self.data_misfit = np.mean(data_misfit)
-            self.prior_data_misfit = np.mean(data_misfit)
-            self.data_misfit_std = np.std(data_misfit)
-
-            self.logger.info(
-                f'Prior run complete with data misfit: {self.prior_data_misfit:0.1f}.')
-
-        # Get assimilation order as a list
-        # must subtract one to be inline
-        self.assim_index = [self.keys_da['obsname'], self.keys_da['assimindex'][self.iteration-1]]
-
-        # Get list of data types to be assimilated and of the free states. Do this once, because listing keys from a
-        # Python dictionary just when needed (in different places) may not yield the same list!
-        self.list_datatypes, list_active_dataypes = at.get_list_data_types(
-            self.obs_data, self.assim_index)
-
         # Augment observed and predicted data
-        if ('emp_cov' in self.keys_da) and (self.keys_da['emp_cov'] == 'yes'):
-            _, self.enPred = at.aug_obs_pred_data(
-                self.obs_data, 
-                self.pred_data, 
-                self.assim_index,
-                self.list_datatypes
-            )
+        if extract.is_enabled(self.keys_da.get('emp_cov', False)):
+            self.enPred = self.pred_data.matrix
         else:
-            self.vecObs, self.enPred = at.aug_obs_pred_data(
-                self.obs_data, 
-                self.pred_data, 
-                self.assim_index,
-                self.list_datatypes
-            )
-            
-            self.cov_data = at.gen_covdata(
-                self.datavar, 
-                self.assim_index, 
-                self.list_datatypes
-            )
+            self.enPred = self.pred_data.matrix
 
-            generator = Cholesky()  # Initialize GeoStat class for generating realizations
+            #self.cov_data = at.gen_covdata(
+            #    self.datavar,
+            #    self.assim_index,
+            #    self.list_datatypes
+           # )
+            self.cov_data = self.ensemble.obs_variance
+
             self.data_random_state = deepcopy(np.random.get_state())
-            self.enObs, self.scale_data = generator.gen_real(
-                self.vecObs, 
-                self.cov_data, 
+            self.enObs, self.scale_data = gen_real(
+                self.vecObs,
+                self.cov_data,
                 self.ne,
+                rng=self.ensemble.rng,
                 return_chol=True
             )
 
         self.E = np.dot(self.enObs, self.proj)
 
         if 'localanalysis' in self.keys_da:
-            self.local_analysis_update()
+            self.ensemble.local_analysis_update()
+            # The one path that still writes ensemble.enX_temp, which nothing
+            # reads now -- so take its result explicitly.
+            proposed = getattr(self.ensemble, "enX_temp", None)
+            self.enX_proposal = self.enX if proposed is None else proposed
         else:
-            self.update(
-                enX = self.enX, 
-                enY = self.enPred, 
-                enE = self.enObs, 
-                prior = self.prior_enX
-            )
-            # Update the state ensemble and weights
-            if hasattr(self, 'step'):
-                self.enX_temp = self.enX + self.step
-            if hasattr(self, 'w_step'):
-                self.W = self.current_W + self.w_step
-                self.enX_temp = np.dot(self.prior_enX, (np.eye(self.ne) + self.W/np.sqrt(self.ne - 1)))
+            # Check for adjoint
+            if hasattr(self, 'adjoints'):
+                enAdj = self.adjoints   # (nd, nx, ne), None without adjoints
+            else:
+                enAdj = None
+
+            self.enX_proposal = self.propose_state(self.update(
+                enX = self.enX,
+                enY = self.enPred,
+                enE = self.enObs,
+                prior = self.prior_enX,
+                enAdj = enAdj
+            ))
 
             # Ensure limits are respected
             limits = {key: self.prior_info[key].get('limits', (None, None)) for key in self.idX.keys()}
-            self.enX_temp = entools.clip_matrix(self.enX_temp, limits, self.idX)
+            self.state_layout.clip(self.enX_proposal, limits)
 
-    def check_convergence(self):
+    # ------------------------------------------------------------------
+    # AssimilationScheme contract
+    # ------------------------------------------------------------------
+    def update_step(self) -> StepReport:
+        """Run one EnKF step: analysis, forecast, then score and commit.
+
+        Returns
+        -------
+        bool
+            Always ``True``. The EnKF applies one update per data group and
+            has no rejection path.
+        """
+        self.calc_analysis()
+        self.after_analysis()
+        state = self.run_forecast(self.enX_proposal)
+        self.score_and_commit()
+        return StepReport(accepted=True, misfit=self.ensemble_misfit,
+                          state=state)
+
+    def check_convergence(self) -> bool:
+        """The EnKF runs its full sweep of data groups; nothing stops early."""
+        return False
+
+    def score_and_commit(self):
         """
         Calculate the "convergence" of the method. Important to
         """
-        self.prev_data_misfit = self.prior_data_misfit
-        
+        self.prev_data_misfit_mean = self.prior_data_misfit_mean
+
         # only calulate for the final (posterior) estimate
-        if self.iteration == len(self.keys_da['assimindex']):
-            assim_index = [self.keys_da['obsname'], list(
-                np.concatenate(self.keys_da['assimindex']))]
-            list_datatypes = self.list_datatypes
-
-            _, enPred = at.aug_obs_pred_data(
-                self.obs_data,
-                self.pred_data,
-                assim_index,
-                list_datatypes
-            )
-
-            data_misfit = at.calc_objectivefun(self.enObs, enPred, self.full_cov_data)
-            self.data_misfit = np.mean(data_misfit)
+        if self.iteration + 1 == len(self.keys_da['assimindex']):
+            data_misfit = self.score()
+            self.ensemble_misfit = data_misfit
+            self.data_misfit_mean = np.mean(data_misfit)
             self.data_misfit_std = np.std(data_misfit)
 
         else:  # sequential updates not finished. Misfit is not relevant
-            self.data_misfit = self.prior_data_misfit
+            self.data_misfit_mean = self.prior_data_misfit_mean
 
         # Logical variables for conv. criteria
-        why_stop = {'rel_data_misfit': 1 - (self.data_misfit / self.prev_data_misfit),
-                    'data_misfit': self.data_misfit,
-                    'prev_data_misfit': self.prev_data_misfit}
+        why_stop = {'rel_data_misfit': 1 - (self.data_misfit_mean / self.prev_data_misfit_mean),
+                    'data_misfit': self.data_misfit_mean,
+                    'prev_data_misfit': self.prev_data_misfit_mean}
 
         # Update state ensemble
-        self.enX = deepcopy(self.enX_temp)
-        self.enX_temp = None
 
-        if self.data_misfit == self.prev_data_misfit:
+        if self.data_misfit_mean == self.prev_data_misfit_mean:
             self.logger.info(
                 f'EnKF update {self.iteration} complete!')
         else:
-            if self.data_misfit < self.prior_data_misfit:
+            if self.data_misfit_mean < self.prior_data_misfit_mean:
                 self.logger.info(
-                    f'EnKF update complete! Objective function decreased from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
+                    f'EnKF update complete! Objective function decreased from {self.prior_data_misfit_mean:0.1f} to {self.data_misfit_mean:0.1f}.')
             else:
                 self.logger.info(
-                    f'EnKF update complete! Objective function increased from {self.prior_data_misfit:0.1f} to {self.data_misfit:0.1f}.')
-        # Return conv = False, why_stop var.
-        return False, True, why_stop
-
-
-class enkf_approx(enkfMixIn, approx_update):
-    """
-    MixIn the main EnKF update class with the standard analysis scheme.
-    """
-    pass
-
-
-class enkf_full(enkfMixIn, approx_update):
-    """
-    MixIn the main EnKF update class with the standard analysis scheme. Note that this class is only included for
-    completness. The EnKF does not iterate, and the standard scheme is therefor always applied.
-    """
-    pass
-
-
-class enkf_subspace(enkfMixIn, subspace_update):
-    """
-    MixIn the main EnKF update class with the subspace analysis scheme.
-    """
-    pass
+                    f'EnKF update complete! Objective function increased from {self.prior_data_misfit_mean:0.1f} to {self.data_misfit_mean:0.1f}.')
+        self.why_stop = why_stop
+        return why_stop

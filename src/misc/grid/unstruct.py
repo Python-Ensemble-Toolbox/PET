@@ -118,7 +118,7 @@ def conv(grid):
     corn_z = np.empty((2, 2, 2, nk), dtype=np.float32)
     corn_i = np.empty((2, 2, 2, nk), dtype=np.int32)
     corn_j = np.empty((2, 2, 2, nk), dtype=np.int32)
-    corn_a = np.empty((2, 2, 2, nk), dtype=np.bool)
+    corn_a = np.empty((2, 2, 2, nk), dtype=bool)
 
     # get all unique points that are hinged to a certain pillar (p, q)
     for q, p in np.ndindex((nj + 1, ni + 1)):
