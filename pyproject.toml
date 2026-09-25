@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PET"
+version = "0.2"
 description = "Python Ensemble Toolbox"
 authors = [
   { name = "Data assimilation and optimization group" }
