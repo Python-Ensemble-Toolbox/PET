@@ -13,6 +13,7 @@ from pipt.update_schemes.analysis.approx import approx_update
 from pipt.update_schemes.analysis.full import full_update
 from pipt.update_schemes.analysis.subspace import subspace_update
 from pipt.update_schemes.analysis.subspace2 import subspace2_update
+from pipt.update_schemes.analysis.enif import enif_update
 import pipt.misc_tools.analysis_tools as at
 
 __all__ = ['ESMDA']
@@ -47,11 +48,13 @@ class ESMDA(AssimilationScheme):
         variable names, and the ``prior_<name>`` blocks describing each.
     sim : object
         Forward simulator instance, e.g. ``simulator.opm.flow``.
-    analysis : {'approx', 'full', 'subspace'}, optional
+    analysis : {'approx', 'full', 'subspace', 'subspace2', 'enif'}, optional
         Analysis flavour, i.e. how the ensemble-approximated sensitivity is
         inverted. Defaults to the ``analysis`` key in ``keys_da``, falling back
         to ``'approx'``. The flavours differ in cost and in how they handle a
-        rank-deficient ensemble; they solve the same update equation.
+        rank-deficient ensemble; they solve the same update equation. The
+        ``'enif'`` flavour is the graph-informed information filter; see its
+        module for the ``enif`` settings block.
 
     Attributes
     ----------
@@ -107,6 +110,7 @@ class ESMDA(AssimilationScheme):
         "full": full_update,
         "subspace": subspace_update,
         "subspace2": subspace2_update,
+        "enif": enif_update,
     }
 
     # The perturbed observations are redrawn every step (from the ensemble's

@@ -15,10 +15,11 @@ Layout
     :class:`AnalysisBase` -- the shared contract and helpers.
 ``approx``, ``full``, ``subspace``, ``subspace2``
     The four registered flavours.
-``hybrid``, ``margis``
-    Flavours consumed as mixins rather than through the registry: ``hybrid``
-    belongs to the multilevel scheme and ``margis`` is backed by a private
-    package when installed.
+``hybrid``, ``margis``, ``enif``
+    Flavours that live outside the registry: ``hybrid`` belongs to the
+    multilevel scheme, ``margis`` is backed by a private package when
+    installed, and ``enif`` (ES-MDA only) uses the graphite-maps
+    estimators -- see :mod:`pipt.update_schemes.analysis.enif`.
 ``registry``
     Name-to-class lookup, plus :func:`register_analysis` for out-of-tree
     flavours.
@@ -35,6 +36,7 @@ from .full import full_update
 from .hybrid import hybrid_update
 from .subspace import subspace_update
 from .subspace2 import subspace2_update
+from .enif import enif_update
 from .registry import (
     ANALYSES,
     available_analyses,
@@ -50,6 +52,7 @@ __all__ = [
     "subspace_update",
     "subspace2_update",
     "hybrid_update",
+    "enif_update",
     "ANALYSES",
     "available_analyses",
     "get_analysis",
