@@ -46,6 +46,11 @@ dependencies = [
 pet = "pet_cli.__main__:main"
 
 [project.optional-dependencies]
+minires = [
+    # Pure-Python two-phase TPFA simulator, ref src/simulator/minires.py.
+    # Optional: it needs Python >= 3.12, whereas PET supports 3.10.
+    "minires>=0.3.2",
+]
 dev = [
     "pytest",
     "pytest-cov",
