@@ -67,7 +67,7 @@ def pairs_to_dict(entries) -> dict:
 ALIASES_DATAASSIM = {"truedata": "data", "var": "datavar", "save_folder": "savefolder", "restartfile": "restart_file"}
 FLAGS_DATAASSIM = ("emp_cov", "restart", "restartsave", "obsvarsave", "screendata", "post_process_forecast",
                    "scale_data", "logit")
-BLOCKS_DATAASSIM = ("iteration", "mda", "compress", "localization", "localanalysis")
+BLOCKS_DATAASSIM = ("iteration", "mda", "compress", "localization", "localanalysis", "enif")
 
 ALIASES_ENSEMBLE = {"importstaticvar": "importstate", "save_folder": "savefolder"}
 FLAGS_ENSEMBLE = ("save_prior", "disable_tqdm", "natural_gradient")
@@ -86,7 +86,7 @@ BLOCKS_OPTIM: tuple = ()
 KNOWN_DATAASSIM = frozenset({
     "scheme", "analysis", "data", "datavar", "obsname", "datatype", "truedataindex", "assimindex", "energy",
     "emp_cov", "iteration", "mda", "compress", "localization", "localanalysis", "actnum", "scale_data", "scale",
-    "screendata", "post_process_forecast", "remove_outliers",
+    "screendata", "post_process_forecast", "remove_outliers", "enif",
     "savefolder", "nosave", "savedata", "analysisdebug", "iterinfo", "obsvarsave", "qa", "qc",
     "restart", "restartsave", "restart_file", "logit", "logger_name",
     # legacy text files keep the ensemble's keys in DATAASSIM

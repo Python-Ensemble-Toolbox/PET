@@ -21,3 +21,4 @@ Here are some tutorials.
 
 - [`adding_an_analysis.ipynb`](pipt/extending/adding_an_analysis): Write a new analysis flavour and bind it to a scheme
 - [`adding_a_scheme.ipynb`](pipt/extending/adding_a_scheme): Write a new scheme and register it for config-driven use
+- [EnIF, an out-of-tree analysis brought in-tree](enif.md): The graph-informed information-filter flavour for ES-MDA -- installation, settings and parameter graphs

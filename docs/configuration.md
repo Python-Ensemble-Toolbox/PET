@@ -20,7 +20,7 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 | Key | Meaning | Default |
 | --- | --- | --- |
 | `scheme` | Algorithm: `esmda`, `es`, `enkf`, `lmenrml`, `gnenrml`. `pipt.available_schemes()` lists every `(scheme, analysis)` pair. | required |
-| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (all schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
+| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (all schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML); `enif` (ES-MDA, see the `[dataassim.enif]` block below). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
 | `energy` | Truncation energy of the SVD in ES-MDA, ES and EnKF; a fraction, or a percentage when greater than 1. The iterative schemes read `iteration.energy`. | `0.98` |
 | `emp_cov` | The variance file holds an ensemble of observation errors; the analyses use that empirical covariance. Flag. | off |
 
@@ -58,6 +58,19 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 | --- | --- | --- |
 | `tot_assim_steps` | Number of inflated assimilation steps; one update each. | required |
 | `inflation_param` | Inflation factor per step (a list) or one factor for all. The inverses must sum to 1. | `tot_assim_steps` for every step |
+
+### EnIF: the `[dataassim.enif]` block
+
+Settings for the `enif` analysis flavour of ES-MDA (see
+[the EnIF tutorial](tutorials/enif.md)). Spatial dependence is specified by
+parameter graphs rather than localization: the flavour rejects `localization`,
+`localanalysis`, `multilevel` and `emp_cov`.
+
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `parameter_graphs` | Maps state names to NetworkX graphs, SciPy sparse adjacency arrays, or `.npz` files written with `scipy.sparse.save_npz`. Without one, a state with `grid` metadata in `prior_<name>` gets nearest-neighbour connectivity, and a state without it independent nodes. | none |
+| `neighbourhood_expansion` | Graph hops used when fitting the prior precision. | `2` |
+| `neighbor_propagation_order` | Graph hops the update propagates through. | `15` |
 
 ### Localization: the `[dataassim.localization]` block
 

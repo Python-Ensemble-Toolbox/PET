@@ -13,6 +13,9 @@ at NORCE Norwegian Research Centre AS.
 
 ## Installation
 
+PET requires Python 3.12 through 3.14. The standard installation includes
+EnIF and EnIF-MDA with their dependencies.
+
 Before installing ensure you have python3 pre-requisites. On a Debian system run:
 
 ```

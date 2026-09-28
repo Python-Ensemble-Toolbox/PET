@@ -56,9 +56,10 @@ An analysis (`pipt.update_schemes.analysis`) is a class with
 `update(enX, enY, enE, **kwargs) -> AnalysisResult`, returning exactly one of
 a state-space `step`, a weight-space `w_step` or a `W_step`. The scheme turns
 it into a proposal with `propose_state(result, step_scale)`. The flavours are
-`approx`, `full`, `subspace`, `margis` and the multilevel `hybrid`;
-`register_analysis` adds one. Analyses read what they need from the scheme:
-`state_scaling`, `scale_data`, `proj`, `cov_data`, `trunc_energy`, `lam`.
+`approx`, `full`, `subspace`, `margis`, the multilevel `hybrid` and `enif`
+(ES-MDA); `register_analysis` adds one. Analyses read what they need from the
+scheme: `state_scaling`, `scale_data`, `proj`, `cov_data`, `trunc_energy`,
+`lam`.
 
 ## Data on the analysis path
 

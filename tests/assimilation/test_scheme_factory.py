@@ -50,10 +50,10 @@ def test_five_algorithms_cover_every_registered_combination():
 
 def test_registry_size_matches_the_algorithms_specials_and_historical_names():
     """Down from eighteen hand-written classes: 5 algorithms x 3 flavours, ``subspace2``
-    on the three schemes that can apply an ensemble transform, the two combinations
-    backed by a distinct implementation, and the two historical names (co_lm_enrml,
-    gn_enrml) that each pin a single flavour."""
-    assert len(registry.available_schemes()) == 5 * 3 + 3 + 2 + 2
+    on the three schemes that can apply an ensemble transform, ``enif`` on ES-MDA,
+    the two combinations backed by a distinct implementation, and the two historical
+    names (co_lm_enrml, gn_enrml) that each pin a single flavour."""
+    assert len(registry.available_schemes()) == 5 * 3 + 3 + 1 + 2 + 2
     assert len(ALGORITHMS) == 5               # the public constructors above
     assert len(registry.ALGORITHMS) == 5 + 2  # plus the two historical names
 
