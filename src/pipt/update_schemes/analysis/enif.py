@@ -16,6 +16,7 @@ selectable as ``analysis='enif'``. The original single-update EnIF is the
 one-step schedule, ``mda={tot_assim_steps: 1}``.
 """
 
+from dataclasses import dataclass
 from os import PathLike
 
 import networkx as nx
@@ -30,6 +31,15 @@ from pipt.update_schemes.analysis.base import AnalysisBase, AnalysisResult
 import pipt.misc_tools.extract_tools as extract
 
 __all__ = ["enif_update"]
+
+
+@dataclass(frozen=True)
+class _EnIFInformation:
+    precision: sparse.sparray
+    scales: np.ndarray
+    active_rows: np.ndarray
+    groups: tuple
+    iteration: int
 
 
 class enif_update(AnalysisBase):
@@ -53,7 +63,8 @@ class enif_update(AnalysisBase):
       ``prior_`` block gets nearest-neighbour connectivity; a group without
       grid metadata is treated as independent.
     - ``neighbourhood_expansion``: precision fitting graph hops (default 2).
-    - ``neighbor_propagation_order``: update propagation hops (default 15).
+    - ``neighbor_propagation_order``: accepted for compatibility; MDA updates
+      all retained state rows to preserve the accumulated information.
 
     Covariance localization, local analysis, multilevel ensembles and
     ``emp_cov`` cannot be combined with this flavour; spatial dependence is
@@ -81,8 +92,8 @@ class enif_update(AnalysisBase):
             Predicted data ensemble matrix, shape ``(nd, ne)``.
         enE : np.ndarray
             Perturbed observations with covariance
-            ``alpha * cov_data`` and the same shape as ``enY``. These are
-            used without adding more noise.
+            ``alpha * cov_data`` and the same shape as ``enY``. Additional
+            noise is drawn when the fitted response has unexplained variance.
 
         Returns
         -------
@@ -93,8 +104,9 @@ class enif_update(AnalysisBase):
         -----
         Each parameter group has its own precision block. Parameters
         containing non-finite values, and parameters with no ensemble
-        spread, are held fixed. The regression and prior precision are
-        refitted at every MDA step.
+        spread, are held fixed. The regression is refitted at every MDA step;
+        the posterior precision is carried forward in the new standardized
+        state coordinates.
         """
         scheme = self.scheme
         options = scheme.keys_da.get('enif', {})
@@ -115,7 +127,26 @@ class enif_update(AnalysisBase):
         active[finite] = np.ptp(enX[finite], axis=1) > 0
         step = np.zeros(enX.shape, dtype=float)
         self.enif_active_rows = np.flatnonzero(active)
+        information = getattr(scheme, 'enif_information', None)
+        groups = tuple(sorted(scheme.idX.items(), key=lambda item: item[1][0]))
+        if scheme.iteration and information is None:
+            raise ValueError('EnIF-MDA requires the preceding posterior information to resume.')
+        if information is not None and (
+            information.iteration != scheme.iteration
+            or information.groups != groups
+            or not np.array_equal(information.active_rows, self.enif_active_rows)
+            or information.precision.shape != (len(self.enif_active_rows),) * 2
+            or information.scales.shape != (len(self.enif_active_rows),)
+        ):
+            raise ValueError('EnIF-MDA information does not match the current state rows or iteration.')
         if not active.any():
+            scheme.enif_information = _EnIFInformation(
+                precision=sparse.csc_array((0, 0)),
+                scales=np.empty(0),
+                active_rows=self.enif_active_rows.copy(),
+                groups=groups,
+                iteration=scheme.iteration + 1,
+            )
             return AnalysisResult(step=step)
 
         scaler = StandardScaler()
@@ -123,36 +154,49 @@ class enif_update(AnalysisBase):
         Y, E, d, self.Prec_eps = self._observation_precision(enY, enE)
         self.H = linear_boost_ic_regression(U=U, Y=Y.T)
 
-        # Keep precision blocks in the same row order as the augmented state.
-        blocks = []
-        for name, (start, stop) in sorted(scheme.idX.items(), key=lambda item: item[1][0]):
-            local_active = active[start:stop]
-            if not local_active.any():
-                continue
-            graph = self._parameter_graph(name, stop - start)
-            graph = graph.subgraph(np.flatnonzero(local_active))
-            graph = nx.convert_node_labels_to_integers(graph, ordering='sorted')
-            local_scaler = StandardScaler()
-            local_U = local_scaler.fit_transform(enX[start:stop][local_active].T)
-            blocks.append(fit_precision_cholesky_approximate(
-                local_U,
-                graph,
-                neighbourhood_expansion=options.get('neighbourhood_expansion', 2),
-                use_tqdm=self._use_tqdm(scheme),
-            ))
-        self.Prec_u = sparse.csc_array(sparse.block_diag(blocks, format='csc'))
+        if information is None:
+            # Keep precision blocks in the same row order as the augmented state.
+            blocks = []
+            for name, (start, stop) in groups:
+                local_active = active[start:stop]
+                if not local_active.any():
+                    continue
+                graph = self._parameter_graph(name, stop - start)
+                graph = graph.subgraph(np.flatnonzero(local_active))
+                graph = nx.convert_node_labels_to_integers(graph, ordering='sorted')
+                local_scaler = StandardScaler()
+                local_U = local_scaler.fit_transform(enX[start:stop][local_active].T)
+                blocks.append(fit_precision_cholesky_approximate(
+                    local_U,
+                    graph,
+                    neighbourhood_expansion=options.get('neighbourhood_expansion', 2),
+                    use_tqdm=self._use_tqdm(scheme),
+                ))
+            self.Prec_u = sparse.csc_array(sparse.block_diag(blocks, format='csc'))
+        else:
+            change_of_scale = sparse.diags_array(scaler.scale_ / information.scales, format='csc')
+            self.Prec_u = (change_of_scale @ information.precision @ change_of_scale).tocsc()
 
         gtmap = EnIF(Prec_u=self.Prec_u, Prec_eps=self.Prec_eps, H=self.H)
-        self.update_indices = gtmap.get_update_indices(
-            neighbor_propagation_order=options.get('neighbor_propagation_order', 15),
-        )
+        self.update_indices = None
         canonical = gtmap.pushforward_to_canonical(U)
         residuals = gtmap.response_residual(U, Y.T)
-        # ERT transport draws noise internally. Use PET's existing perturbations
-        # instead: d - (residuals + d - E) == E - residuals.
+        alpha = scheme.alpha[scheme.iteration]
+        extra_variance = (alpha - 1) * gtmap.unexplained_variance
+        if alpha > 1:
+            self.Prec_eps = sparse.diags_array(
+                1 / (1 / self.Prec_eps.diagonal() + extra_variance), format='csc',
+            )
+            gtmap.Prec_eps = self.Prec_eps
+            extra_noise = scheme.ensemble.rng.standard_normal(residuals.shape) * np.sqrt(extra_variance)
+        else:
+            extra_noise = 0
+        # PET already drew the measurement noise in E. The extra independent
+        # draw inflates the full noisy-residual variance, including the fitted
+        # unexplained response variance.
         canonical = gtmap.update_canonical(
             canonical=canonical,
-            residual_noisy=residuals + d - E.T,
+            residual_noisy=residuals + d - E.T + extra_noise,
             d=d,
         )
         updated = gtmap.pullback_from_canonical(
@@ -163,6 +207,13 @@ class enif_update(AnalysisBase):
         )
         self.Prec_posterior = gtmap.Prec_u
         step[active] = scaler.inverse_transform(updated).T - enX[active]
+        scheme.enif_information = _EnIFInformation(
+            precision=self.Prec_posterior,
+            scales=scaler.scale_.copy(),
+            active_rows=self.enif_active_rows.copy(),
+            groups=groups,
+            iteration=scheme.iteration + 1,
+        )
         return AnalysisResult(step=step)
 
     # ------------------------------------------------------------------
@@ -235,6 +286,8 @@ class enif_update(AnalysisBase):
         covariance = np.asarray(scheme.cov_data, dtype=float)
         alpha = scheme.alpha[scheme.iteration]
         nd = enY.shape[0]
+        if not np.isfinite(alpha) or alpha < 1:
+            raise ValueError('EnIF-MDA inflation must be finite and at least one.')
         if not np.all(np.isfinite(covariance)):
             raise ValueError('EnIF observation covariance must be finite.')
         if covariance.ndim == 2:

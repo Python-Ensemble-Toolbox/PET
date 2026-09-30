@@ -12,6 +12,9 @@ config path, on a single-parameter identity model where the Gaussian
 posterior is known analytically.
 """
 
+import importlib
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -42,6 +45,7 @@ class FakeScheme:
         self.iteration = 0
         self.vecObs = np.array([1.2, -0.3])
         self.cov_data = np.array([0.2, 0.5])
+        self.ensemble = SimpleNamespace(rng=np.random.RandomState(19))
 
 
 @pytest.fixture(autouse=True)
@@ -56,9 +60,8 @@ def scheme_double():
     return FakeScheme()
 
 
-@pytest.mark.parametrize('alpha', [1.0, 4.0])
-def test_matches_ert_transport(scheme_double, alpha):
-    """Compare the PET step with ERT's fit-and-transport recipe, member by member."""
+def test_matches_single_step_ert_transport(scheme_double):
+    """The one-pass update retains the EnIF transport equations."""
     rng = np.random.default_rng(13)
     X = rng.normal(size=(6, 80)) * np.arange(1, 7)[:, None] + 5
     Y = np.vstack((X[0] + 0.3 * X[1] ** 2, X[4] - X[5]))
@@ -70,24 +73,124 @@ def test_matches_ert_transport(scheme_double, alpha):
     precision = fit_precision_cholesky_approximate(U, graph, use_tqdm=False)
     reference = EnIF(
         Prec_u=precision,
-        Prec_eps=sparse.diags_array(1 / (alpha * scheme_double.cov_data), format='csc'),
+        Prec_eps=sparse.diags_array(1 / scheme_double.cov_data, format='csc'),
         H=H,
     )
     noise = reference.generate_observation_noise(X.shape[1], seed=19)
     expected = reference.transport(
         U, Y.T, scheme_double.vecObs,
-        update_indices=reference.get_update_indices(neighbor_propagation_order=15),
+        update_indices=None,
         iterative=False, seed=19,
     )
     expected = scaler.inverse_transform(expected).T
 
-    scheme_double.alpha = [alpha]
     E = scheme_double.vecObs[:, None] - noise.T
     analysis = enif_update(scheme_double)
     result = analysis.update(X, Y, E)
 
     np.testing.assert_allclose(X + result.step, expected, rtol=1e-11, atol=1e-11)
     np.testing.assert_allclose(analysis.Prec_posterior.toarray(), reference.Prec_u.toarray())
+
+
+def test_mda_inflates_total_residual_and_posterior_spread(scheme_double, monkeypatch):
+    """An imperfect response map must dilute information and its stochastic update."""
+    enif_module = importlib.import_module('pipt.update_schemes.analysis.enif')
+    monkeypatch.setattr(enif_module, 'fit_precision_cholesky_approximate',
+                        lambda *args, **kwargs: sparse.eye_array(1, format='csc'))
+    monkeypatch.setattr(enif_module, 'linear_boost_ic_regression',
+                        lambda **kwargs: sparse.csc_array([[1.0]]))
+    rng = np.random.default_rng(30)
+    X = rng.normal(size=(1, 3000))
+    X = (X - X.mean()) / X.std()
+    Y = X + rng.normal(scale=0.9, size=X.shape)
+    scheme_double.idX = {'field': (0, 1)}
+    scheme_double.prior_info = {'field': {}}
+    scheme_double.vecObs = np.array([1.2])
+    scheme_double.cov_data = np.array([0.25])
+    scheme_double.alpha = [5.0]
+    E = scheme_double.vecObs[:, None] + rng.normal(scale=np.sqrt(5 * 0.25), size=Y.shape)
+
+    analysis = enif_update(scheme_double)
+    updated = X + analysis.update(X, Y, E).step
+    expected_variance = 1 / (1 + 1 / (5 * (0.25 + 0.9**2)))
+
+    np.testing.assert_allclose(analysis.Prec_eps.diagonal(),
+                               1 / (5 * 0.25 + 4 * np.var(Y - X)), rtol=0.01)
+    np.testing.assert_allclose(analysis.Prec_posterior.toarray(),
+                               [[1 + 1 / (5 * (0.25 + 0.9**2))]], atol=0.01)
+    np.testing.assert_allclose(updated.var(), expected_variance, atol=0.035)
+
+
+def test_mda_carries_precision_in_new_coordinates(scheme_double, monkeypatch):
+    enif_module = importlib.import_module('pipt.update_schemes.analysis.enif')
+    calls = []
+
+    def fit_precision(*args, **kwargs):
+        calls.append(1)
+        return sparse.eye_array(1, format='csc')
+
+    def fit_response(U, Y):
+        return sparse.csc_array([[float(U[:, 0] @ Y[:, 0] / (U[:, 0] @ U[:, 0]))]])
+
+    monkeypatch.setattr(enif_module, 'fit_precision_cholesky_approximate', fit_precision)
+    monkeypatch.setattr(enif_module, 'linear_boost_ic_regression', fit_response)
+    scheme_double.idX = {'field': (0, 1)}
+    scheme_double.prior_info = {'field': {}}
+    scheme_double.vecObs = np.array([1.2])
+    scheme_double.cov_data = np.array([0.5])
+    scheme_double.alpha = [2.0, 2.0]
+    X = np.linspace(-2, 2, 100)[None, :]
+    initial_precision = 1 / X.var()
+    analysis = enif_update(scheme_double)
+
+    for iteration in range(2):
+        scheme_double.iteration = iteration
+        E = np.broadcast_to(scheme_double.vecObs[:, None], X.shape)
+        X = X + analysis.update(X, X, E).step
+        information = scheme_double.enif_information
+        np.testing.assert_allclose(information.precision.toarray()[0, 0] / information.scales[0]**2,
+                                   initial_precision + (iteration + 1) / (2 * 0.5), atol=1e-12)
+        assert information.iteration == iteration + 1
+        assert analysis.update_indices is None
+
+    assert len(calls) == 1
+    scheme_double.iteration = 2
+    with pytest.raises(ValueError, match='does not match'):
+        analysis.update(np.ones_like(X), X, E)
+
+
+def test_carried_precision_preserves_cross_parameter_coupling(scheme_double, monkeypatch):
+    enif_module = importlib.import_module('pipt.update_schemes.analysis.enif')
+    fitted = sparse.csc_array([[2.0, 0.6], [0.6, 3.0]])
+    monkeypatch.setattr(enif_module, 'fit_precision_cholesky_approximate',
+                        lambda *args, **kwargs: fitted)
+    monkeypatch.setattr(enif_module, 'linear_boost_ic_regression',
+                        lambda U, Y: sparse.csc_array([[float(U[:, 0] @ Y[:, 0] / (U[:, 0] @ U[:, 0])), 0.0]]))
+    scheme_double.idX = {'field': (0, 2)}
+    scheme_double.prior_info = {'field': {}}
+    scheme_double.vecObs = np.array([1.2])
+    scheme_double.cov_data = np.array([0.5])
+    scheme_double.alpha = [2.0, 2.0]
+    X = np.vstack((np.linspace(-2, 2, 80), np.linspace(1, 3, 80)))
+    analysis = enif_update(scheme_double)
+    E = np.broadcast_to(scheme_double.vecObs[:, None], (1, X.shape[1]))
+    X = X + analysis.update(X, X[:1], E).step
+    previous = scheme_double.enif_information
+    physical_precision = previous.precision.toarray() / np.outer(previous.scales, previous.scales)
+
+    scheme_double.iteration = 1
+    analysis.update(X, X[:1], E)
+    scales = X.std(axis=1)
+    np.testing.assert_allclose(analysis.Prec_u.toarray() / np.outer(scales, scales), physical_precision)
+    assert analysis.Prec_u[0, 1] != 0
+
+
+def test_mda_rejects_missing_preceding_information(scheme_double):
+    scheme_double.iteration = 1
+    scheme_double.alpha = [2.0, 2.0]
+    X = np.ones((6, 20))
+    with pytest.raises(ValueError, match='preceding posterior information'):
+        enif_update(scheme_double).update(X, X[:2], X[:2])
 
 
 def test_parameter_grid_order_and_custom_graphs(scheme_double, tmp_path):
@@ -174,6 +277,17 @@ def test_constant_and_nonfinite_parameters(scheme_double):
         analysis.update(X[:, :1], Y[:, :1], Y[:, :1])
     with pytest.raises(ValueError, match='must be finite'):
         analysis.update(X, Y * np.nan, Y)
+
+
+def test_constant_parameters_remain_constant_over_multiple_passes(scheme_double):
+    scheme_double.alpha = [2.0, 2.0]
+    X = np.ones((6, 20))
+    Y = np.ones((2, 20))
+    analysis = enif_update(scheme_double)
+    for iteration in range(2):
+        scheme_double.iteration = iteration
+        np.testing.assert_array_equal(analysis.update(X, Y, Y).step, 0)
+    assert scheme_double.enif_information.iteration == 2
 
 
 # ----------------------------------------------------------------------
@@ -286,3 +400,37 @@ def test_state_limits(pet_inputs):
     scheme.run_assimilation()
     assert np.min(scheme.enX) >= -0.1
     assert np.max(scheme.enX) <= 0.1
+
+
+def test_enif_restart_preserves_accumulated_information(pet_inputs, monkeypatch, tmp_path):
+    keys_da, keys_en, sim = pet_inputs
+    keys_da['mda'] = {'tot_assim_steps': 3}
+    checkpoint = tmp_path / 'enif_restart.pkl'
+    np.random.seed(14)
+    reference = ESMDA(keys_da, keys_en, sim)
+    reference.run_assimilation()
+
+    keys_da.update(restartsave=True, restart_file=str(checkpoint))
+    np.random.seed(14)
+    partial = ESMDA(keys_da, keys_en, sim)
+    update_step = partial.update_step
+
+    def interrupt_after_checkpoint():
+        if partial.iteration == 1:
+            raise InterruptedError
+        return update_step()
+
+    monkeypatch.setattr(partial, 'update_step', interrupt_after_checkpoint)
+    with pytest.raises(InterruptedError):
+        partial.run_assimilation()
+    assert checkpoint.exists()
+
+    keys_da.update(restart=True, restartsave=False)
+    np.random.seed(12345)
+    resumed = ESMDA(keys_da, keys_en, sim)
+    resumed.run_assimilation()
+
+    np.testing.assert_array_equal(resumed.enX, reference.enX)
+    np.testing.assert_array_equal(resumed.analysis.Prec_posterior.toarray(),
+                                  reference.analysis.Prec_posterior.toarray())
+    assert resumed.enif_information.iteration == 3

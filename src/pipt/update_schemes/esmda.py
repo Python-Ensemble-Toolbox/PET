@@ -116,7 +116,7 @@ class ESMDA(AssimilationScheme):
     # The perturbed observations are redrawn every step (from the ensemble's
     # stream, whose state travels with the ensemble); the misfit is scored
     # against the un-inflated draw taken at construction (`enObs_conv`).
-    RESTART_ATTRIBUTES = ("enObs", "enObs_conv", "scale_data")
+    RESTART_ATTRIBUTES = ("enObs", "enObs_conv", "scale_data", "enif_information")
 
     def __init__(self, keys_da, keys_en, sim, analysis=None, ensemble=None):
         """Build the ensemble from the config (or take the one given) and bind the analysis.
@@ -135,6 +135,8 @@ class ESMDA(AssimilationScheme):
         # The analysis flavour is a parameter of the algorithm, not a different
         # algorithm, so it selects an analysis object rather than a class.
         self.bind_analysis(self.resolve_analysis(analysis, ensemble.keys_da))
+        if self.analysis_name == 'enif':
+            self.enif_information = None
 
         self.prev_data_misfit_mean = None
 
