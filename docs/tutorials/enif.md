@@ -41,11 +41,15 @@ The equivalent Python entry point is `ESMDA(keys_da, keys_en, sim,
 analysis="enif")`, and `("esmda", "enif")` resolves through the scheme
 registry like any other combination.
 
-EnIF-MDA reruns the simulator and refits the regression and state precision
-after each update. MDA requires positive, finite inflation factors satisfying
-`sum(1 / alpha) = 1`. If you omit `inflation_param`, PET uses
-`tot_assim_steps` for each factor. A scalar factor repeats across the schedule.
-The schedule retains its original indexing on restart.
+EnIF-MDA reruns the simulator and refits the response regression after each
+update. It estimates the graph-based prior precision on the first pass, then
+passes the accumulated posterior precision to the next pass, converting it to
+that pass's standardized state coordinates. MDA requires positive, finite
+inflation factors satisfying `sum(1 / alpha) = 1`. If you omit
+`inflation_param`, PET uses `tot_assim_steps` for each factor. A scalar factor
+repeats across the schedule.
+Checkpoints retain both the schedule position and the accumulated precision;
+restarting a multi-pass EnIF run requires a checkpoint with that information.
 
 ## Parameter graphs
 
@@ -61,15 +65,19 @@ The regular-grid ordering matches PET's layered prior generator:
 with a different ordering, reduced active-cell arrays or irregular geometry,
 provide a graph whose node numbers match the imported parameter rows.
 
-You can configure graphs and neighbourhood sizes under `enif`:
+You can configure graphs and the initial precision-fitting neighbourhood under
+`enif`:
 
 ```yaml
 enif:
   parameter_graphs:
     perm: perm_graph.npz
   neighbourhood_expansion: 2
-  neighbor_propagation_order: 15
 ```
+
+`neighbor_propagation_order` is accepted in existing configurations but is
+ignored by EnIF-MDA: every retained state row is solved for at each pass so
+the carried information is reflected in the ensemble.
 
 Write a graph file as a symmetric sparse adjacency array with
 `scipy.sparse.save_npz`. For example, for five parameters arranged in a chain:
@@ -96,9 +104,14 @@ increment, then applies PET's configured state limits.
 
 EnIF uses PET's perturbed observations, random-number stream, state clipping,
 forecast loop and misfit reporting. It scales observation covariance by the
-current MDA factor once. It also estimates the unexplained response variance,
-as in ERT. For a correlated observation covariance, it whitens the observations,
-forecasts and perturbations before fitting the response map.
+current MDA factor once. It estimates the unexplained response variance and
+inflates the **total** noisy-residual variance: for step factor `alpha`, this
+is `alpha * (observation variance + unexplained variance)`. PET's existing
+observation perturbations already include the inflated measurement error; an
+independent draw supplies the remaining `(alpha - 1) * unexplained variance`.
+For a correlated observation covariance, PET whitens the observations,
+forecasts and perturbations before fitting the response map and drawing this
+additional noise in whitened coordinates.
 
 The analysis lives in `pipt/update_schemes/analysis/enif.py` and binds to the
 ES-MDA scheme like the `approx`, `full` and `subspace` flavours; it returns an
@@ -106,10 +119,15 @@ additive state-space step and uses the direct sparse solver, matching ERT's
 non-iterative transport setting.
 
 After an update, the bound analysis object (`scheme.analysis`) exposes the
-fitted `H`, `Prec_u`, `Prec_eps` and `Prec_posterior`. These matrices use
-standardized, retained state rows; `enif_active_rows` maps them back to the
-full state. With correlated observation errors, `H` and `Prec_eps` use
-whitened observation coordinates.
+fitted `H`, `Prec_u`, `Prec_eps` and `Prec_posterior`. `Prec_u` is the initial
+graph-based fit on the first pass and the carried, rescaled posterior precision
+on later passes. These matrices use standardized, retained state rows;
+`enif_active_rows` maps them back to the full state. The scheme stores the
+information needed by the next pass in `scheme.enif_information`, including
+the posterior precision, scaling and
+retained rows. Changes to the retained rows across passes are rejected rather
+than silently discarding accumulated information. With correlated observation
+errors, `H` and `Prec_eps` use whitened observation coordinates.
 
 This analysis requires at least two ensemble members and positive observation
 variances. It does not support PET's covariance localization, local analysis,
