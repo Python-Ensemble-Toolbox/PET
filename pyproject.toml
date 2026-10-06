@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=64", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "PET"
-version = "1.0"
+# Derived from the latest git tag by setuptools-scm (v0.2 -> 0.2;
+# commits after it -> 0.3.devN+g<hash>). Release by pushing a tag.
+dynamic = ["version"]
 description = "Python Ensemble Toolbox"
 authors = [
   { name = "Data assimilation and optimization group" }
@@ -77,6 +79,10 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+# Used when building without git metadata, e.g. from a source zip.
+fallback_version = "0.0.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
