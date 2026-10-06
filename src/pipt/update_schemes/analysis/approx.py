@@ -102,7 +102,10 @@ class approx_update(AnalysisBase):
                 return AnalysisResult(step=Cxy_loc @ X2)    # shape: (nx, ne)
 
             elif y_proj == 'ensemble':
-                Y_anom_proj = X2 @ D_anom                   # shape: (ne, ne)
+                # W = V_r S_r (I + S_r^2)^-1 U_r^T D: the innovations enter
+                # once, through X2, so an all-ones taper gives the
+                # non-localized step X_anom @ X3.
+                Y_anom_proj = (VrT.T * Sr[None, :]) @ X2    # shape: (ne, ne)
                 T_loc = localization(                       # shape: (nx, ne)
                     X = scx[:, None]*X_anom,                # shape: (nx, ne)
                     Y = Y_anom_proj

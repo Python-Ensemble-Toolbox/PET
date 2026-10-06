@@ -172,3 +172,40 @@ def test_approx_update_with_autoadaloc():
     np.testing.assert_allclose(step_loc, step_loc_expected)
     np.testing.assert_allclose(step_no_loc, step_expected_no_loc)
     assert not np.array_equal(step_loc, step_no_loc)
+
+
+def test_approx_update_autoadaloc_ensemble_projection():
+    # Regression for #170: the 'ensemble' projection multiplied X2 by D_anom a
+    # second time, which fails unless nd == ne. Use nd != ne != nr, and an
+    # all-ones taper so the step must equal the non-localized one.
+    rng = np.random.default_rng(170)
+    nx, nd, ne = 6, 15, 10
+    enX = rng.normal(size=(nx, ne))
+    enY = rng.normal(size=(nd, ne))
+    enE = enY.mean(axis=1)[:, None] + rng.normal(0, 0.1, size=enY.shape)
+
+    class FakeScheme:
+        lam = 1.0
+        trunc_energy = 0.9
+        cov_data = 0.1*np.ones(nd)
+        keys_da = {"emp_cov": False}
+
+        def __init__(self, localization):
+            self.localization = localization
+
+    loc_info = {
+        "name": "autoadaloc",
+        "field": [nx],
+        "actnum": None,
+        "threshold": "fixed",
+        "cutoff": 0.0,
+        "type": "hard",
+        "projection": "ensemble",
+    }
+    step_loc = approx_update(FakeScheme(AutoAdaptiveLocalization(loc_info))).update(enX, enY, enE).step
+    step_no_loc = approx_update(
+        FakeScheme(type('localization', (object,), {'name': None})())
+    ).update(enX, enY, enE).step
+
+    assert step_loc.shape == (nx, ne)
+    np.testing.assert_allclose(step_loc, step_no_loc)
