@@ -16,6 +16,15 @@ at NORCE Norwegian Research Centre AS.
 PET requires Python 3.12 through 3.14. The standard installation includes
 EnIF and EnIF-MDA with their dependencies.
 
+To install PET, first clone the repo (assuming you have added the SSH key)
+
+```
+git clone git@github.com:Python-Ensemble-Toolbox/PET.git PET
+```
+Alternatively, [click here to download ZIP](https://github.com/Python-Ensemble-Toolbox/PET/archive/refs/heads/main.zip).
+
+### On Linux
+
 Before installing ensure you have python3 pre-requisites. On a Debian system run:
 
 ```
@@ -23,12 +32,6 @@ sudo apt-get update
 sudo apt-get install python3
 sudo apt-get install python3-pip
 sudo apt-get install python3-venv
-```
-
-To install PET, first clone the repo (assuming you have added the SSH key)
-
-```sh
-git clone git@github.com:Python-Ensemble-Toolbox/PET.git PET
 ```
 
 Make sure you have the latest version of `pip` and `setuptools`:
@@ -63,6 +66,19 @@ To also install the tools needed for running tests and linting locally:
 ```sh
 python3 -m pip install -e ".[dev]"
 ```
+
+### On Windows
+
+TL;DR: use `conda` to create the environment and install PET. Inside the PET folder,
+run:
+
+```powershell
+conda env create -f environment.yml -n pet
+conda activate pet
+```
+For more details refer to
+[Installing PET on Windows](docs/installation_windows.md).
+This setup may also work on Linux, though it has not been tested yet.
 
 ## Documentation
 

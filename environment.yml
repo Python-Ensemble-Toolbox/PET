@@ -1,0 +1,41 @@
+# Conda environment for PET. Needed on Windows, where pip alone cannot install
+# PET; tested there only. See docs/installation_windows.md.
+#
+#   conda env create -f environment.yml
+#   conda activate pet
+#
+# Requires git on PATH (Git for Windows on Windows): graphite-maps and PET's
+# geostat dependency are installed from git. (git is deliberately not a conda
+# dependency here: the conda-forge build fails its certificate revocation check
+# behind some proxies.)
+#
+# Windows needs conda because scikit-sparse (required by graphite-maps, which
+# the EnIF analysis uses) has no Windows wheel on PyPI.
+name: pet
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - scikit-sparse<0.5   # brings suitesparse (CHOLMOD); graphite-maps needs <0.5
+  - numpy
+  - scipy
+  - matplotlib
+  - h5py
+  - pandas
+  - scikit-learn        # graphite-maps
+  - networkx            # graphite-maps
+  - joblib              # graphite-maps
+  - tqdm
+  - p-tqdm
+  - pywavelets
+  - pyyaml
+  - sympy
+  - tomli
+  - tomli-w
+  - pip
+  - pip:
+      # Not on conda-forge, and no Windows build on PyPI. Pinned to the release
+      # that PET's pyproject.toml requires.
+      - git+https://github.com/equinor/graphite-maps@0.0.11
+      # PET itself, editable. The path is relative to this file.
+      - -e .

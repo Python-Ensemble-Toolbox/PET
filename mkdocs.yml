@@ -9,6 +9,7 @@ watch: [.]
 
 nav:
   - Home: index.md
+  - Windows installation: installation_windows.md
   - Reference: reference/
   - Tutorials: tutorials/
   - Configuration: configuration.md

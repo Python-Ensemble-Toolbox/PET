@@ -15,6 +15,9 @@ python -m pip install -e .
 
 PET requires Python 3.12 through 3.14, matching its `graphite-maps` dependency.
 
+On Windows, `graphite-maps` cannot be installed with pip alone; see
+[Installing PET on Windows](../installation_windows.md).
+
 ## Select the analysis
 
 Keep your existing ensemble, observation and simulator settings. EnIF is an
