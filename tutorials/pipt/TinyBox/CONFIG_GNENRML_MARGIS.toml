@@ -1,0 +1,52 @@
+[ensemble]
+    ne = 50
+    state = "permx"
+    [ensemble.prior_permx]
+        vario = "sph"
+        mean  = "priormean.npz"
+        var   = 1.0
+        range = 10.0
+        aniso = 1.0
+        angle = 0.0
+        grid  = [10, 10, 2]
+
+[dataassim]
+    savefolder = "Results_margis"
+    scheme     = "gnenrml"
+    analysis   = "margis"
+    energy     = 98.0
+    obsname    = "dates"
+    data       = "data.csv"
+    datavar    = "var.csv"
+    savedata   = ["ensemble_misfit"]
+
+    # GN-EnRML settings
+    [dataassim.iteration]
+        max_iter = 10
+        gamma = 0.5
+        gamma_factor = 5
+        trunc_energy = 0.99
+
+
+[simulator]
+    reporttype  = "dates"
+    reportpoint = [
+        2023-02-05T00:00:00,
+        2024-03-11T00:00:00,
+        2025-04-15T00:00:00,
+        2026-05-20T00:00:00,
+        2027-06-24T00:00:00,
+        2028-07-28T00:00:00,
+        2029-09-01T00:00:00,
+        2030-10-06T00:00:00,
+        2031-11-10T00:00:00,
+        2032-12-14T00:00:00,
+    ]
+    sim_limit = 300.0
+    runfile   = "RUNFILE"
+    parallel  = 5
+    datatype  = [
+        "WOPR:PRO1", "WOPR:PRO2", "WOPR:PRO3",
+        "WWPR:PRO1", "WWPR:PRO2", "WWPR:PRO3",
+        "WWIR:INJ1", "WWIR:INJ2", "WWIR:INJ3"
+    ]
