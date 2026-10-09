@@ -106,8 +106,15 @@ class EnsembleOptimizationBase(BaseEnsemble):
         if ensemble_input:
             self.ne = x.shape[1]
         else:
-            x = x[:, np.newaxis]
-            self.ne = self.num_models # In case of robust optimization
+            # A single control vector is evaluated on every geological model in
+            # robust optimization: one copy per model, each paired with its own
+            # model index. Without the copies the simulator got one input for
+            # num_models members, and `_aux_input`'s ensemble pairing
+            # ([0, 0, 1, 1, ...]) would have sent them to the wrong models.
+            x = np.repeat(x[:, np.newaxis], self.num_models, axis=1)
+            self.ne = self.num_models
+            if self.num_models > 1:
+                self.aux_input = list(range(self.num_models))
 
         if isinstance(self.sim, noSimulation):
             func_values = self.obj_func(x, **kwargs)
