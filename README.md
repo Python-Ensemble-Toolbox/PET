@@ -98,52 +98,6 @@ pet migrate my_config.toml    # update a config file to the current schema
 pet version                   # print the installed PET version
 ```
 
-### Config schema change: `daalg` becomes `scheme`
-
-The analysis flavour is a parameter of an algorithm, not a separate algorithm,
-so the two-element `daalg` key has been replaced by a single `scheme` key:
-
-```toml
-# before                              # after
-[dataassim]                           [dataassim]
-daalg = ["esmda", "esmda"]            scheme = "esmda"
-analysis = "approx"                   analysis = "approx"
-```
-
-`pet migrate` performs this rewrite in place, keeping the original as
-`<config>.bak`. Use `--dry-run` to preview. Loading a config that still uses
-`daalg` raises an error pointing at the command. For a legacy `.pipt`/`.popt`
-file, convert first and then migrate:
-
-```sh
-pet convert my_case.pipt && pet migrate my_case.toml
-```
-
-The same change is reflected in the Python API, where one constructor per
-algorithm now takes the flavour as an argument:
-
-```python
-from pipt import ESMDA, available_schemes
-
-scheme = ESMDA(cfg_da, cfg_en, sim)   # flavour comes from the config's `analysis`
-result = scheme.run_assimilation()    # the scheme owns its iteration loop
-
-available_schemes()   # every valid (scheme, analysis) pair
-```
-
-`analysis=` overrides the config when passed. `ESMDA.assimilate(cfg_da, cfg_en,
-sim)` is the one-line form for when the scheme object is not needed afterwards;
-it returns the same `AssimilationResult`, whose `x` is the posterior ensemble.
-
-The eighteen per-flavour classes this used to produce (`esmda_approx`,
-`lmenrml_full`, ...) are gone: each was a one-line subclass pinning the
-flavour a constructor argument already expresses. Use `ESMDA(..., analysis=
-"approx")` and friends instead.
-
-Running a data-assimilation or optimization job itself is still done from a
-Python driver script that wires up your forward simulator/cost function -- see
-the tutorials below.
-
 ## Examples
 
 PET needs to be set up with a configuration file. See the example [repository](https://github.com/Python-Ensemble-Toolbox/Examples) for inspiration.
