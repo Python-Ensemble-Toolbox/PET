@@ -138,18 +138,32 @@ class ForecastMixin:
         members = self.member_adjoints
         if not members:
             return None
-        cells = {row: [np.asarray(member.loc[row.label, row.datatype], dtype=float).reshape(row.size, -1)
-                       for member in members] for row in self.data_layout.rows}
-        nx = next(iter(cells.values()))[0].shape[1]
-        out = np.empty((self.data_layout.nd, nx, len(members)))
-        for row, blocks in cells.items():
-            for j, block in enumerate(blocks):
-                out[row.rows, :, j] = block
+
+        rows = self.data_layout.rows
+        # The layout's rows are contiguous and in order, so stacking each member's
+        # blocks row by row gives its (nd, nx) Jacobian; members go last.
+        jacobians = [np.vstack([self._adjoint_block(member, row) for row in rows]) for member in members]
+        out = np.stack(jacobians, axis=-1)
+
         if self.data_df.is_scaled:
+            # Scaled data is (d - min) / (max - min), so its sensitivity is d's divided by (max - min).
             span = self.data_df.scale_max - self.data_df.scale_min
-            for row in self.data_layout.rows:
-                out[row.rows] = (out[row.rows] - 0) / span[row.datatype]
+            for row in rows:
+                out[row.rows] /= span[row.datatype]
         return out
+
+    @staticmethod
+    def _adjoint_block(member, row):
+        """The sensitivities of one observed cell in one member's adjoint frame, as ``(row.size, nx)``.
+
+        With ``(datatype, parameter)`` columns the cell holds one gradient per
+        parameter; they are joined in column order into one gradient over the
+        whole state.
+        """
+        cell = member.loc[row.label, row.datatype]
+        if isinstance(cell, pd.Series):
+            cell = np.concatenate([np.ravel(gradient) for gradient in cell.values])
+        return np.asarray(cell, dtype=float).reshape(row.size, -1)
 
     def _record_positions(self):
         """Where each observed label sits in a member's records: the simulator's ``true_order``, else the label itself."""
