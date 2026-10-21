@@ -119,8 +119,11 @@ class GaussianEnsemble(EnsembleOptimizationBase):
             dF = self.enF[levelID] - np.repeat(self.stateF, nr)
             ne = dF.shape[0]
 
+            # Members with non-finite objective (failed simulation/eCalc) are skipped
+            ok = self._finite_members(dF)
+
             dx = self.enX[:, start_idx:start_idx + ne] - self.stateX[:, None]
-            grad_ml[levelID] = np.squeeze(dx @ dF) / ne
+            grad_ml[levelID] = np.squeeze(dx[:, ok] @ dF[ok]) / ok.sum()
             start_idx += ne
 
         if 'multilevel' in self.keys_en:
@@ -140,6 +143,16 @@ class GaussianEnsemble(EnsembleOptimizationBase):
             grad = np.linalg.solve(self.covX, grad)
 
         return grad
+
+    @staticmethod
+    def _finite_members(dF):
+        '''Mask of ensemble members with a finite objective difference. Raises if none are finite.'''
+        ok = np.isfinite(dF)
+        if not ok.any():
+            raise RuntimeError('Objective function is non-finite for all ensemble members')
+        if not ok.all():
+            print(f'Warning: skipping {np.count_nonzero(~ok)} of {ok.size} ensemble members with non-finite objective')
+        return ok
 
     def hessian(self, x=None, *args, **kwargs):
         '''
@@ -184,9 +197,12 @@ class GaussianEnsemble(EnsembleOptimizationBase):
             dF = self.enF[levelID] - np.repeat(self.stateF, nr)
             ne = self.enF[levelID].shape[0]
 
+            # Members with non-finite objective (failed simulation/eCalc) are skipped
+            ok = self._finite_members(dF)
+
             # Vectorized Hessian estimate for this level.
-            dx = self.enX[:, index:index + ne] - self.stateX[:, None]
-            hess_ml[levelID] = (dx * dF) @ dx.T / ne - self.covX * np.mean(dF)
+            dx = self.enX[:, index:index + ne][:, ok] - self.stateX[:, None]
+            hess_ml[levelID] = (dx * dF[ok]) @ dx.T / ok.sum() - self.covX * np.mean(dF[ok])
             index += ne
 
         if 'multilevel' in self.keys_en:

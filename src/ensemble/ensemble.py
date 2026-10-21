@@ -366,7 +366,9 @@ class BaseEnsemble:
         """Run the members through the simulator's HPC queue, ``batch_size`` at a time; needs the queue hooks on the wrapper."""
         import pipt.misc_tools.analysis_tools as at
 
-        list_member_index = list(range(self.ne))
+        # Use the size of the input ensemble, not self.ne: for multilevel, enX holds a single level only
+        ne = len(enX)
+        list_member_index = list(range(ne))
 
         # Split the ensemble into batches of 500
         if batch_size >= 1000:
@@ -374,11 +376,11 @@ class BaseEnsemble:
             batch_size = 1000
         en_pred = []
         batch_en = [np.arange(start, start + batch_size) for start in
-                    np.arange(0, self.ne - batch_size, batch_size)]
-        if len(batch_en): # if self.ne is less than batch_size
-            batch_en.append(np.arange(batch_en[-1][-1]+1, self.ne))
+                    np.arange(0, ne - batch_size, batch_size)]
+        if len(batch_en): # if ne is less than batch_size
+            batch_en.append(np.arange(batch_en[-1][-1]+1, ne))
         else:
-            batch_en.append(np.arange(0, self.ne))
+            batch_en.append(np.arange(0, ne))
         for n_e in batch_en:
             _ = [self.sim.run_fwd_sim(state, member_index, nosim=True) for state, member_index in
                     zip([enX[curr_n] for curr_n in n_e], [list_member_index[curr_n] for curr_n in n_e])]

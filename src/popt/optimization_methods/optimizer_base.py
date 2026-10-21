@@ -756,7 +756,8 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
         self.fk_old = state['fk_old']
         self.iteration = state['iteration']
         self.epf_iteration = state['epf_iteration']
-        self.ftol = state['ftol']
+        # A tolerance given in the options overrides the saved one, so it can be changed on restart
+        self.ftol = self.options.get('ftol', state['ftol']) if self.options else state['ftol']
         self.xtol = state['xtol']
         self.epf = state['epf']
         self.conv_msg = state.get('conv_msg', '')
