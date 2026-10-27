@@ -92,10 +92,14 @@ def experiment(case_name: str, method: dict, i: int, ne: int) -> dict:
 # ----------------------------------------------------------------------
 # Tables
 # ----------------------------------------------------------------------
-TABLES = {
-    "Data and forecast": {"misfit": "misfit", "forecast_wwct_rmse": "RMSE forecast WWCT", "runs": "simulations"},
-    "Field (log K)": {"logk_rmse": "RMSE", "logk_corr": "corr", "logk_spread": "spread"},
-    "Scalars": {f"{n}_{s}": f"{n} {s}" for n in SCALARS for s in ("error", "spread")},
+COLUMNS = {
+    "misfit": "misfit",
+    "forecast_wwct_rmse": "RMSE forecast WWCT",
+    "logk_rmse": "logK RMSE",
+    "logk_corr": "logK corr",
+    "logk_spread": "logK spread",
+    **{f"{n}_{s}": f"{n} {s}" for n in SCALARS for s in ("error", "spread")},
+    "runs": "simulations",
 }
 
 
@@ -127,18 +131,16 @@ def render(results: dict) -> str:
             f"observed at steps {OBS_STEPS}. PET at `{meta['commit']}`, {meta['date']}.",
         ]
         any_method = next(iter(runs.values()))
-        for title, columns in TABLES.items():
-            lines += ["", f"### {title}", "", "| | " + " | ".join(columns.values()) + " |"]
-            lines += ["|---" * (len(columns) + 1) + "|"]
-            prior = [cell(any_method["prior"][k]) if k != "runs" else "" for k in columns]
-            lines += ["| prior | " + " | ".join(prior) + " |"]
-            group = None
-            for label, r in runs.items():
-                if r["group"] != group:
-                    group = r["group"]
-                    lines += [f"| *{group}* |" + " |" * len(columns)]
-                post = [cell(r["posterior"][k]) if k != "runs" else f"{np.mean(r['runs']):.0f}" for k in columns]
-                lines += [f"| {label} | " + " | ".join(post) + " |"]
+        lines += ["", "| | " + " | ".join(COLUMNS.values()) + " |", "|---" * (len(COLUMNS) + 1) + "|"]
+        prior = [cell(any_method["prior"][k]) if k != "runs" else "" for k in COLUMNS]
+        lines += ["| prior | " + " | ".join(prior) + " |"]
+        group = None
+        for label, r in runs.items():
+            if r["group"] != group:
+                group = r["group"]
+                lines += [f"| *{group}* |" + " |" * len(COLUMNS)]
+            post = [cell(r["posterior"][k]) if k != "runs" else f"{np.mean(r['runs']):.0f}" for k in COLUMNS]
+            lines += [f"| {label} | " + " | ".join(post) + " |"]
     return "\n".join(lines) + "\n"
 
 
