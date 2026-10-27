@@ -476,6 +476,33 @@ class TestDistanceLocalizationOutput:
         assert np.any(dense[:n_cells] > 0),    "perm weights should have non-zero entries"
         np.testing.assert_array_equal(dense[n_cells:], 0.0)
 
+    def test_a_parameter_without_a_grid_and_an_entry_gives_zero_weights(self):
+        """Its zero mask was sized from a grid it does not have: KeyError 'nx'."""
+        prior_info = {"sor": {"mean": [0.2]}, "mult": {"mean": [1.0, 2.0, 3.0]}}
+        loc = DistanceLocalization(
+            _make_info(), data=_make_data(), parameters=["perm", "sor", "mult"], prior_info=prior_info
+        )
+        dense = loc().toarray()
+        n_cells = NZ * NX * NY
+        assert dense.shape == (n_cells + 1 + 3, 1)
+        np.testing.assert_array_equal(dense[n_cells:], 0.0)
+
+    def test_an_unlocalized_parameter_gets_weight_one_from_every_datum(self):
+        data = pd.DataFrame({"pressure": [5], "rate": [3]}, index=[1.0])
+        info = {**_make_info(), "unlocalized": ["SOR", "other"]}
+        grid = {"nx": NX, "ny": NY, "nz": NZ}
+        prior_info = {"perm": grid, "sor": {"mean": [0.2]}, "other": grid}
+        loc = DistanceLocalization(info, data=data, parameters=["perm", "sor", "other"], prior_info=prior_info)
+        dense = loc().toarray()
+        n_cells = NZ * NX * NY
+        assert dense.shape == (2 * n_cells + 1, 2)
+        np.testing.assert_array_equal(dense[n_cells:], 1.0)
+        np.testing.assert_array_equal(dense[:n_cells, 1], 0.0)  # "rate" has no entry for perm
+
+    def test_unlocalized_must_name_parameters_of_the_state(self):
+        with pytest.raises(ValueError, match="not among the state's parameters"):
+            DistanceLocalization({**_make_info(), "unlocalized": ["sro"]}, data=_make_data(), parameters=["perm", "sor"])
+
     def test_two_configured_params_correct_output_shape(self):
         """With two configured parameters the output must span both cell-spaces."""
         data = _make_data()
