@@ -209,3 +209,44 @@ def test_approx_update_autoadaloc_ensemble_projection():
 
     assert step_loc.shape == (nx, ne)
     np.testing.assert_allclose(step_loc, step_no_loc)
+
+
+def test_corr_matrix_matches_corrcoef():
+    corr = AutoAdaptiveLocalization.corr_matrix(X, Y)
+    assert corr.shape == (NX, NY)
+    np.testing.assert_allclose(corr, R, atol=1e-12)
+
+
+def test_corr_matrix_constant_rows():
+    Xc = X.copy()
+    Yc = Y.copy()
+    Xc[2] = 3.0
+    Yc[1] = -1.0
+
+    corr = AutoAdaptiveLocalization.corr_matrix(Xc, Yc)
+    assert np.all(np.isfinite(corr))
+    np.testing.assert_array_equal(corr[2, :], 0.0)
+    np.testing.assert_array_equal(corr[:, 1], 0.0)
+
+
+def test_corr_matrix_large_memory():
+    # The full (nx+ny, nx+ny) correlation matrix would take ~816 MB here,
+    # while the (nx, ny) cross block only needs ~8 MB.
+    import tracemalloc
+
+    rng = np.random.default_rng(0)
+    nx, ny, ne = 10_000, 100, 50
+    enX = rng.normal(size=(nx, ne))
+    enY = rng.normal(size=(ny, ne))
+    full_bytes = (nx + ny)**2 * enX.itemsize
+
+    tracemalloc.start()
+    try:
+        corr = AutoAdaptiveLocalization.corr_matrix(enX, enY)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert corr.shape == (nx, ny)
+    assert peak < full_bytes / 10
+    np.testing.assert_allclose(corr[:5, :5], np.corrcoef(enX[:5], enY[:5])[:5, 5:], atol=1e-12)
