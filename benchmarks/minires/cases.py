@@ -1,7 +1,6 @@
 """The cases: one waterflood, at two resolutions, observed over its history and scored on its forecast.
 
-The reservoir is that of ert's ``test-data/ert/waterflood`` (equinor/ert#14598), so that the
-two can be set side by side: a 1000 x 1000 x 20 m box in metric units (m, day, bar, mD, cP),
+The reservoir is a 1000 x 1000 x 20 m box in metric units (m, day, bar, mD, cP), with
 one injector at the centre on rate, four producers towards the corners on bottom-hole
 pressure, 40 report steps of 60 days. The producers' rates, and when they water out, are
 therefore outcomes of the permeability around them.
@@ -34,7 +33,7 @@ PRODUCERS = ["PROD1", "PROD2", "PROD3", "PROD4"]
 INJECTOR = "INJ"
 DATATYPES = [f"WWCT:{w}" for w in PRODUCERS] + [f"WOPR:{w}" for w in PRODUCERS] + [f"WBHP:{INJECTOR}"]
 
-# Observation error, as (relative, absolute): the larger applies. As ert's case.
+# Observation error, as (relative, absolute): the larger applies.
 OBS_ERROR = {"WWCT": (0.05, 0.02), "WOPR": (0.10, 5.0), "WBHP": (0.01, 1.0)}
 
 # The prior. log K about log(200 mD), sd 0.8, spherical variogram of range RANGE metres.
