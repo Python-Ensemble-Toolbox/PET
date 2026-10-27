@@ -7,6 +7,7 @@ import pytest
 
 from misc.system_tools.environ_var import OpenBlasSingleThread
 from pipt.localization.factory import build_localization_instance
+from pipt.misc_tools.extract_tools import extract_prior_info
 from simulator.simple_models import lin_1d, nonlin_onedimmodel
 
 
@@ -53,3 +54,15 @@ def test_an_explicitly_empty_localization_name_still_raises():
     with pytest.raises(ValueError, match="no 'name'"):
         build_localization_instance({"name": None}, None, None, None, 10)
 
+
+def test_extract_prior_info_leaves_the_config_intact():
+    """It rewrote the caller's prior in place, so a second extraction got `nx == [16]`."""
+    keys = {
+        "state": "permx",
+        "prior_permx": {"vario": "sph", "mean": 0.0, "var": 1.0, "range": 5.0, "grid": [16, 16, 1]},
+    }
+    original = {"vario": "sph", "mean": 0.0, "var": 1.0, "range": 5.0, "grid": [16, 16, 1]}
+    first = extract_prior_info(keys)
+    assert keys["prior_permx"] == original
+    assert extract_prior_info(keys) == first
+    assert first["permx"]["nx"] == 16

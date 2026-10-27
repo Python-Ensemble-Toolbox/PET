@@ -52,6 +52,8 @@ def extract_prior_info(keys: dict) -> dict:
             prior = list_to_dict(prior)
         else:
             assert isinstance(prior, dict), f'PRIOR_{name.upper()} must be a dictionary or list of lists!'
+            # Work on a copy: the caller's config must survive being extracted again.
+            prior = dict(prior)
 
         # Load mean if in file
         if 'mean' in prior:

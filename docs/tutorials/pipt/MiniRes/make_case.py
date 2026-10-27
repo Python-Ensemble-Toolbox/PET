@@ -8,8 +8,6 @@ point of this tutorial's simulator.
     python make_case.py
 """
 
-from copy import deepcopy
-
 import numpy as np
 import pandas as pd
 
@@ -29,7 +27,7 @@ np.savez("priormean.npz", permx=np.zeros(nx * ny))
 
 # The truth: one draw from that prior
 truth, _ = StateLayout.from_prior_info(
-    extract_prior_info(deepcopy(kwens)), 1, rng=random_stream(7), save=False
+    extract_prior_info(kwens), 1, rng=random_stream(7), save=False
 )
 truth = truth[:, 0]
 np.savez("truth.npz", permx=truth)
