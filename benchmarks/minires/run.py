@@ -69,8 +69,11 @@ def experiment(case_name: str, method: dict, i: int, ne: int) -> dict:
         variance = [[str(["abs", float(s**2)]) for s in row] for row in tw.std]
         pd.DataFrame(variance, index=index, columns=DATATYPES).to_csv("var.csv")
 
+        dataassim = {**COMMON, **method["dataassim"], "data": "data.csv", "datavar": "var.csv", "savefolder": "Results"}
+        if "localization" in dataassim:  # the grid is the case's, not the method's
+            dataassim["localization"] = {"field": [case.n, case.n], **dataassim["localization"]}
         keys_da, keys_sim, keys_en = normalize(
-            {**COMMON, **method["dataassim"], "data": "data.csv", "datavar": "var.csv", "savefolder": "Results"},
+            dataassim,
             case.simulator(OBS_STEPS),
             case.ensemble(ne, ENSEMBLE_SEED + i, "priormean.npz"),
         )

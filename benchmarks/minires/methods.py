@@ -15,4 +15,22 @@ METHODS = [
             "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]},
         },
     },
+    {
+        "label": "ES-MDA (4 steps, α = 4), adaptive localization (universal threshold)",
+        "dataassim": {
+            "scheme": "esmda",
+            "analysis": "approx",
+            "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]},
+            "localization": {"name": "autoadaloc", "threshold": "universal", "type": "hard"},
+        },
+    },
+    {
+        "label": "ES-MDA (4 steps, α = 4), adaptive localization (3σ threshold)",
+        "dataassim": {
+            "scheme": "esmda",
+            "analysis": "approx",
+            "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]},
+            "localization": {"name": "autoadaloc", "threshold": "adaptive", "cutoff": 3.0, "type": "hard"},
+        },
+    },
 ]
