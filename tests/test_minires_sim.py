@@ -108,6 +108,41 @@ def test_a_fidelity_level_reconfigures_the_model():
     assert sim.dt == 0.05
 
 
+
+def bhp_config(**kwargs):
+    """A producer on BHP control, so its rate follows from its well index, and a compressible model."""
+    cfg = config(**{"datatype": ["WOPR:PRD1", "WWCT:PRD1", "WBHP:INJ1"], "p0": 2.0, **kwargs})
+    cfg["model"]["ct"] = 0.1
+    cfg["model"]["wells"] = [
+        {"name": "INJ1", "xy": [0.05, 0.05], "rate": 1.0, "rw": 0.01},
+        {"name": "PRD1", "xy": [0.95, 0.95], "bhp": 0.0, "rw": 0.01},
+    ]
+    return cfg
+
+
+def test_a_member_runs_as_the_model_built_with_its_permeability_would():
+    """The well indices are derived from K, so they must be the member's, not the config's stand-in's."""
+    from minires import ResSim
+
+    cfg = bhp_config()
+    sim = MiniRes(cfg)
+    for field in (a_field(seed=1), a_field(seed=2) + 2):
+        records = sim.run_fwd_sim({"permx": field}, 0)
+
+        spec = {k: v for k, v in cfg["model"].items() if k != "por"}
+        model = ResSim(**spec, K=np.exp(field.reshape(NX, NY)), por=np.full((NX, NY), 0.2))
+        SS, _PP = model.sim(sim.dt, sim.nSteps, sim.S0, np.full(NX * NY, cfg["p0"]), pbar=False)
+        expected = sim.records(model, SS)
+
+        for row, want in zip(records, expected):
+            for key in row:
+                assert row[key][0] == pytest.approx(want[key][0], rel=1e-10)
+
+
+def test_the_initial_pressure_counts_when_the_model_is_compressible():
+    low, high = (MiniRes(bhp_config(p0=p0)).run_fwd_sim({"permx": a_field()}, 0) for p0 in (1.0, 3.0))
+    assert high[0]["WOPR:PRD1"][0] > low[0]["WOPR:PRD1"][0]  # more pressure to deplete
+
 class TestAdjoints:
     """`compute_adjoints` gives each datum's sensitivity to the state, checked against a difference."""
 

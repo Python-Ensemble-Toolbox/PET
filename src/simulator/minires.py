@@ -124,6 +124,8 @@ class MiniRes:
         - ``field_order``: the state vector's grid ordering, ``"C"`` (default)
           or ``"F"``.
         - ``s0``: initial water saturation, a scalar or a field (default ``0``).
+        - ``p0``: initial pressure, a scalar or a field (default ``0``). Only
+          consequential if the model's ``ct > 0``.
         - ``compute_adjoints``: also return each datum's sensitivity to the
           state (default ``False``), ref :meth:`adjoint_frame`.
         - ``levels``: per-fidelity overrides of the above, for multilevel runs,
@@ -166,7 +168,9 @@ class MiniRes:
         assert self.field_order in ("C", "F"), "'field_order' must be 'C' or 'F'"
 
         self.model = build_model(cfg.get("model", {}))
+        self.well_records = cfg.get("model", {}).get("wells", [])
         self.S0 = np.full(self.model.Nxy, 0.0) + np.ravel(cfg.get("s0", 0.0))
+        self.P0 = np.full(self.model.Nxy, 0.0) + np.ravel(cfg.get("p0", 0.0))
         self._parse_datatypes()
 
     def _parse_datatypes(self) -> None:
@@ -209,7 +213,7 @@ class MiniRes:
         model = deepcopy(self.model)
         try:
             self.set_permeability(model, state)
-            SS, PP = model.sim(self.dt, self.nSteps, self.S0, pbar=False)
+            SS, PP = model.sim(self.dt, self.nSteps, self.S0, self.P0, pbar=False)
         except Exception:
             logger.exception("MiniRes failed on member %s; it will be replaced.", member_index)
             return False
@@ -231,6 +235,9 @@ class MiniRes:
             raise ValueError(f"'{self.state_variable}' has {field.size} values, but the grid has {model.Nxy} cells.")
         field = field.reshape(model.shape, order=self.field_order)
         model.K = np.exp(field) if self.log_perm else field
+        # The wells' indices (Peaceman's, for those given an `rw`) are derived from K
+        # when the wells are assembled, so they are assembled again for this K.
+        model.wells = self.well_records
 
     # ------------------------------------------------------------------
     # Reporting
