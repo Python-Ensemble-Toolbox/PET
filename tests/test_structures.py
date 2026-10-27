@@ -17,6 +17,7 @@ import pytest
 
 from misc.structures import StateLayout
 from misc.structures.structures import PETDataFrame
+from pipt.misc_tools.extract_tools import extract_prior_info
 
 
 # ---------------------------------------------------------------------------
@@ -458,6 +459,19 @@ class TestFromPriorInfo:
         enX, layout = StateLayout.from_prior_info(prior_info, ne=NE, save=False)
         assert enX.shape == (3, NE)
         assert layout.indices == {"a": (0, 1), "b": (1, 2), "c": (2, 3)}
+
+    def test_a_variable_without_a_grid_is_drawn_as_independent_scalars(self):
+        """It used to end the loop, so it -- and every variable after it -- was silently left out."""
+        keys = {
+            "state": ["sor", "mult", "after"],
+            "prior_sor": {"mean": 0.2, "var": 0.01},
+            "prior_mult": {"mean": [1.0, 2.0, 3.0], "var": 1e-12},
+            "prior_after": {"mean": 0.0, "var": 1.0, "grid": [1, 1, 1]},
+        }
+        np.random.seed(0)
+        enX, layout = StateLayout.from_prior_info(extract_prior_info(keys), ne=NE, save=False)
+        assert layout.indices == {"sor": (0, 1), "mult": (1, 4), "after": (4, 5)}
+        np.testing.assert_allclose(layout.to_dict(enX)["mult"].mean(axis=1), [1.0, 2.0, 3.0], atol=1e-4)
 
     def test_indices_address_the_rows_of_their_own_variable(self):
         prior_info = {"a": self._scalar(1.0, 1e-12), "b": self._scalar(2.0, 1e-12)}

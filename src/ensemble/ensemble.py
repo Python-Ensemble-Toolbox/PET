@@ -134,12 +134,15 @@ class BaseEnsemble:
                 self.ne = int(self.ne)
 
             # Generate prior ensemble
-            self.enX, layout = StateLayout.from_prior_info(
-                self.prior_info,
-                self.ne,
-                rng=self.rng,
-                save=self.keys_en.get('save_prior', True),
-            )
+            if 'state' in self.keys_en:
+                self.enX, layout = StateLayout.from_prior_info(
+                    self.prior_info,
+                    self.ne,
+                    rng=self.rng,
+                    save=self.keys_en.get('save_prior', True),
+                )
+            else:  # controls are not drawn from a prior: the optimizer builds its ensemble around them
+                self.enX, layout = None, StateLayout({})
         else:
             # State variable imported as a Numpy save file
             file = np.load(self.keys_en['importstate'], allow_pickle=True)
