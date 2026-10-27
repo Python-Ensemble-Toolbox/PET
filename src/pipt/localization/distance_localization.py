@@ -286,6 +286,12 @@ class DistanceLocalization(LocalizationBase):
                 - **dict**: Pre-built ``{(data_type, time, param): LocalizationEntry}``
                   dict (rarely used; prefer the other formats).
 
+            **unlocalized** : list of str, *optional*
+                State parameters that every datum updates with weight one, i.e.
+                that are not localized -- typically scalars, which have no
+                position. A parameter that is neither here nor in an entry gets
+                weight zero: it is not updated. Default: ``[]``.
+
 
         data : pd.DataFrame, optional
             Observed data whose **index** contains the assimilation time
@@ -452,6 +458,15 @@ class DistanceLocalization(LocalizationBase):
         self.prior_info    = prior_info if prior_info is not None else {}
         self.ensemble_size = ensemble_size
 
+        # -- parameters updated by every datum with weight one
+        self.unlocalized = [str(p).lower() for p in info.get("unlocalized", [])]
+        known = {p.lower() for p in self.parameters or []}
+        if self.parameters is not None and set(self.unlocalized) - known:
+            raise ValueError(
+                f"'unlocalized' names {sorted(set(self.unlocalized) - known)}, "
+                f"which are not among the state's parameters {sorted(known)}."
+            )
+
         # -- select and instantiate the kernel (optional; entry rows may supply it instead)
         taperfunc = info.get("taper_func")
         if taperfunc is not None and taperfunc not in self._kernel_map:
@@ -520,14 +535,14 @@ class DistanceLocalization(LocalizationBase):
 
                 for param in curr_param:
                     key = (data_name.lower(), time, param.lower())
-                    if key in self._entries and self._entries[key].taper is not None:
-                        mask = self._resolve_mask(key)
-                        for i in range(n_obs):
-                            obs_blocks[i].append(mask)
+                    if param.lower() in self.unlocalized:
+                        masks = self._constant_mask(param, n_obs, 1.0)
+                    elif key in self._entries and self._entries[key].taper is not None:
+                        masks = [self._resolve_mask(key)] * n_obs
                     else:
-                        zero_masks = self._zero_mask(param, n_obs)
-                        for i in range(n_obs):
-                            obs_blocks[i].append(zero_masks[i])
+                        masks = self._constant_mask(param, n_obs, 0.0)
+                    for i in range(n_obs):
+                        obs_blocks[i].append(masks[i])
 
                 for blocks in obs_blocks:
                     sparse_blocks = [sparse.csc_matrix(b.reshape(1, -1)) for b in blocks]
@@ -771,9 +786,9 @@ class DistanceLocalization(LocalizationBase):
         """Return the repositioned spatial mask for an entry key, over the active cells.
 
         The kernel is placed on the full grid, but the state holds only the active
-        cells, and :meth:`_zero_mask` already reduces to them. Returning the full grid
+        cells, and :meth:`_constant_mask` already reduces to them. Returning the full grid
         here made the two disagree: a localized parameter contributed one row per grid
-        cell and an unlocalized one a row per active cell, so the operator came out
+        cell and one without an entry a row per active cell, so the operator came out
         with the wrong number of rows altogether.
         """
         entry = self._entries[key]
@@ -841,15 +856,17 @@ class DistanceLocalization(LocalizationBase):
         result[z_pos, gx0:gx1, gy0:gy1] = kernel[kx0:kx1, ky0:ky1]
         return result
 
-    def _zero_mask(self, param: str, n_obs: int) -> List[np.ndarray]:
-        """Return zero-valued masks for a parameter with no localization entry."""
-        p       = self.prior_info[param]
-        n_cells = p["nx"] * p["ny"] * p["nz"]
+    def _constant_mask(self, param: str, n_obs: int, value: float) -> List[np.ndarray]:
+        """Masks of ``value`` over all of ``param``: zero for a parameter with no entry, one for an unlocalized one.
 
-        if n_obs > 1:
-            mat = np.zeros((n_obs, n_cells))
-            return [mat[i, self.actnum] if self.actnum is not None else mat[i]
-                    for i in range(n_obs)]
-
-        vec = np.zeros(n_cells)
-        return [vec[self.actnum] if self.actnum is not None else vec]
+        A field's size is its grid's, reduced to the active cells as :meth:`_resolve_mask`
+        does. A parameter without a grid is as many independent scalars as its mean has
+        entries (ref ``StateLayout.from_prior_info``), and has no cells to be inactive.
+        """
+        p = self.prior_info[param]
+        if "nx" in p:
+            vec = np.full(p["nx"] * p["ny"] * p["nz"], value)
+            vec = vec[self.actnum] if self.actnum is not None else vec
+        else:
+            vec = np.full(np.size(p["mean"]), value)
+        return [vec] * n_obs
