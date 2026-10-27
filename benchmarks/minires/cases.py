@@ -89,6 +89,16 @@ class Case:
             ens[f"prior_{name}"] = {"mean": mean, "var": sd**2, "limits": limits}
         return ens
 
+    def distance_entries(self, radius: float) -> list:
+        """Distance-localization entries: a taper of ``radius`` metres on the field, at each datum's well."""
+        cells = {w["name"]: [int(w["xy"][0] // self.dx), int(w["xy"][1] // self.dx)] for w in self.model()["wells"]}
+        return [
+            {"x": x, "y": y, "z": 0, "radius": int(round(radius / self.dx)), "z_range": ":", "aniso": 1.0,
+             "rotation": 0.0, "data_type": d, "time": "*", "param": "permx"}
+            for d in DATATYPES
+            for x, y in [cells[d.split(":")[1]]]
+        ]
+
     def write_prior_mean(self, path: str) -> None:
         np.savez(path, permx=np.full(self.n**2, LOGK_MEAN))
 

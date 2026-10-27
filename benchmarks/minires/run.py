@@ -70,8 +70,12 @@ def experiment(case_name: str, method: dict, i: int, ne: int) -> dict:
         pd.DataFrame(variance, index=index, columns=DATATYPES).to_csv("var.csv")
 
         dataassim = {**COMMON, **method["dataassim"], "data": "data.csv", "datavar": "var.csv", "savefolder": "Results"}
-        if "localization" in dataassim:  # the grid is the case's, not the method's
-            dataassim["localization"] = {"field": [case.n, case.n], **dataassim["localization"]}
+        if "localization" in dataassim:  # the grid and the wells are the case's, not the method's
+            loc = {"field": [case.n, case.n], **dataassim["localization"]}
+            if loc["name"] == "distance_loc":
+                loc["field"] = [1, case.n, case.n]
+                loc["entries"] = [{"taper": loc["taper_func"], **e} for e in case.distance_entries(loc.pop("radius"))]
+            dataassim["localization"] = loc
         keys_da, keys_sim, keys_en = normalize(
             dataassim,
             case.simulator(OBS_STEPS),
