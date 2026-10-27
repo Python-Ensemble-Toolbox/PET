@@ -50,7 +50,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip setuptools
-        python -m pip install -e ".[dev]"
+        python -m pip install -e ".[dev,minires]"  # else the MiniRes tests are skipped
     - name: Launch tests
       run: |
         pytest --cov=src --cov-report=term
