@@ -108,4 +108,5 @@ ignore = [
 "src/misc/grdecl.py" = ["E722", "E741", "F821"]  # vendored parser; F821 is dead Python-2-only code
 "src/misc/ecl.py" = ["E722", "E741"]
 "src/misc/grid/sector.py" = ["E722", "E741"]
+"benchmarks/minires/run.py" = ["E402"]  # pins the BLAS threads before numpy is imported
 "src/misc/grid/unstruct.py" = ["F841"]  # untested legacy grid parser; allocations look WIP, not dead code
