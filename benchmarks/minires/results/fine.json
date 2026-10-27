@@ -6,8 +6,7 @@
   "date": "2026-10-27"
  },
  "methods": {
-  "ES-MDA, 4 x 4": {
-   "group": "Iterating",
+  "ES-MDA (4 steps, \u03b1 = 4)": {
    "runs": [
     250,
     250,
