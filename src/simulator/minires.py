@@ -33,6 +33,11 @@ The simulator section of the config configures it, e.g.
 ``wells`` are MiniRes well records), less the permeability, which is what the
 ensemble state supplies, one field per member.
 
+The state may hold further unknowns, recognised by name: a field ``por`` is
+the porosity, and a scalar named after a field of ``minires.fluids.Fluid``
+(``sor``, ``swc``, ``vo``, ``vw``, ``no``, ``nw``, ...) overrides that
+parameter of the fluid that ``[simulator.model]`` describes.
+
 Conventions, all of which this module owns -- MiniRes itself is agnostic:
 
 - **Report points** are *step indices*, ``1 .. nSteps``, since MiniRes takes a
@@ -212,7 +217,7 @@ class MiniRes:
         """Simulate one realisation; return its records (and adjoint), or ``False`` if it failed."""
         model = deepcopy(self.model)
         try:
-            self.set_permeability(model, state)
+            self.set_state(model, state)
             SS, PP = model.sim(self.dt, self.nSteps, self.S0, self.P0, pbar=False)
         except Exception:
             logger.exception("MiniRes failed on member %s; it will be replaced.", member_index)
@@ -223,6 +228,31 @@ class MiniRes:
             return records, self.adjoint_frame(model, SS, PP)
         return records
 
+    def set_state(self, model, state: dict) -> None:
+        """Write the member's state into the model: the permeability, and whatever else it holds."""
+        fluid_parameters = {f.name for f in dataclass_fields(model.fluid)}
+        others = set(state) - {self.state_variable}
+        unknown = others - {"por"} - fluid_parameters
+        if unknown:
+            raise KeyError(
+                f"The state has {sorted(unknown)}, which MiniRes has no use for. Besides the permeability "
+                f"('{self.state_variable}') it takes 'por' and the fluid's {sorted(fluid_parameters)}."
+            )
+        if self.compute_adjoints and others:
+            raise NotImplementedError(
+                f"compute_adjoints is on, but the state also has {sorted(others)}; "
+                "the adjoint is only with respect to the permeability."
+            )
+
+        self.set_permeability(model, state)
+        if "por" in state:
+            model.por = self.as_field(model, "por", state["por"])
+        for name in sorted(others & fluid_parameters):
+            value = np.asarray(state[name], dtype=float)
+            if value.size != 1:
+                raise ValueError(f"'{name}' is a parameter of the fluid, a scalar, but has {value.size} values.")
+            setattr(model.fluid, name, value.item())
+
     def set_permeability(self, model, state: dict) -> None:
         """Write the member's field into the model, as its (isotropic) permeability."""
         if self.state_variable not in state:
@@ -230,14 +260,18 @@ class MiniRes:
                 f"The state has no '{self.state_variable}' (it has {sorted(state)}). "
                 f"Name the permeability state with 'state_variable' in the simulator config."
             )
-        field = np.asarray(state[self.state_variable], dtype=float).ravel()
-        if field.size != model.Nxy:
-            raise ValueError(f"'{self.state_variable}' has {field.size} values, but the grid has {model.Nxy} cells.")
-        field = field.reshape(model.shape, order=self.field_order)
+        field = self.as_field(model, self.state_variable, state[self.state_variable])
         model.K = np.exp(field) if self.log_perm else field
         # The wells' indices (Peaceman's, for those given an `rw`) are derived from K
         # when the wells are assembled, so they are assembled again for this K.
         model.wells = self.well_records
+
+    def as_field(self, model, name: str, values) -> np.ndarray:
+        """The state vector ``values`` as a field on the model's grid, in its declared ordering."""
+        field = np.asarray(values, dtype=float).ravel()
+        if field.size != model.Nxy:
+            raise ValueError(f"'{name}' has {field.size} values, but the grid has {model.Nxy} cells.")
+        return field.reshape(model.shape, order=self.field_order)
 
     # ------------------------------------------------------------------
     # Reporting
