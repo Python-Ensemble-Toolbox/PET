@@ -341,27 +341,33 @@ class AutoAdaptiveLocalization(LocalizationBase):
     def corr_matrix(X, Y, eps=1e-6):
         """
         Compute the correlation matrix between two ensemble matrices X and Y.
-
+ 
         Parameters
         ----------
         X : np.ndarray, shape (nx, ne)
         Y : np.ndarray, shape (ny, ne)
         eps : float, optional, default=1e-6
             Small value to avoid division by zero when computing standard deviations.
-
+ 
         Returns
         -------
         corr : np.ndarray, shape (nx, ny)
             The correlation matrix between X and Y.
         """
-        stdX = np.std(X, axis=1)
-        stdY = np.std(Y, axis=1)
-
-        nx = X.shape[0]
-        corr = np.corrcoef(X, Y)[:nx, nx:]
+        # Only the (nx, ny) cross block is computed
+        Xc = X - X.mean(axis=1, keepdims=True)
+        Yc = Y - Y.mean(axis=1, keepdims=True)
+        stdX = np.sqrt(np.mean(Xc**2, axis=1))
+        stdY = np.sqrt(np.mean(Yc**2, axis=1))
+ 
+        with np.errstate(divide="ignore", invalid="ignore"):
+            corr  = (Xc @ Yc.T) / X.shape[1]
+            corr /= stdX[:, None]
+            corr /= stdY[None, :]
+        np.clip(corr, -1.0, 1.0, out=corr)
         corr[stdX < eps, :] = 0
         corr[:, stdY < eps] = 0
-
+ 
         return np.nan_to_num(corr)
 
 
