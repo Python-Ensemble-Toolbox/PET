@@ -20,4 +20,5 @@ def test_a_twin_experiment_runs_and_scores(method):
     assert out["runs"] > 0
     for stage in ("prior", "posterior"):
         assert all(np.isfinite(v) for v in out[stage].values()), out[stage]
-    assert out["posterior"]["misfit"] < out["prior"]["misfit"]
+    # Not strictly: with so few members, a localization may find every correlation to be noise
+    assert out["posterior"]["misfit"] <= out["prior"]["misfit"]
