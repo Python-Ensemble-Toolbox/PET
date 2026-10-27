@@ -204,6 +204,8 @@ class StateLayout:
         prior_info : dict
             Per variable: ``mean``, ``variance`` (per layer), the grid size
             ``nx``/``ny``/``nz`` and, for fields, the covariance description.
+            A variable without a grid is drawn as independent scalars, one per
+            entry of its ``mean``, each of the given variance.
         ne : int
             Number of members.
         rng : RandomState-like, optional
@@ -218,13 +220,16 @@ class StateLayout:
             mean = info['mean']
             var = info['variance']
             nx, ny, nz = info.get('nx', 0), info.get('ny', 0), info.get('nz', 0)
-            if nx == ny == 0:
-                break
+            gridded = not (nx == ny == 0)
+            if not gridded:  # independent scalars, one per entry of the mean
+                nz = 1
 
             j = 0
             field = None
             for z in range(nz):
-                if isinstance(mean, (list, np.ndarray)) and len(mean) > 1:
+                if not gridded and len(mean) > 1:
+                    cov = np.full(len(mean), var[z])
+                elif gridded and isinstance(mean, (list, np.ndarray)) and len(mean) > 1:
                     cov = Cholesky().gen_cov2d(
                         x_size=nx, y_size=ny, variance=var[z], var_range=info['corr_length'][z],
                         aspect=info['aniso'][z], angle=info['angle'][z], var_type=info['vario'][z],
