@@ -143,6 +143,40 @@ def test_the_initial_pressure_counts_when_the_model_is_compressible():
     low, high = (MiniRes(bhp_config(p0=p0)).run_fwd_sim({"permx": a_field()}, 0) for p0 in (1.0, 3.0))
     assert high[0]["WOPR:PRD1"][0] > low[0]["WOPR:PRD1"][0]  # more pressure to deplete
 
+
+def test_a_fluid_parameter_in_the_state_overrides_the_configs():
+    in_config = config()
+    in_config["model"]["fluid"] = {"sor": 0.2, "vo": 3.0}
+    expected = MiniRes(in_config).run_fwd_sim({"permx": a_field()}, 0)
+
+    sim = MiniRes(config())
+    records = sim.run_fwd_sim({"permx": a_field(), "sor": np.array([0.2]), "vo": np.array([3.0])}, 0)
+    assert records == expected
+    assert sim.model.fluid.sor == 0  # the member's copy took it, not the template
+    assert records != sim.run_fwd_sim({"permx": a_field()}, 0)
+
+
+def test_a_porosity_in_the_state_is_a_field_in_the_declared_grid_ordering():
+    poro = 0.1 + 0.2 * np.random.default_rng(3).random(NX * NY)
+    for order in ("C", "F"):
+        sim = MiniRes(config(field_order=order))
+        model = sim.model
+        sim.set_state(model, {"permx": a_field(), "por": poro})
+        np.testing.assert_array_equal(model.por, poro.reshape(model.shape, order=order))
+
+
+@pytest.mark.parametrize(
+    "extra, message",
+    [
+        ({"banana": np.array([1.0])}, "no use for"),
+        ({"sor": np.array([0.1, 0.2])}, "a scalar"),
+    ],
+)
+def test_a_state_it_cannot_place_fails_the_member_and_says_why(extra, message, caplog):
+    sim = MiniRes(config())
+    assert sim.run_fwd_sim({"permx": a_field(), **extra}, 0) is False
+    assert message in caplog.text
+
 class TestAdjoints:
     """`compute_adjoints` gives each datum's sensitivity to the state, checked against a difference."""
 
@@ -168,6 +202,11 @@ class TestAdjoints:
         for i, step in enumerate(sim.report):
             difference = (plus[i][datatype][0] - minus[i][datatype][0]) / (2 * eps)
             assert adjoint.loc[step, datatype] @ v == pytest.approx(difference, rel=1e-4)
+
+    def test_a_state_beyond_the_permeability_is_refused_rather_than_left_out(self, caplog):
+        sim = MiniRes(config(compute_adjoints=True, datatype=["WWCT:PRD1"]))
+        assert sim.run_fwd_sim({"permx": a_field(), "sor": np.array([0.1])}, 0) is False
+        assert "only with respect to the permeability" in caplog.text
 
     def test_a_quantity_it_cannot_differentiate_is_refused_rather_than_dropped(self):
         with pytest.raises(NotImplementedError, match="not among the differentiated"):
