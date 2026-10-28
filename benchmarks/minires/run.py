@@ -4,7 +4,11 @@
     python run.py                       # every method, every case, the default number of truths
     python run.py --case coarse         # one case
     python run.py --method "ES-MDA"     # the methods whose label contains this
-    python run.py --truths 2 --ne 10    # a quick check (not written to results/)
+    python run.py --quick               # a check while developing: the coarse case, a few truths
+
+A run of fewer truths than the case's own is a check, printed and not written to results/:
+its truths are the first of the official run's, so it is printed next to the official scores
+on those same truths, and any difference is due to the code (the experiments are seeded).
 
 Each (method, truth) is one twin experiment, run in its own process and its own
 temporary directory, so that what PET writes there (results, logs) goes nowhere.
@@ -40,6 +44,7 @@ from simulator.minires import MiniRes
 
 HERE = Path(__file__).parent
 TRUTH_SEED, ENSEMBLE_SEED = 1000, 2000  # truth i is drawn with TRUTH_SEED + i
+QUICK = {"case": ["coarse"], "truths": 5}
 
 
 class CountingMiniRes(MiniRes):
@@ -118,6 +123,25 @@ def cell(values) -> str:
     return f"{values.mean():.3g} ± {values.std(ddof=1) / np.sqrt(len(values)):.2g}"
 
 
+def render_case(title: str, res: dict) -> list:
+    meta, runs = res["meta"], res["methods"]
+    lines = [
+        "",
+        title,
+        "",
+        f"{meta['truths']} truths, {meta['ne']} members; history of {HISTORY} of {NSTEPS} steps, "
+        f"observed at steps {OBS_STEPS}. PET at `{meta['commit']}`, {meta['date']}.",
+    ]
+    any_method = next(iter(runs.values()))
+    lines += ["", "| | " + " | ".join(COLUMNS.values()) + " |", "|---" * (len(COLUMNS) + 1) + "|"]
+    prior = [cell(any_method["prior"][k]) if k != "runs" else "" for k in COLUMNS]
+    lines += ["| prior | " + " | ".join(prior) + " |"]
+    for label, r in runs.items():
+        post = [cell(r["posterior"][k]) if k != "runs" else f"{np.mean(r['runs']):.0f}" for k in COLUMNS]
+        lines += [f"| {label} | " + " | ".join(post) + " |"]
+    return lines
+
+
 def render(results: dict) -> str:
     lines = [
         "# MiniRes benchmark: results",
@@ -128,23 +152,19 @@ def render(results: dict) -> str:
         "and which score matters is for the reader to judge.",
     ]
     for case_name, res in results.items():
-        meta, runs = res["meta"], res["methods"]
         case = CASES[case_name]
-        lines += [
-            "",
-            f"## Case `{case_name}`: {case.n} x {case.n} cells",
-            "",
-            f"{meta['truths']} truths, {meta['ne']} members; history of {HISTORY} of {NSTEPS} steps, "
-            f"observed at steps {OBS_STEPS}. PET at `{meta['commit']}`, {meta['date']}.",
-        ]
-        any_method = next(iter(runs.values()))
-        lines += ["", "| | " + " | ".join(COLUMNS.values()) + " |", "|---" * (len(COLUMNS) + 1) + "|"]
-        prior = [cell(any_method["prior"][k]) if k != "runs" else "" for k in COLUMNS]
-        lines += ["| prior | " + " | ".join(prior) + " |"]
-        for label, r in runs.items():
-            post = [cell(r["posterior"][k]) if k != "runs" else f"{np.mean(r['runs']):.0f}" for k in COLUMNS]
-            lines += [f"| {label} | " + " | ".join(post) + " |"]
+        lines += render_case(f"## Case `{case_name}`: {case.n} x {case.n} cells", res)
     return "\n".join(lines) + "\n"
+
+
+def first_truths(res: dict, truths: int, labels) -> dict:
+    """The official results ``res``, of the methods ``labels``, cut down to their first ``truths``."""
+
+    def cut(v):
+        return {k: cut(w) for k, w in v.items()} if isinstance(v, dict) else v[:truths]
+
+    methods = {label: cut(r) for label, r in res["methods"].items() if label in labels}
+    return {"meta": {**res["meta"], "truths": truths}, "methods": methods}
 
 
 def commit() -> str:
@@ -163,7 +183,11 @@ def main():
     parser.add_argument("--truths", type=int, help="default: the case's own")
     parser.add_argument("--ne", type=int, default=50)
     parser.add_argument("--workers", type=int, default=os.cpu_count())
+    parser.add_argument("--quick", action="store_true", help=f"default to {QUICK}")
     args = parser.parse_args()
+    if args.quick:
+        args.case = args.case or QUICK["case"]
+        args.truths = args.truths or QUICK["truths"]
 
     methods = [m for m in METHODS if not args.method or any(s in m["label"] for s in args.method)]
     quick = args.truths is not None and args.truths < min(CASES[c].truths for c in args.case or CASES)
@@ -189,7 +213,11 @@ def main():
         results["methods"] = {m["label"]: results["methods"][m["label"]] for m in METHODS if m["label"] in results["methods"]}
 
         if quick:
-            print(render({case_name: results}))
+            print("\n".join(render_case(f"## Case `{case_name}`: this run", results)))
+            if old and old["meta"]["ne"] == args.ne and old["meta"]["truths"] >= truths:
+                official = first_truths(old, truths, results["methods"])
+                print("\n".join(render_case(f"## Case `{case_name}`: official, on the same truths", official)))
+            print()
             continue
         res_file.parent.mkdir(exist_ok=True)
         res_file.write_text(json.dumps(results, indent=1) + "\n")
