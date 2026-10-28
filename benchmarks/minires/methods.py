@@ -42,7 +42,7 @@ METHODS = [
             "scheme": "esmda",
             "analysis": "approx",
             "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]},
-            "localization": {"name": "distance_loc", "taper_func": "gc", "radius": 300.0, "unlocalized": ["sor", "vo"]},
+            "localization": {"name": "distance_loc", "taper_func": "gc", "radius": 300.0, "unlocalized": ["sor"]},
         },
     },
 ]
