@@ -23,12 +23,28 @@ METHODS = [
         "dataassim": {"scheme": "gnenrml", "analysis": "approx", "iteration": {"max_iter": 4, "energy": 99.0}},
     },
     {
+        "label": "GN-EnRML (4 iterations), subspace2 analysis",
+        "dataassim": {"scheme": "gnenrml", "analysis": "subspace2", "iteration": {"max_iter": 4, "energy": 99.0}},
+    },
+    {
+        "label": "GN-EnRML (4 iterations), margis analysis",
+        "dataassim": {"scheme": "gnenrml", "analysis": "margis", "iteration": {"max_iter": 4, "energy": 99.0}},
+    },
+    {
         "label": "ES-MDA (4 steps, α = 4)",
         "dataassim": {
             "scheme": "esmda",
             "analysis": "approx",
             "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]},
         },
+    },
+    {
+        "label": "ES-MDA (4 steps, α = 4), full analysis",
+        "dataassim": {"scheme": "esmda", "analysis": "full", "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]}},
+    },
+    {
+        "label": "ES-MDA (4 steps, α = 4), enif analysis",
+        "dataassim": {"scheme": "esmda", "analysis": "enif", "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]}},
     },
     {
         "label": "ES-MDA (4 steps, α = 4), adaptive localization (universal threshold)",
