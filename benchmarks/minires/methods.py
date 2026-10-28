@@ -39,10 +39,6 @@ METHODS = [
         },
     },
     {
-        "label": "ES-MDA (4 steps, α = 4), full analysis",
-        "dataassim": {"scheme": "esmda", "analysis": "full", "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]}},
-    },
-    {
         "label": "ES-MDA (4 steps, α = 4), enif analysis",
         "dataassim": {"scheme": "esmda", "analysis": "enif", "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]}},
     },
