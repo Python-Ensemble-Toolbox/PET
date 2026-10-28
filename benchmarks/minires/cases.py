@@ -5,8 +5,8 @@ one injector at the centre on rate, four producers towards the corners on bottom
 pressure, 40 report steps of 60 days. The producers' rates, and when they water out, are
 therefore outcomes of the permeability around them.
 
-The unknowns are the log-permeability field and two scalars of the fluid, the residual oil
-saturation ``sor`` and the oil viscosity ``vo``. Each twin experiment draws its truth from
+The unknowns are the log-permeability field and a scalar of the fluid, the residual oil
+saturation ``sor``; the oil viscosity is known. Each twin experiment draws its truth from
 the same prior as the ensemble, simulates it to the end, and perturbs the history part into
 observations; the forecast part is what the posterior is scored against, unseen.
 """
@@ -36,12 +36,12 @@ DATATYPES = [f"WWCT:{w}" for w in PRODUCERS] + [f"WOPR:{w}" for w in PRODUCERS] 
 # Observation error, as (relative, absolute): the larger applies.
 OBS_ERROR = {"WWCT": (0.05, 0.02), "WOPR": (0.10, 5.0), "WBHP": (0.01, 1.0)}
 
-# The prior. log K about log(200 mD), sd 0.8, spherical variogram of range RANGE metres.
+# The prior. log K about log(200 mD), sd 0.8, with a smooth variogram of range RANGE metres:
+# PET's "exp" is exp(-3 (h/range)^1.9), i.e. all but Gaussian.
 LOGK_MEAN, LOGK_SD, RANGE = np.log(200.0), 0.8, 300.0
 SCALARS = {
     #       mean   sd     limits
     "sor": (0.22, 0.04, [0.05, 0.40]),
-    "vo": (5.0, 1.0, [1.5, 10.0]),
 }
 
 
@@ -63,7 +63,7 @@ class Case:
         return {
             "Lx": LX, "Ly": LX, "Nx": self.n, "Ny": self.n,
             "por": 0.2, "ct": 1e-5, "cdarcy": 0.008527,
-            "fluid": {"vw": 1.0, "vo": SCALARS["vo"][0], "swc": 0.2, "sor": SCALARS["sor"][0]},
+            "fluid": {"vw": 1.0, "vo": 5.0, "swc": 0.2, "sor": SCALARS["sor"][0]},
             "wells": wells,
         }
 
@@ -81,13 +81,23 @@ class Case:
             "ne": ne, "seed": seed, "disable_tqdm": True, "save_prior": False,
             "state": ["permx", *SCALARS],
             "prior_permx": {
-                "vario": "sph", "mean": mean_file, "var": LOGK_SD**2,
+                "vario": "exp", "mean": mean_file, "var": LOGK_SD**2,
                 "range": RANGE / self.dx, "aniso": 1.0, "angle": 0.0, "grid": [self.n, self.n, 1],
             },
         }
         for name, (mean, sd, limits) in SCALARS.items():
             ens[f"prior_{name}"] = {"mean": mean, "var": sd**2, "limits": limits}
         return ens
+
+    def distance_entries(self, radius: float) -> list:
+        """Distance-localization entries: a taper of ``radius`` metres on the field, at each datum's well."""
+        cells = {w["name"]: [int(w["xy"][0] // self.dx), int(w["xy"][1] // self.dx)] for w in self.model()["wells"]}
+        return [
+            {"x": x, "y": y, "z": 0, "radius": int(round(radius / self.dx)), "z_range": ":", "aniso": 1.0,
+             "rotation": 0.0, "data_type": d, "time": "*", "param": "permx"}
+            for d in DATATYPES
+            for x, y in [cells[d.split(":")[1]]]
+        ]
 
     def write_prior_mean(self, path: str) -> None:
         np.savez(path, permx=np.full(self.n**2, LOGK_MEAN))

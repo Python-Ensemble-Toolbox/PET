@@ -7,22 +7,24 @@ and which score matters is for the reader to judge.
 
 ## Case `coarse`: 25 x 25 cells
 
-20 truths, 50 members; history of 16 of 40 steps, observed at steps [4, 8, 12, 16]. PET at `b731be7`, 2026-10-27.
+20 truths, 50 members; history of 16 of 40 steps, observed at steps [4, 8, 12, 16]. PET at `2fe3aba`, 2026-10-28.
 
-| | misfit | RMSE forecast WWCT | logK RMSE | logK corr | logK spread | sor error | sor spread | vo error | vo spread | simulations |
-|---|---|---|---|---|---|---|---|---|---|---|
-| prior | 91.7 ± 4.2 | 0.221 ± 0.021 | 0.783 ± 0.019 | 0.0201 ± 0.027 | 0.8 ± 0.0028 | 0.0314 ± 0.0058 | 0.0383 ± 0.00077 | 0.676 ± 0.15 | 1.02 ± 0.023 |  |
-| ES-MDA (4 steps, α = 4) | 1.68 ± 0.083 | 0.0847 ± 0.013 | 0.829 ± 0.016 | 0.205 ± 0.037 | 0.526 ± 0.0041 | 0.0349 ± 0.0059 | 0.0221 ± 0.0007 | 0.602 ± 0.094 | 0.469 ± 0.012 | 250 |
-| ES-MDA (4 steps, α = 4), adaptive localization (universal threshold) | 29.6 ± 1.7 | 0.146 ± 0.02 | 0.779 ± 0.019 | 0.122 ± 0.024 | 0.773 ± 0.0031 | 0.0302 ± 0.0052 | 0.0339 ± 0.001 | 0.531 ± 0.08 | 0.894 ± 0.025 | 250 |
-| ES-MDA (4 steps, α = 4), adaptive localization (3σ threshold) | 17.7 ± 0.91 | 0.123 ± 0.018 | 0.777 ± 0.019 | 0.167 ± 0.024 | 0.752 ± 0.0029 | 0.0253 ± 0.0053 | 0.0329 ± 0.00071 | 0.43 ± 0.083 | 0.773 ± 0.022 | 250 |
+| | misfit | RMSE forecast WWCT | logK RMSE | logK corr | logK spread | sor error | sor spread | simulations |
+|---|---|---|---|---|---|---|---|---|
+| prior | 99.2 ± 5 | 0.242 ± 0.023 | 0.78 ± 0.026 | 0.0299 ± 0.036 | 0.802 ± 0.0037 | 0.0314 ± 0.0058 | 0.0383 ± 0.00077 |  |
+| ES-MDA (4 steps, α = 4) | 1.71 ± 0.095 | 0.092 ± 0.015 | 0.763 ± 0.029 | 0.299 ± 0.043 | 0.494 ± 0.0058 | 0.0362 ± 0.0058 | 0.0212 ± 0.00071 | 250 |
+| ES-MDA (4 steps, α = 4), adaptive localization (universal threshold) | 20.6 ± 1.9 | 0.153 ± 0.023 | 0.758 ± 0.025 | 0.21 ± 0.031 | 0.744 ± 0.0038 | 0.0257 ± 0.0049 | 0.0327 ± 0.00083 | 250 |
+| ES-MDA (4 steps, α = 4), adaptive localization (3σ threshold) | 13.5 ± 1.2 | 0.124 ± 0.019 | 0.75 ± 0.024 | 0.262 ± 0.032 | 0.719 ± 0.0042 | 0.0288 ± 0.0051 | 0.0316 ± 0.00071 | 250 |
+| ES-MDA (4 steps, α = 4), distance localization (Gaspari-Cohn, 300 m) | 8.96 ± 0.96 | 0.101 ± 0.017 | 0.718 ± 0.023 | 0.337 ± 0.039 | 0.678 ± 0.0035 | 0.0303 ± 0.0046 | 0.0236 ± 0.00071 | 250 |
 
 ## Case `fine`: 50 x 50 cells
 
-8 truths, 50 members; history of 16 of 40 steps, observed at steps [4, 8, 12, 16]. PET at `b731be7`, 2026-10-27.
+8 truths, 50 members; history of 16 of 40 steps, observed at steps [4, 8, 12, 16]. PET at `2fe3aba`, 2026-10-28.
 
-| | misfit | RMSE forecast WWCT | logK RMSE | logK corr | logK spread | sor error | sor spread | vo error | vo spread | simulations |
-|---|---|---|---|---|---|---|---|---|---|---|
-| prior | 97 ± 7.6 | 0.243 ± 0.029 | 0.815 ± 0.022 | -0.0673 ± 0.03 | 0.793 ± 0.0038 | 0.0282 ± 0.008 | 0.0402 ± 0.0012 | 0.583 ± 0.12 | 1.03 ± 0.035 |  |
-| ES-MDA (4 steps, α = 4) | 1.9 ± 0.21 | 0.0867 ± 0.015 | 0.869 ± 0.035 | 0.179 ± 0.059 | 0.511 ± 0.0037 | 0.0326 ± 0.01 | 0.0253 ± 0.001 | 0.356 ± 0.14 | 0.47 ± 0.015 | 250 |
-| ES-MDA (4 steps, α = 4), adaptive localization (universal threshold) | 47.7 ± 5.4 | 0.2 ± 0.026 | 0.806 ± 0.021 | 0.0307 ± 0.042 | 0.777 ± 0.0026 | 0.0328 ± 0.0082 | 0.0364 ± 0.00088 | 0.476 ± 0.15 | 0.926 ± 0.039 | 250 |
-| ES-MDA (4 steps, α = 4), adaptive localization (3σ threshold) | 20.2 ± 3.5 | 0.144 ± 0.021 | 0.794 ± 0.019 | 0.151 ± 0.04 | 0.745 ± 0.0018 | 0.0358 ± 0.0099 | 0.0355 ± 0.0013 | 0.495 ± 0.12 | 0.766 ± 0.035 | 250 |
+| | misfit | RMSE forecast WWCT | logK RMSE | logK corr | logK spread | sor error | sor spread | simulations |
+|---|---|---|---|---|---|---|---|---|
+| prior | 99 ± 5.2 | 0.247 ± 0.035 | 0.817 ± 0.029 | -0.0719 ± 0.047 | 0.793 ± 0.0058 | 0.0282 ± 0.008 | 0.0402 ± 0.0012 |  |
+| ES-MDA (4 steps, α = 4) | 1.83 ± 0.16 | 0.0984 ± 0.02 | 0.793 ± 0.059 | 0.355 ± 0.07 | 0.489 ± 0.0055 | 0.0308 ± 0.01 | 0.0231 ± 0.00081 | 250 |
+| ES-MDA (4 steps, α = 4), adaptive localization (universal threshold) | 33.3 ± 3.6 | 0.173 ± 0.039 | 0.793 ± 0.027 | 0.153 ± 0.032 | 0.752 ± 0.0046 | 0.0306 ± 0.0089 | 0.0342 ± 0.0024 | 250 |
+| ES-MDA (4 steps, α = 4), adaptive localization (3σ threshold) | 16.4 ± 2.4 | 0.158 ± 0.032 | 0.761 ± 0.03 | 0.29 ± 0.043 | 0.711 ± 0.0039 | 0.0335 ± 0.0086 | 0.0317 ± 0.0014 | 250 |
+| ES-MDA (4 steps, α = 4), distance localization (Gaspari-Cohn, 300 m) | 12.4 ± 2.4 | 0.112 ± 0.029 | 0.732 ± 0.036 | 0.402 ± 0.047 | 0.675 ± 0.0048 | 0.0338 ± 0.011 | 0.0249 ± 0.00089 | 250 |
