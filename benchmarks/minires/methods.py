@@ -10,6 +10,10 @@ COMMON = {"energy": 99.0, "obsname": "steps"}
 
 METHODS = [
     {
+        "label": "ES (one update)",
+        "dataassim": {"scheme": "es", "analysis": "approx"},
+    },
+    {
         "label": "ES-MDA (4 steps, α = 4)",
         "dataassim": {
             "scheme": "esmda",

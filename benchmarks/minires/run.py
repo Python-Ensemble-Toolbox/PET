@@ -107,10 +107,12 @@ def experiment(case_name: str, method: dict, i: int, ne: int) -> dict:
 COLUMNS = {
     "misfit": "misfit",
     "forecast_wwct_rmse": "RMSE forecast WWCT",
+    "forecast_wwct_crps": "CRPS forecast WWCT",
     "logk_rmse": "logK RMSE",
     "logk_corr": "logK corr",
     "logk_spread": "logK spread",
-    **{f"{n}_{s}": f"{n} {s}" for n in SCALARS for s in ("error", "spread")},
+    "logk_crps": "logK CRPS",
+    **{f"{n}_{s}": f"{n} {t}" for n in SCALARS for s, t in [("error",) * 2, ("spread",) * 2, ("crps", "CRPS")]},
     "runs": "simulations",
 }
 
@@ -134,10 +136,12 @@ def render_case(title: str, res: dict) -> list:
     ]
     any_method = next(iter(runs.values()))
     lines += ["", "| | " + " | ".join(COLUMNS.values()) + " |", "|---" * (len(COLUMNS) + 1) + "|"]
-    prior = [cell(any_method["prior"][k]) if k != "runs" else "" for k in COLUMNS]
+    prior = [cell(any_method["prior"][k]) if k in any_method["prior"] else "" for k in COLUMNS]
     lines += ["| prior | " + " | ".join(prior) + " |"]
     for label, r in runs.items():
-        post = [cell(r["posterior"][k]) if k != "runs" else f"{np.mean(r['runs']):.0f}" for k in COLUMNS]
+        # A score added since the official results were run is blank in them
+        post = [cell(r["posterior"][k]) if k in r["posterior"] else "" for k in COLUMNS]
+        post[list(COLUMNS).index("runs")] = f"{np.mean(r['runs']):.0f}"
         lines += [f"| {label} | " + " | ".join(post) + " |"]
     return lines
 
@@ -214,8 +218,10 @@ def main():
 
         if quick:
             print("\n".join(render_case(f"## Case `{case_name}`: this run", results)))
+            official = {"methods": {}}
             if old and old["meta"]["ne"] == args.ne and old["meta"]["truths"] >= truths:
                 official = first_truths(old, truths, results["methods"])
+            if official["methods"]:
                 print("\n".join(render_case(f"## Case `{case_name}`: official, on the same truths", official)))
             print()
             continue
