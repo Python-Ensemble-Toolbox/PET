@@ -14,6 +14,15 @@ METHODS = [
         "dataassim": {"scheme": "es", "analysis": "approx"},
     },
     {
+        # The iterating schemes read their truncation from the iteration block, not from COMMON
+        "label": "LM-EnRML (4 iterations)",
+        "dataassim": {"scheme": "lmenrml", "analysis": "approx", "iteration": {"max_iter": 4, "energy": 99.0}},
+    },
+    {
+        "label": "GN-EnRML (4 iterations)",
+        "dataassim": {"scheme": "gnenrml", "analysis": "approx", "iteration": {"max_iter": 4, "energy": 99.0}},
+    },
+    {
         "label": "ES-MDA (4 steps, α = 4)",
         "dataassim": {
             "scheme": "esmda",
