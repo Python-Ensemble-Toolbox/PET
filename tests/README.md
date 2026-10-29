@@ -57,8 +57,8 @@ scheme and analysis is run on it and compared with that posterior, on both the m
 The cases are multivariate but not spatial: 1, 2 or 10 unknowns, a random prior correlation, a
 dense random `G` with fewer data than unknowns, and noise variances spanning three orders of
 magnitude. The reference is the exact update of the prior *ensemble*'s own mean and covariance, so
-prior sampling error does not count against a method. The error is averaged over 5 seeds of 100
-members each. Correct methods come within 0.14 posterior sd on the mean and 0.90–1.11 on the
+prior sampling error does not count against a method. The error is averaged over 20 seeds of 100
+members each. Correct methods come within 0.08 posterior sd on the mean and 0.96–1.06 on the
 variance ratio, and the tolerances (0.2, and 0.85–1.2) leave a margin above that. Known
 deviations are listed, with their reasons, in `DEVIATIONS` (strict xfails, so a fix shows up)
 and `EXCLUDED`.

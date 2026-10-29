@@ -16,9 +16,11 @@ graph (no assumed sparsity) rather than the nearest-neighbour one it builds from
 The reference is the exact update of the prior *ensemble*: its own mean and covariance,
 through the Kalman gain. That is the right answer for those members, so sampling error in
 the prior does not count against a method; what is left (the perturbed observations) is
-averaged out over a few seeds. With 100 members and five seeds, the correct methods were
-measured within 0.14 posterior standard deviations on the mean and 0.90--1.11 on the
-variance ratio, over four independent sets of seeds; the tolerances leave a margin above that.
+averaged out over 20 seeds. With 100 members and 20 seeds, the correct methods were
+measured within 0.08 posterior standard deviations on the mean and 0.96--1.06 on the
+variance ratio, over three independent sets of seeds; the tolerances leave a margin above
+that. With five seeds the `full` analysis of the iterative schemes, the noisiest, reached
+0.2 in 10D on some sets.
 
 A method passes if it does so in every dimension: a case that happens not to show a fault
 does not make the method right there. Expected deviations are listed in ``DEVIATIONS``,
@@ -36,7 +38,7 @@ from misc.structures import PETDataFrame
 from pipt.update_schemes.registry import available_schemes, get_scheme
 
 NE = 100
-SEEDS = range(5)
+SEEDS = range(20)
 
 #: Bounds on the seed-averaged error: of the mean, in posterior standard deviations, and
 #: of the variance, as a ratio to the posterior variance. Per unknown, the worst counts.
@@ -122,7 +124,10 @@ def exact_update(X, G, R, d):
 def assimilate(scheme, analysis, P, seed):
     """The posterior ensemble, and the prior ensemble it started from."""
     nx, nd = len(P["m"]), len(P["d"])
-    prior = np.random.default_rng(1000 + seed).multivariate_normal(P["m"], P["C"], size=NE).T
+    # Through the Cholesky factor, not `multivariate_normal`, whose SVD makes the draw depend
+    # on the platform's linear algebra library: the tolerances hold for these members.
+    z = np.random.default_rng(1000 + seed).standard_normal((nx, NE))
+    prior = P["m"][:, None] + np.linalg.cholesky(P["C"]) @ z
     np.savez("prior.npz", x=prior)
     index = pd.Index(range(nd), name="index")
     PETDataFrame(pd.DataFrame({"value": P["d"]}, index=index)).to_pickle("data.pkl")
