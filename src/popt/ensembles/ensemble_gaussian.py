@@ -106,9 +106,16 @@ class GaussianEnsemble(EnsembleOptimizationBase):
         enX = enX - enX.mean(axis=1, keepdims=True) + self.stateX[:, None]
         enX = np.clip(enX, self.lb[:, None], self.ub[:, None])
 
+        # Reference value per level, evaluated before the ensemble so the ensemble's forecast
+        # is the one left in `sim_data`.
+        self.run_levels = self.levels_with_members(enX)
+        self.levelF = self._level_reference_values(x, self.run_levels, **kwargs)
+
         enF = self.function(enX, **kwargs)
         self.enX = enX
         self.enF = enF if isinstance(enF, list) else [enF]
+        if len(self.enF) != len(self.levelF):
+            raise RuntimeError(f'{len(self.enF)} objective arrays returned for {len(self.levelF)} levels with members')
 
         start_idx = 0
         nlevels = len(self.enF)
@@ -116,7 +123,7 @@ class GaussianEnsemble(EnsembleOptimizationBase):
 
         # Loop over levels (single level when not multilevel).
         for levelID in range(nlevels):
-            dF = self.enF[levelID] - np.repeat(self.stateF, nr)
+            dF = self.enF[levelID] - np.repeat(self._reference(levelID), nr)
             ne = dF.shape[0]
 
             # Members with non-finite objective (failed simulation/eCalc) are skipped
@@ -126,23 +133,69 @@ class GaussianEnsemble(EnsembleOptimizationBase):
             grad_ml[levelID] = np.squeeze(dx[:, ok] @ dF[ok]) / ok.sum()
             start_idx += ne
 
-        if 'multilevel' in self.keys_en:
-            weight = np.asarray(self.multilevel['ml_weights'], dtype=float)
-            if weight.size > 1:
-                weight_sum = np.sum(weight)
-                if weight_sum != 1.0:
-                    weight = weight / weight_sum
-                grad = np.dot(weight, grad_ml)
-            else:
-                grad = grad_ml[0]
-        else:
-            grad = grad_ml[0]
+        grad = self._level_weights(nlevels) @ grad_ml
 
         # Check if natural or averaged gradient (default is natural).
         if not self.keys_en.get('natural_gradient', True):
             grad = np.linalg.solve(self.covX, grad)
 
         return grad
+
+    def _level_reference_values(self, x, levels, **kwargs):
+        """Objective at the mean state ``x`` on each of ``levels``, the reference the members of that level are compared against.
+
+        The finest level uses ``stateF``, the optimizer's own value at ``x``. A coarser level
+        gets one extra simulation of ``x`` on that level. Subtracting the finest-level value
+        from coarse members put the coarse-fine offset into every member's dF; the perturbations
+        are recentred but then clipped at the bounds, so for a control at a bound the clipped
+        perturbations do not sum to zero and the offset (times the mean clipped perturbation)
+        appeared as a gradient component. With many controls at a bound and the gradient
+        normalised by its largest element, that component set the step size and the real
+        components got a fraction of it. Comparing each level with its own value at the mean
+        removes the offset exactly. If the reference evaluation fails, the mean of the level's
+        finite members is used instead and a warning is logged.
+        """
+        refs = []
+        for level in levels:
+            if 'multilevel' not in self.keys_en or level == self.finest_level:
+                refs.append(np.asarray(self.stateF, dtype=float))
+                continue
+            value = np.asarray(self.function(x, level=level, **kwargs), dtype=float)
+            if not np.all(np.isfinite(value)):
+                msg = (f'Objective of the mean state on level {level} is not finite; '
+                       f'the mean of the finite members on that level is used as reference instead')
+                logger = getattr(self, 'logger', None)
+                if logger is not None:
+                    logger.warning(msg)
+                else:
+                    warnings.warn(msg)
+                value = None
+            refs.append(value)
+        return refs
+
+    def _reference(self, levelID):
+        """Reference objective for the ``levelID``-th level with members: its value at the mean state from the last
+        gradient, the mean of its finite members when that evaluation failed, and ``stateF`` when no gradient set it."""
+        refs = getattr(self, 'levelF', None)
+        if refs is None or levelID >= len(refs):
+            return np.asarray(self.stateF, dtype=float)
+        if refs[levelID] is not None:
+            return refs[levelID]
+        values = np.asarray(self.enF[levelID], dtype=float)
+        return np.atleast_1d(values[np.isfinite(values)].mean())
+
+    def _level_weights(self, nlevels):
+        """Normalised weights for the ``nlevels`` levels that have members, from ``ml_weights``/``cov_wgt``."""
+        if 'multilevel' not in self.keys_en:
+            return np.ones(nlevels) / nlevels
+        weight = np.asarray(self.multilevel['ml_weights'], dtype=float).ravel()
+        if weight.size == nlevels:
+            pass
+        elif weight.size == self.num_levels:
+            weight = weight[self.run_levels]
+        else:
+            raise ValueError(f'{weight.size} multilevel weights given for {nlevels} levels with members')
+        return weight / np.sum(weight)
 
     @staticmethod
     def _finite_members(dF):
@@ -194,7 +247,7 @@ class GaussianEnsemble(EnsembleOptimizationBase):
 
         # Loop over levels (only one level if not multilevel)
         for levelID in range(nlevels):
-            dF = self.enF[levelID] - np.repeat(self.stateF, nr)
+            dF = self.enF[levelID] - np.repeat(self._reference(levelID), nr)
             ne = self.enF[levelID].shape[0]
 
             # Members with non-finite objective (failed simulation/eCalc) are skipped
@@ -205,14 +258,7 @@ class GaussianEnsemble(EnsembleOptimizationBase):
             hess_ml[levelID] = (dx * dF[ok]) @ dx.T / ok.sum() - self.covX * np.mean(dF[ok])
             index += ne
 
-        if 'multilevel' in self.keys_en:
-            weight = ot.get_list_element(self.keys_en['multilevel'], 'cov_wgt')
-            weight = np.array(weight)
-            if not np.sum(weight) == 1.0:
-                weight = weight / np.sum(weight)
-            hessian = np.sum([h*w for h, w in zip(hess_ml, weight)], axis=0)
-        else:
-            hessian = hess_ml[0]
+        hessian = np.tensordot(self._level_weights(nlevels), hess_ml, axes=1)
 
         # Check if natural or averaged Hessian (default is natural)
         if not self.keys_en.get('natural_gradient', True):

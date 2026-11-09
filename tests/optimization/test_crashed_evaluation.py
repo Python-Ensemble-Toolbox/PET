@@ -30,7 +30,7 @@ def _host(*, sim_success, ne=NE):
         calc_prediction=lambda x, save_prediction=None: sim_success,
         obj_func=lambda *a, **k: np.arange(ne, dtype=float),
         _aux_input=lambda: 1,
-        _reorganize_multilevel_ensemble=lambda x: x,
+        _reorganize_multilevel_ensemble=lambda x, level=None: x,
         stateF=np.array([7.0]),
         enF=None,
     ), logged

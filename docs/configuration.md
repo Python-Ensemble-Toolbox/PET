@@ -149,7 +149,7 @@ forecast and random stream.
 | `save_prior` | Write the generated prior as `prior_ensemble.npz`. Flag. | on |
 | `sim_limit` | Wall-time limit passed to the simulator. | none |
 | `disable_tqdm` | Hide progress bars. Flag. | off |
-| `multilevel` | Multilevel ES-MDA: `levels`, `en_size` (members per level), `ml_weights` or `cov_wgt` (weights per level, normalised). | none |
+| `multilevel` | Multilevel ES-MDA and EnOpt: `levels`, `en_size` (members per level), `ml_weights` or `cov_wgt` (weights per level, normalised). In popt a single control vector runs on the finest level unless `function(x, level=...)` says otherwise, and the gradient compares the members of each coarser level with the objective of the mean state on that same level (one extra simulation per level and gradient). `en_size = [ne, 0]` gives a coarse gradient with fine trial steps. | none |
 | `savefolder` | Folder for popt's `save_prediction` output. | `Predictions` |
 
 ### `[ensemble.prior_<name>]`

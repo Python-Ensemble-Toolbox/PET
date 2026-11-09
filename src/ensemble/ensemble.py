@@ -210,15 +210,22 @@ class BaseEnsemble:
             # `ne` and `enX`. Iterating the ml_ne values instead made `level`
             # an ensemble size, so `ne[level]` raised IndexError and multilevel
             # forward simulation could never run.
-            ne = self.multilevel['ml_ne']
-            levels = tqdm(range(len(ne)), desc='Fidelity level', position=1, **progbar_settings)
             assert isinstance(enX, list)
             enX = [np.asarray(x) for x in enX]
+            # Members per level are counted from the state itself, not from `en_size`: a single
+            # control vector placed on one level, or an `en_size` that does not add up to `ne`,
+            # would otherwise send the wrong number of member indices to the simulator.
+            ne = [x.shape[1] for x in enX]
+            levels = tqdm(range(len(ne)), desc='Fidelity level', position=1, **progbar_settings)
         else:
             levels = range(1)
             ne = [self.ne]
             is_multilevel = False
             enX = np.asarray(enX)
+
+        # Which levels this forecast ran members on, in the order of `member_outputs`/`sim_data`
+        # (levels without members produce no output and are left out).
+        self.run_levels = [level for level in range(len(ne)) if ne[level] > 0]
 
         # Loop over levels, if not multilevel, this loop will only run once.
         for level in levels:
@@ -261,8 +268,9 @@ class BaseEnsemble:
             folder = self.keys_en.get('savefolder', 'Predictions')
             os.makedirs(folder, exist_ok=True)
             if is_multilevel:
-                for l in range(self.tot_level):
-                    self.sim_data[l].to_pickle(f'{folder}/{save_prediction}_level{l}.pkl')
+                frames = self.sim_data if isinstance(self.sim_data, list) else [self.sim_data]
+                for l, frame in zip(self.run_levels, frames):
+                    frame.to_pickle(f'{folder}/{save_prediction}_level{l}.pkl')
             else:
                 self.sim_data.to_pickle(f'{folder}/{save_prediction}.pkl')
 
