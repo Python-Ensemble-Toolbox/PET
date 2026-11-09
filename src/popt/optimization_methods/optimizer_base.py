@@ -251,6 +251,39 @@ class BoundTransformHandler:
             return None
         return hess / np.outer(self.db, self.db)
 
+    # ----------------------------------------------------------------------
+    # Transforms of ensemble (natural) derivatives
+    # ----------------------------------------------------------------------
+    # An ensemble gradient is Cov(F, x) (a covariance-preconditioned gradient), so it scales
+    # like a state perturbation, not like a derivative: in unit-cube coordinates it is divided by
+    # the bound range, where a derivative is multiplied by it. The ensemble Hessian is built from
+    # the perturbations in the same way. Applying the derivative rules to them weighted each
+    # control by the square of its range, so controls with wide bounds dominated the step.
+
+    def natural_jac_to_unit_cube(self, jac):
+        """Transform an ensemble (natural) gradient to unit-cube coordinates."""
+        if (not self.transform) or (self.bounds is None) or (jac is None):
+            return jac
+        return jac / self.db
+
+    def natural_jac_from_unit_cube(self, jac):
+        """Transform an ensemble (natural) gradient from unit-cube coordinates."""
+        if (not self.transform) or (self.bounds is None) or (jac is None):
+            return jac
+        return jac * self.db
+
+    def natural_hess_to_unit_cube(self, hess):
+        """Transform an ensemble Hessian to unit-cube coordinates."""
+        if (not self.transform) or (self.bounds is None) or (hess is None):
+            return hess
+        return hess / np.outer(self.db, self.db)
+
+    def natural_hess_from_unit_cube(self, hess):
+        """Transform an ensemble Hessian from unit-cube coordinates."""
+        if (not self.transform) or (self.bounds is None) or (hess is None):
+            return hess
+        return hess * np.outer(self.db, self.db)
+
 
 
 class OptimizerBase(OptimizerRestartMixin, ABC):
@@ -645,8 +678,8 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
         result = OptimizeResult({
             'x': xk,
             'fun': self.fk,
-            'jac': self.bound_handler.jac_from_unit_cube(self.jk),
-            'hess': self.bound_handler.hess_from_unit_cube(self.hk),
+            'jac': self._jac_from_unit_cube(self.jk),
+            'hess': self._hess_from_unit_cube(self.hk),
             'nit': self.iteration,
             'nfev': self.fun.nfev,
             'njev': self.jac.nfev if self.jac else 0,
@@ -660,6 +693,14 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
 
         self.fk = self.fun(self.xk)
         self._record_results()
+
+    def _jac_from_unit_cube(self, jac):
+        """The gradient in original coordinates; an optimizer working with ensemble gradients overrides this."""
+        return self.bound_handler.jac_from_unit_cube(jac)
+
+    def _hess_from_unit_cube(self, hess):
+        """The Hessian in original coordinates; an optimizer working with ensemble Hessians overrides this."""
+        return self.bound_handler.hess_from_unit_cube(hess)
 
     def _wrap_callable(self, func, name, transform_result=None):
         if func is None:

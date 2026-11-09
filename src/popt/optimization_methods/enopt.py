@@ -49,6 +49,10 @@ class EnOpt(OptimizerBase):
             - normalize: Whether to normalize the gradient or Hessian-derived search quantities (default: True).
             - cov_factor: Covariance shrink factor applied during resampling (default: 0.5).
             - optimizer: Update rule name. Supported values are ``GD``, ``Adam``, ``AdaMax``, and ``Steihaug`` (default: ``GD``).
+            - natural_gradient: Whether ``jac`` returns the ensemble (natural) gradient Cov(F, x) rather than a
+              true gradient. Decides how the gradient, the Hessian and the covariance update are scaled
+              when ``transform`` is on. Default: the ``natural_gradient`` setting of the ensemble that ``jac``
+              is bound to, else True.
         """
         if jac is None:
             raise ValueError("EnOpt requires a Jacobian (ensemble gradient) callable.")
@@ -56,6 +60,13 @@ class EnOpt(OptimizerBase):
         # Keep args empty for wrapped callables to avoid duplicating covariance
         # (EnOpt passes covariance explicitly during each update).
         super().__init__(x0, fun, jac=jac, hess=hess, args=(), bounds=bounds, callback=callback, **options)
+
+        # The ensemble gradient scales like a state perturbation under the unit-cube transform
+        # (see BoundTransformHandler.natural_jac_to_unit_cube), so wrap jac and hess with those rules.
+        self.natural_gradient = options.get("natural_gradient", self._ensemble_uses_natural_gradient(jac))
+        if self.natural_gradient:
+            self.jac = self._wrap_callable(jac, "jac", self.bound_handler.natural_jac_to_unit_cube)
+            self.hess = self._wrap_callable(hess, "hess", self.bound_handler.natural_hess_to_unit_cube)
 
         # EnOpt controls
         self.obj_func_tol = options.get("tol", 1e-6)
@@ -78,6 +89,25 @@ class EnOpt(OptimizerBase):
 
         self.optimizer_name = options.get("optimizer", "GD")
         self.optimizer = self._build_optimizer(self.optimizer_name)
+
+    @staticmethod
+    def _ensemble_uses_natural_gradient(jac):
+        """The ``natural_gradient`` option of the ensemble ``jac`` is a method of (default True), or True."""
+        owner = getattr(jac, "__self__", None)
+        options = getattr(owner, "keys_en", None)
+        if isinstance(options, dict):
+            return bool(options.get("natural_gradient", True))
+        return True
+
+    def _jac_from_unit_cube(self, jac):
+        if self.natural_gradient:
+            return self.bound_handler.natural_jac_from_unit_cube(jac)
+        return self.bound_handler.jac_from_unit_cube(jac)
+
+    def _hess_from_unit_cube(self, hess):
+        if self.natural_gradient:
+            return self.bound_handler.natural_hess_from_unit_cube(hess)
+        return self.bound_handler.hess_from_unit_cube(hess)
 
     @property
     def obj_func_values(self):
@@ -156,7 +186,7 @@ class EnOpt(OptimizerBase):
             self.alpha = self.optimizer.get_step_size()
 
         if hessian is not None:
-            grad_cov = self.bound_handler.hess_from_unit_cube(hessian)
+            grad_cov = self._hess_from_unit_cube(hessian)
             # Momentum on the covariance step, as for the state step (beta is
             # documented as the momentum parameter). `beta * self.cov` here
             # shrank the covariance by (1 - beta) every accepted step whatever

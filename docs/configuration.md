@@ -191,7 +191,7 @@ Per optimizer:
 
 | Optimizer | Keys |
 | --- | --- |
-| `EnOpt` | `tol`, `alpha` (or `step_size`), `alpha_cov`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `hessian`, `normalize`, `optimizer` (`GD`, `Adam`, `AdaMax`, `Steihaug`) |
+| `EnOpt` | `tol`, `alpha` (or `step_size`), `alpha_cov`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `hessian`, `normalize`, `optimizer` (`GD`, `Adam`, `AdaMax`, `Steihaug`), `natural_gradient` (whether `jac` is the ensemble gradient Cov(F, x), which under `transform` is divided by the bound range rather than multiplied like a derivative; default: the ensemble's own setting) |
 | `GenOpt` | `tol`, `alpha` (or `step_size`), `alpha_theta`, `alpha_corr`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `normalize`, `optimizer` (`GD`, `Adam`). Takes `args = (theta, corr)`, a `jac_mut` mutation gradient, and an optional `corr_adapt` (a `CMA` instance or any callable). |
 | `LineSearch` | `step_size`, `step_size_max`, `step_size_adapt`, `c1`, `c2`, `rho`, `lsmaxiter`, `lsmethod` (0 backtracking, 1 Wolfe), `normalize`, `recompute_jac`, `hess0_inv` |
 | `TrustRegion` | `trust_radius`, `trust_radius_max`, `trust_radius_min`, `trust_radius_cuts`, `rho_tol`, `eta1`, `eta2`, `gam1`, `gam2`, `resample`, `convergence_criteria` |
