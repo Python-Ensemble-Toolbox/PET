@@ -1,0 +1,4 @@
+gc 10 10 0 6 : 1.0  0.0  pressure    400.0 permx
+gc 10 10 0 6 : 1.0  0.0  pressure    800.0 permx
+gc  5 15 0 4 : 1.0  0.0  wopr pro1   400.0 permx
+gc  5 15 0 4 : 2.0 30.0  wopr pro1   800.0 permx

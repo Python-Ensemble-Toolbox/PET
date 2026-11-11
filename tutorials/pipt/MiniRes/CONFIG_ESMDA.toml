@@ -1,0 +1,70 @@
+[ensemble]
+    ne    = 100
+    state = "permx"   # log-permeability, one value per grid cell
+
+    [ensemble.prior_permx]
+        vario = "sph"
+        mean  = "priormean.npz"
+        var   = 1.0
+        range = 5.0
+        aniso = 1.0
+        angle = 0.0
+        grid  = [16, 16, 1]
+
+[dataassim]
+    savefolder = "Results"
+    scheme     = "esmda"
+    analysis   = "approx"
+    energy     = 99.0
+    obsname    = "steps"
+    data       = "data.csv"
+    datavar    = "var.csv"
+    savedata   = ["ensemble_misfit"]
+
+    # ESMDA settings
+    [dataassim.mda]
+        tot_assim_steps = 3
+        inflation_param = [3, 3, 3]
+
+[simulator]
+    # The report points are *step indices*: MiniRes takes a uniform dt.
+    dt          = 0.025
+    reporttype  = "steps"
+    reportpoint = [2, 4, 6, 8, 10, 12]
+    parallel    = 1
+    datatype    = [
+        "WWCT:PRD1", "WWCT:PRD2", "WWCT:PRD3", "WWCT:PRD4",
+        "WOPR:PRD1", "WOPR:PRD2", "WOPR:PRD3", "WOPR:PRD4",
+    ]
+
+    # Passed to minires.ResSim as it stands -- less the permeability,
+    # which is what the ensemble state supplies, one field per member.
+    [simulator.model]
+        Nx  = 16
+        Ny  = 16
+        por = 0.2
+
+        [[simulator.model.wells]]
+            name = "INJ1"
+            xy   = [0.5, 0.5]
+            rate = 1.0
+
+        [[simulator.model.wells]]
+            name = "PRD1"
+            xy   = [0.05, 0.05]
+            rate = -0.25
+
+        [[simulator.model.wells]]
+            name = "PRD2"
+            xy   = [0.95, 0.05]
+            rate = -0.25
+
+        [[simulator.model.wells]]
+            name = "PRD3"
+            xy   = [0.05, 0.95]
+            rate = -0.25
+
+        [[simulator.model.wells]]
+            name = "PRD4"
+            xy   = [0.95, 0.95]
+            rate = -0.25

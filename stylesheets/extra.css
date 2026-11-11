@@ -1,0 +1,6 @@
+/* From NORCE color palette */
+:root {
+  --md-primary-fg-color:        #007075;
+  --md-primary-fg-color--light: #c6dddf;
+  --md-primary-fg-color--dark:  #060654;
+}
