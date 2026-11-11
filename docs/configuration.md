@@ -149,7 +149,7 @@ forecast and random stream.
 | `save_prior` | Write the generated prior as `prior_ensemble.npz`. Flag. | on |
 | `sim_limit` | Wall-time limit passed to the simulator. | none |
 | `disable_tqdm` | Hide progress bars. Flag. | off |
-| `multilevel` | Multilevel ES-MDA: `levels`, `en_size` (members per level), `ml_weights` or `cov_wgt` (weights per level, normalised). | none |
+| `multilevel` | Multilevel ES-MDA and EnOpt: `levels`, `en_size` (members per level), `ml_weights` or `cov_wgt` (weights per level, normalised). In popt a single control vector runs on the finest level unless `function(x, level=...)` says otherwise, and the gradient compares the members of each coarser level with the objective of the mean state on that same level (one extra simulation per level and gradient). `en_size = [ne, 0]` gives a coarse gradient with fine trial steps. | none |
 | `savefolder` | Folder for popt's `save_prediction` output. | `Predictions` |
 
 ### `[ensemble.prior_<name>]`
@@ -191,7 +191,7 @@ Per optimizer:
 
 | Optimizer | Keys |
 | --- | --- |
-| `EnOpt` | `tol`, `alpha` (or `step_size`), `alpha_cov`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `hessian`, `normalize`, `optimizer` (`GD`, `Adam`, `AdaMax`, `Steihaug`) |
+| `EnOpt` | `tol`, `alpha` (or `step_size`), `alpha_cov`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `hessian`, `normalize`, `optimizer` (`GD`, `Adam`, `AdaMax`, `Steihaug`), `natural_gradient` (whether `jac` is the ensemble gradient Cov(F, x), which under `transform` is divided by the bound range rather than multiplied like a derivative; default: the ensemble's own setting) |
 | `GenOpt` | `tol`, `alpha` (or `step_size`), `alpha_theta`, `alpha_corr`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `normalize`, `optimizer` (`GD`, `Adam`). Takes `args = (theta, corr)`, a `jac_mut` mutation gradient, and an optional `corr_adapt` (a `CMA` instance or any callable). |
 | `LineSearch` | `step_size`, `step_size_max`, `step_size_adapt`, `c1`, `c2`, `rho`, `lsmaxiter`, `lsmethod` (0 backtracking, 1 Wolfe), `normalize`, `recompute_jac`, `hess0_inv` |
 | `TrustRegion` | `trust_radius`, `trust_radius_max`, `trust_radius_min`, `trust_radius_cuts`, `rho_tol`, `eta1`, `eta2`, `gam1`, `gam2`, `resample`, `convergence_criteria` |

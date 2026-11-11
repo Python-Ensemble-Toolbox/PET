@@ -76,7 +76,7 @@ class EnsembleOptimizationBase(BaseEnsemble):
         self.covX = np.diag(self.varX)  # Covariance matrix, (nx, nx)
         self.dimX = self.stateX.size    # Dimension of state vector
 
-    def function(self, x, *args, **kwargs):
+    def function(self, x, *args, level=None, **kwargs):
         """
         Evaluate objective values for a single state vector or an ensemble.
 
@@ -85,6 +85,13 @@ class EnsembleOptimizationBase(BaseEnsemble):
         x : ndarray
             Control vector with shape ``(n_controls,)`` or ensemble matrix with
             shape ``(n_controls, n_perturbations)``.
+        level : int, optional
+            Fidelity level to simulate on, for a multilevel ensemble (``multilevel`` in
+            the options). Default: a single control vector runs on the finest level and an
+            ensemble is split over the levels by ``en_size``. With ``level`` given, every
+            column runs on that level. Negative values count from the finest level. A value
+            on a coarser level is returned but does not update ``stateF``, which stays the
+            objective the optimizer works with.
 
         Returns
         -------
@@ -100,6 +107,7 @@ class EnsembleOptimizationBase(BaseEnsemble):
         """
         self._aux_input()
         x = np.asarray(x)
+        level = self._resolve_level(level) if level is not None else None
 
         # Check for ensemble input (nx, ne) vs. single state vector (nx,)
         ensemble_input = (x.ndim != 1)
@@ -119,7 +127,7 @@ class EnsembleOptimizationBase(BaseEnsemble):
         if isinstance(self.sim, noSimulation):
             func_values = self.obj_func(x, **kwargs)
         else:
-            x = self._reorganize_multilevel_ensemble(x)
+            x = self._reorganize_multilevel_ensemble(x, level=level)
             sim_success = self.calc_prediction(x, save_prediction=self.save_prediction)
             x = self._reorganize_multilevel_ensemble(x)
 
@@ -145,6 +153,11 @@ class EnsembleOptimizationBase(BaseEnsemble):
 
         if ensemble_input:
             self.enF = func_values
+        elif level is not None and level != self.finest_level:
+            # The objective of the mean state on a coarser level belongs to the caller (the
+            # gradient uses it as the reference for that level's members). `stateF` keeps the
+            # finest-level value the optimizer compares trial points against.
+            pass
         elif np.all(np.isfinite(func_values)):
             self.stateF = func_values
         # A crashed single-point evaluation leaves `stateF` alone. The gradient is
@@ -208,14 +221,61 @@ class EnsembleOptimizationBase(BaseEnsemble):
         elif filetype == 'npy':
             np.save(path + 'stateX.npy', stateX)
 
-    def _reorganize_multilevel_ensemble(self, x):
-        # Only toggle multilevel state when x is truly an ensemble (2D with >1 columns).
-        # Treat shape (nx, 1) the same as a 1D vector.
+    @property
+    def num_levels(self):
+        """Number of fidelity levels: the length of ``en_size``, or 1 without ``multilevel``."""
         if 'multilevel' in self.keys_en:
-            if isinstance(x,list) or ( x.ndim > 1 and (x.shape[1] > 1) ):
-                ml_ne = self.multilevel['ml_ne']
-                x = ot.toggle_ml_state(x, ml_ne)
-        return x
+            return len(self.multilevel['ml_ne'])
+        return 1
+
+    @property
+    def finest_level(self):
+        """Index of the finest (highest-fidelity) level, the last one in ``en_size``."""
+        return self.num_levels - 1
+
+    def _resolve_level(self, level):
+        """``level`` as a non-negative index, or None. Negative values count from the finest level."""
+        if level is None:
+            return None
+        if 'multilevel' not in self.keys_en:
+            raise ValueError('level is only meaningful for a multilevel ensemble (multilevel in the options)')
+        level = int(level)
+        n = self.num_levels
+        if not -n <= level < n:
+            raise ValueError(f'level {level} is out of range for {n} levels')
+        return level % n
+
+    def levels_with_members(self, x):
+        """Indices of the levels that ``x`` (a matrix, or a per-level list) puts members on."""
+        blocks = x if isinstance(x, list) else self._reorganize_multilevel_ensemble(x)
+        if not isinstance(blocks, list):
+            return [0]
+        return [l for l, block in enumerate(blocks) if np.asarray(block).shape[1] > 0]
+
+    def _reorganize_multilevel_ensemble(self, x, level=None):
+        """Toggle between a state matrix and the per-level list that the multilevel forecast takes.
+
+        A matrix becomes one block per level: an ensemble is split by ``en_size``, a single
+        state (1-D or one column) goes whole to ``level`` (the finest level when None), and
+        ``level`` puts all columns of an ensemble on that level. A list is joined back into a
+        matrix. Without ``multilevel`` in the options ``x`` is returned unchanged.
+
+        A single state used to be left as a matrix, which `calc_prediction` rejects for a
+        multilevel ensemble; on which level a trial point ran was then up to the simulator's
+        default level.
+        """
+        if 'multilevel' not in self.keys_en:
+            return x
+        ml_ne = self.multilevel['ml_ne']
+        if isinstance(x, list):
+            return ot.toggle_ml_state(x, ml_ne)
+        x = np.asarray(x)
+        if x.ndim == 1:
+            x = x[:, np.newaxis]
+        if level is None and x.shape[1] > 1:
+            return ot.toggle_ml_state(x, ml_ne)
+        target = self.finest_level if level is None else level
+        return [x if l == target else np.empty((x.shape[0], 0)) for l in range(self.num_levels)]
 
     def _aux_input(self):
         """
