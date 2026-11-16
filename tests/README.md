@@ -83,9 +83,9 @@ the only case resembling a reservoir.
 - `test_minires_sim.py`: the wrapper on an 8 × 8 grid: the simulator protocol, pickling, the state
   as log-permeability in the declared grid order, crashed members, and the adjoint.
 - `test_benchmark_minires.py` (marked `slow`): runs every method of the
-  [benchmark](../benchmarks/minires/README.md) on one tiny twin experiment (coarse grid, 6 members)
+  [benchmark](../benchmarks/pipt/minires/README.md) on one tiny twin experiment (coarse grid, 6 members)
   and asserts that the scores are finite and the misfit did not increase. It checks that the
-  benchmark still runs, not how well the methods do; that is `benchmarks/minires/RESULTS.md`.
+  benchmark still runs, not how well the methods do; that is `benchmarks/pipt/minires/RESULTS.md`.
 
 ### Optimization
 

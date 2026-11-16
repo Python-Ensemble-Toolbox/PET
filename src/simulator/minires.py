@@ -38,6 +38,16 @@ the porosity, and a scalar named after a field of ``minires.fluids.Fluid``
 (``sor``, ``swc``, ``vo``, ``vw``, ``no``, ``nw``, ...) overrides that
 parameter of the fluid that ``[simulator.model]`` describes.
 
+For optimization the wells can be *controlled* by the state instead: ``controls``
+maps a state variable to the rate (or BHP) of a well,
+
+    [simulator.controls]
+        rate_inj1 = {well = "INJ1", type = "rate"}
+
+whose values, one per control interval, are held constant over equally long
+intervals of the run. With ``controls`` the permeability need not be in the
+state; the ``K`` of ``[simulator.model]`` is then the reservoir's.
+
 Conventions, all of which this module owns -- MiniRes itself is agnostic:
 
 - **Report points** are *step indices*, ``1 .. nSteps``, since MiniRes takes a
@@ -133,6 +143,15 @@ class MiniRes:
           consequential if the model's ``ct > 0``.
         - ``compute_adjoints``: also return each datum's sensitivity to the
           state (default ``False``), ref :meth:`adjoint_frame`.
+        - ``controls``: state variables that set a well's schedule, as
+          ``{variable: {"well": name, "type": "rate" | "bhp", "sign": 1}}``
+          (``type`` defaults to ``"rate"``; rates are positive for injection, so
+          give ``sign = -1`` to control a production rate by its magnitude). The
+          variable's values, whose number must divide the number of steps, are
+          held constant over equally long intervals. Default: none, and the
+          wells run as ``model`` gives them. With controls the permeability may
+          be left out of the state, the ``K`` of ``model`` then being used, and
+          an ``aux_input`` in the state (robust optimization) is ignored.
         - ``levels``: per-fidelity overrides of the above, for multilevel runs,
           selected by ``setup_fwd_run(level=...)``.
         - ``parallel``, ``hpc``: read by the ensemble, not by this class.
@@ -177,6 +196,40 @@ class MiniRes:
         self.S0 = np.full(self.model.Nxy, 0.0) + np.ravel(cfg.get("s0", 0.0))
         self.P0 = np.full(self.model.Nxy, 0.0) + np.ravel(cfg.get("p0", 0.0))
         self._parse_datatypes()
+        self._parse_controls(cfg.get("controls", None))
+
+    def _parse_controls(self, controls) -> None:
+        """Check the ``controls`` against the model: ``{variable: (index of the well's record, type, sign)}``."""
+        self.controls = {}
+        if not controls:
+            return
+        if self.compute_adjoints:
+            raise NotImplementedError("compute_adjoints is on, but the adjoint is not with respect to well controls.")
+        names = [record.get("name") for record in self.well_records]
+        for variable, spec in controls.items():
+            well, kind, sign = spec.get("well"), spec.get("type", "rate"), float(spec.get("sign", 1.0))
+            if well not in names:
+                raise ValueError(f"The control '{variable}' names the well '{well}'; the model's wells are {names}.")
+            if kind not in ("rate", "bhp"):
+                raise ValueError(f"The control '{variable}' has type '{kind}'; it must be 'rate' or 'bhp'.")
+            self.controls[variable] = (names.index(well), kind, sign)
+
+    def controlled_wells(self, state: dict) -> list:
+        """The well records with the schedules that the member's controls give them."""
+        records = deepcopy(self.well_records)
+        for variable, (index, kind, sign) in self.controls.items():
+            if variable not in state:
+                continue  # the well runs as the model gives it
+            values = np.asarray(state[variable], dtype=float).ravel()
+            if values.size == 0 or self.nSteps % values.size:
+                raise ValueError(
+                    f"The control '{variable}' has {values.size} values, which does not divide the "
+                    f"{self.nSteps} steps of the run into equal intervals."
+                )
+            record = records[index]
+            record.pop("bhp" if kind == "rate" else "rate", None)  # a well is on one or the other
+            record[kind] = sign * np.repeat(values, self.nSteps // values.size)
+        return records
 
     def _parse_datatypes(self) -> None:
         """Split each data type into ``(quantity, well)``, checking it against the model."""
@@ -232,6 +285,8 @@ class MiniRes:
         """Write the member's state into the model: the permeability, and whatever else it holds."""
         fluid_parameters = {f.name for f in dataclass_fields(model.fluid)}
         others = set(state) - {self.state_variable}
+        if self.controls:
+            others -= set(self.controls) | {"aux_input"}
         unknown = others - {"por"} - fluid_parameters
         if unknown:
             raise KeyError(
@@ -244,7 +299,14 @@ class MiniRes:
                 "the adjoint is only with respect to the permeability."
             )
 
-        self.set_permeability(model, state)
+        if self.controls:
+            wells = self.controlled_wells(state)
+            if self.state_variable in state:
+                self.set_permeability(model, state, wells)
+            else:
+                model.wells = wells  # on the permeability of the model
+        else:
+            self.set_permeability(model, state)
         if "por" in state:
             model.por = self.as_field(model, "por", state["por"])
         for name in sorted(others & fluid_parameters):
@@ -253,8 +315,8 @@ class MiniRes:
                 raise ValueError(f"'{name}' is a parameter of the fluid, a scalar, but has {value.size} values.")
             setattr(model.fluid, name, value.item())
 
-    def set_permeability(self, model, state: dict) -> None:
-        """Write the member's field into the model, as its (isotropic) permeability."""
+    def set_permeability(self, model, state: dict, wells=None) -> None:
+        """Write the member's field into the model, as its (isotropic) permeability, and assemble ``wells`` on it."""
         if self.state_variable not in state:
             raise KeyError(
                 f"The state has no '{self.state_variable}' (it has {sorted(state)}). "
@@ -264,7 +326,7 @@ class MiniRes:
         model.K = np.exp(field) if self.log_perm else field
         # The wells' indices (Peaceman's, for those given an `rw`) are derived from K
         # when the wells are assembled, so they are assembled again for this K.
-        model.wells = self.well_records
+        model.wells = self.well_records if wells is None else wells
 
     def as_field(self, model, name: str, values) -> np.ndarray:
         """The state vector ``values`` as a field on the model's grid, in its declared ordering."""
