@@ -116,9 +116,21 @@ base: it owns the loop, the starting evaluation, the callback, result
 recording, the log and the function, state and projected-gradient checks. An
 optimizer implements `update_step()`, committing an improving point with
 `_commit_step(x, f, jac=..., hess=...)` and returning a `StepReport(accepted,
-message)`, and `log_columns()`. `EnOpt`, `LineSearch`, `TrustRegion` and
+message)`, and `log_columns()`. `EnOpt`, `EnSQP`, `LineSearch`, `TrustRegion` and
 `SmcOpt` are exported from `popt`, as are the ensembles that estimate
 gradients and Hessians (`GaussianEnsemble`, `GeneralizedEnsemble`).
+
+Constraints are handled in two ways. Any optimizer can run the exterior
+penalty loop of the base class (the `epf` option), where the objective adds
+the penalty itself. `EnSQP` takes the constraints as such: the objective
+returns `{'f': ..., 'c_eq': ..., 'c_iq': ...}` from one simulation (an
+inequality holds when `c_iq >= 0`), `EnsembleOptimizationBase.function` keeps
+the constraint values next to the objective values (`stateC`, `enC`), and
+`GaussianEnsemble.constraint_jacobian` and `.lagrangian_hessian` estimate
+their derivatives from the ensemble of the last `gradient` call. Each
+iteration solves a quadratic program
+(`popt.optimization_methods.subroutines.qp.solve_qp`) for the step and the
+multipliers and backtracks on an l1 merit function.
 
 ## Where a new piece goes
 

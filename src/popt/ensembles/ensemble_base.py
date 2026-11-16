@@ -56,6 +56,10 @@ class EnsembleOptimizationBase(BaseEnsemble):
         self.covX   = None         # Covariance matrix for state vector, (nx, nx)
         self.enX    = None         # Ensemble of state vectors ,(nx, ne)
         self.enF    = None         # Ensemble of function values, (ne,)
+        self.stateC = None         # Constraint values of current state, {'c_eq': (m_eq, num_models), 'c_iq': ...}
+        self.enC    = None         # Ensemble of constraint values, {'c_eq': (m_eq, ne), 'c_iq': (m_iq, ne)}
+        self.lastC  = None         # Constraint values of the latest evaluation, whatever it was
+        self._constraint_sizes = {}  # Number of constraints of each kind, from the latest objective that returned any
         self.lb     = np.array([]) # Lower bounds (transformed) for state vector, (nx,)
         self.ub     = np.array([]) # Upper bounds (transformed) for state vector, (nx,)
 
@@ -99,6 +103,15 @@ class EnsembleOptimizationBase(BaseEnsemble):
             Objective function values, or ``inf`` when the simulation crashed, so the
             optimizer rejects the point instead of the run ending. A crashed
             single-point evaluation leaves ``stateF`` at its last good value.
+
+        Notes
+        -----
+        The objective may return constraint values with the objective, as a dict
+        ``{'f': (ne,), 'c_eq': (m_eq, ne), 'c_iq': (m_iq, ne)}`` (either constraint key may
+        be left out; an inequality is satisfied when ``c_iq >= 0``). The objective values are
+        returned as before, so every optimizer can run such an objective, and the constraint
+        values are kept in ``enC`` (ensemble) or ``stateC`` (single state);
+        :meth:`function_and_constraints` returns both.
 
         Raises
         ------
@@ -151,8 +164,14 @@ class EnsembleOptimizationBase(BaseEnsemble):
                 )
                 func_values = np.full(self.ne, np.inf)
 
+        func_values, constraints = EnsembleOptimizationBase._split_outputs(func_values)
+        self.lastC = constraints
+        if isinstance(constraints, dict):
+            self._constraint_sizes = {key: c.shape[0] for key, c in constraints.items()}
+
         if ensemble_input:
             self.enF = func_values
+            self.enC = constraints
         elif level is not None and level != self.finest_level:
             # The objective of the mean state on a coarser level belongs to the caller (the
             # gradient uses it as the reference for that level's members). `stateF` keeps the
@@ -160,12 +179,73 @@ class EnsembleOptimizationBase(BaseEnsemble):
             pass
         elif np.all(np.isfinite(func_values)):
             self.stateF = func_values
+            self.stateC = constraints
         # A crashed single-point evaluation leaves `stateF` alone. The gradient is
         # `enF - repeat(stateF, nr)`, so writing inf here would poison every later
         # gradient with inf/NaN rather than just rejecting this one point.
 
         return func_values
 
+    def function_and_constraints(self, x, *args, **kwargs):
+        """
+        Evaluate the objective and the constraints the objective returns with it.
+
+        Takes what :meth:`function` takes and runs the same single evaluation. This is the
+        ``fun`` to hand to a constrained optimizer (EnSQP).
+
+        Returns
+        -------
+        dict
+            ``'f'`` with the objective values, and ``'c_eq'``/``'c_iq'`` with the constraint
+            values, shape (number of constraints, number of evaluations), for the kinds the
+            objective returns. Where the simulation crashed the constraints are NaN.
+        """
+        values = {'f': self.function(x, *args, **kwargs)}
+        constraints = self.lastC
+        if isinstance(constraints, list):
+            raise NotImplementedError('Constraint values of a multilevel ensemble are kept per level in enC.')
+        if constraints is None:
+            n = np.size(values['f'])
+            constraints = {key: np.full((m, n), np.nan) for key, m in self._constraint_sizes.items()}
+        values.update(constraints)
+        return values
+
+    @staticmethod
+    def _split_outputs(values):
+        """Split what the objective returned into objective values and constraint values.
+
+        Returns ``(f, c)``: ``f`` as the objective returned it, and ``c`` a dict with the keys
+        of ``'c_eq'``/``'c_iq'`` the objective gave, each an array (number of constraints,
+        number of evaluations), or None when it gave no constraints. A per-level list from a
+        multilevel objective is split element by element.
+        """
+        if isinstance(values, list):
+            parts = [EnsembleOptimizationBase._split_outputs(v) for v in values]
+            constraints = [c for _, c in parts]
+            if all(c is None for c in constraints):
+                constraints = None
+            return [f for f, _ in parts], constraints
+        if not isinstance(values, dict):
+            return values, None
+        if 'f' not in values:
+            raise KeyError("An objective that returns a dict must give the objective values under 'f'.")
+
+        f = np.asarray(values['f'], dtype=float)
+        constraints = {}
+        for key in ('c_eq', 'c_iq'):
+            if values.get(key) is None:
+                continue
+            c = np.atleast_2d(np.asarray(values[key], dtype=float))
+            if c.shape[1] != f.size:
+                raise ValueError(
+                    f"'{key}' has shape {c.shape}; expected (number of constraints, {f.size}), "
+                    f"one column per evaluated control vector."
+                )
+            constraints[key] = c
+        unknown = set(values) - {'f', 'c_eq', 'c_iq'}
+        if unknown:
+            raise KeyError(f"Unknown keys {sorted(unknown)} from the objective; expected 'f', 'c_eq', 'c_iq'.")
+        return f, (constraints or None)
 
     def get_state(self):
         """

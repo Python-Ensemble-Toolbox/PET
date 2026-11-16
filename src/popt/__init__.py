@@ -4,6 +4,7 @@
 """
 from popt.optimization_methods.optimizer_base import OptimizerBase, StepReport
 from popt.optimization_methods.enopt import EnOpt
+from popt.optimization_methods.ensqp import EnSQP
 from popt.optimization_methods.genopt import GenOpt
 from popt.optimization_methods.linesearch import LineSearch
 from popt.optimization_methods.trust_region import TrustRegion
@@ -16,6 +17,7 @@ __all__ = [
     "OptimizerBase",
     "StepReport",
     "EnOpt",
+    "EnSQP",
     "GenOpt",
     "LineSearch",
     "TrustRegion",
