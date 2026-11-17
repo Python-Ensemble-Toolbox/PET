@@ -97,7 +97,9 @@ class GenOpt(OptimizerBase):
         self.corr_adapt = corr_adapt
 
         self.obj_func_tol = options.get("tol", 1e-6)
-        self.ftol = options.get("tol", options.get("ftol", self.ftol))
+        # The relative function tolerance of the base loop: an explicit ftol wins,
+        # else tol doubles as ftol (ftol = 0 keeps only the improvement test above).
+        self.ftol = options.get("ftol", options.get("tol", self.ftol))
         self.alpha = options.get("step_size", options.get("alpha", 0.1))
         self.alpha_theta = options.get("alpha_theta", 0.1)
         # Upstream read 'alpha_theta' for this too, so `alpha_corr` silently did
