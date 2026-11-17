@@ -38,7 +38,7 @@ def outcomes():
 
 @pytest.mark.slow
 def test_every_method_runs_and_is_scored(outcomes):
-    assert len(outcomes) == 6
+    assert len(outcomes) == 5
     for label, out in outcomes.items():
         assert out["runs"] > 0, label
         assert all(np.isfinite(out[k]) for k in ("npv", "water", "capacity")), (label, out)

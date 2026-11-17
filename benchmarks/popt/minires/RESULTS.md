@@ -9,14 +9,13 @@ ensemble method: it differentiates the simulator by finite differences.
 
 ## Injection rates for net present value, under a water-production cap and an injection capacity
 
-10 cases, 10 members for 32 controls. PET at `c65f4a0-dirty`, 2026-11-16.
+10 cases, 10 members for 32 controls. PET at `5aa86d2-dirty`, 2026-11-17.
 
 | | NPV [1e7 USD] | NPV − reference | water-cap excess | capacity excess | feasible runs | simulations |
 |---|---|---|---|---|---|---|
 | EnSQP (BFGS) | 43 ± 0.28 | -0.505 ± 0.049 | 0.000234 ± 0.00017 | 6.37e-11 ± 3.3e-11 | 9 of 10 | 565 |
 | EnOpt + EPF (r = 10) | 42.7 ± 0.36 | -0.743 ± 0.14 | 0.00348 ± 0.0024 | 0.0271 ± 0.0098 | 1 of 10 | 590 |
-| EnOpt + EPF (r = 100) | 42 ± 0.32 | -1.43 ± 0.13 | 0.0023 ± 0.0023 | 0.00665 ± 0.0024 | 4 of 10 | 279 |
-| EnOpt + EPF (r = 1000) | 40.5 ± 0.39 | -2.99 ± 0.39 | 0.000204 ± 0.0002 | 0.000369 ± 0.00031 | 8 of 10 | 188 |
+| EnOpt + EPF (r = 10, advance on failure) | 42.4 ± 0.29 | -1.04 ± 0.098 | 0 ± 0 | 0.000345 ± 0.00015 | 8 of 10 | 774 |
 | EnOpt, constraints ignored | 48.2 ± 0.33 | 4.73 ± 0.077 | 1.78 ± 0.061 | 1.49 ± 0.0042 | 0 of 10 | 378 |
 | SLSQP, finite differences (reference) | 43.5 ± 0.28 | 0 ± 0 | 0.000179 ± 0.00018 | 4.84e-05 ± 4.8e-05 | 9 of 10 | 3714 |
 

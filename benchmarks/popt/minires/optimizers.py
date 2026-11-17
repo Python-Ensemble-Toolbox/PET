@@ -30,14 +30,10 @@ METHODS = [
         "options": {**ENOPT, "maxiter": 15, "epf": {"r": 10.0, **EPF}},
     },
     {
-        "label": "EnOpt + EPF (r = 100)",
+        # A failed step raises the penalty factor instead of ending the run
+        "label": "EnOpt + EPF (r = 10, advance on failure)",
         "kind": "enopt",
-        "options": {**ENOPT, "maxiter": 15, "epf": {"r": 100.0, **EPF}},
-    },
-    {
-        "label": "EnOpt + EPF (r = 1000)",
-        "kind": "enopt",
-        "options": {**ENOPT, "maxiter": 15, "epf": {"r": 1000.0, **EPF}},
+        "options": {**ENOPT, "maxiter": 15, "epf": {"r": 10.0, **EPF, "advance_on_failure": True}},
     },
     {
         "label": "EnOpt, constraints ignored",

@@ -13,8 +13,7 @@ from optimizers import REFERENCE
 COLORS = {
     "EnSQP (BFGS)": "#2a78d6",
     "EnOpt + EPF (r = 10)": "#eb6834",
-    "EnOpt + EPF (r = 100)": "#1baf7a",
-    "EnOpt + EPF (r = 1000)": "#eda100",
+    "EnOpt + EPF (r = 10, advance on failure)": "#1baf7a",
     "EnOpt, constraints ignored": "#e87ba4",
 }
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#1a1a19", "#6b6a63", "#e4e3dd"
@@ -34,7 +33,7 @@ def convergence(results: dict, path) -> None:
     methods = results["methods"]
     shown = [label for label in COLORS if label in methods and "traces" in methods[label]]
     reference = np.asarray(methods[REFERENCE]["npv"], dtype=float) if REFERENCE in methods else None
-    fig, (top, bottom) = plt.subplots(2, 1, figsize=(8.5, 9.9), sharex=True, facecolor=SURFACE,
+    fig, (top, bottom) = plt.subplots(2, 1, figsize=(9.6, 9.9), sharex=True, facecolor=SURFACE,
                                       gridspec_kw={"height_ratios": [3, 2], "hspace": 0.08})
     limit = max((max(methods[label]["runs"]) for label in shown), default=1)
 
@@ -77,7 +76,7 @@ def convergence(results: dict, path) -> None:
     bottom.axhline(0, color=MUTED, lw=0.8)
     cases = len(methods[shown[0]]["traces"]) if shown else 0
     fig.suptitle(f"What each method reaches for the simulations it spends: {cases} cases (thin) and their mean",
-                 x=0.09, y=0.99, ha="left", color=INK, fontsize=11)
+                 x=0.08, y=0.99, ha="left", color=INK, fontsize=11)
     # Most runs end within a few percent of a limit, one method far beyond: linear up to 1 %, logarithmic above
     bottom.set_yscale("symlog", linthresh=1.0, linscale=0.6)
     bottom.set_ylim(-0.15, 400)
@@ -91,8 +90,8 @@ def convergence(results: dict, path) -> None:
         for side in ("top", "right", "left", "bottom"):
             ax.spines[side].set_visible(False)
     top.set_xlim(0, limit * 1.02)
-    fig.legend(*top.get_legend_handles_labels(), loc="upper left", bbox_to_anchor=(0.08, 0.97), ncol=3,
+    fig.legend(*top.get_legend_handles_labels(), loc="upper left", bbox_to_anchor=(0.07, 0.97), ncol=3,
                frameon=False, fontsize=8.5, labelcolor=INK, columnspacing=1.6, handlelength=1.6)
-    fig.subplots_adjust(right=0.74, left=0.09, top=0.905, bottom=0.06)
+    fig.subplots_adjust(right=0.66, left=0.08, top=0.905, bottom=0.06)
     fig.savefig(path, dpi=150, facecolor=SURFACE)
     plt.close(fig)

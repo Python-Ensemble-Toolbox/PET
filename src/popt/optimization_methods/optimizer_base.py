@@ -338,6 +338,12 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
                 - conv_crit: EPF convergence criterion, compared against the mean
                   penalty with the penalty factor divided out (default: 1e-5). The
                   objective must write `penalty` into the epf dict it is handed.
+                - max_epf_iter: Maximum number of outer (penalty) iterations (default: 10)
+                - advance_on_failure: What a step that fails does. False (default): it ends the
+                  run, whatever the constraint violation. True: it ends only the current
+                  outer iteration, so the penalty factor is raised and the optimization
+                  goes on from the same point, unless the violation is already below
+                  `conv_crit`. Costs the simulations of each failed step.
             - transform: Enable [lb, ub] --> [0, 1] transformation for optimization (default: False)
             - saveit: Save intermediate results after each iteration (default: False)
             - savefolder (or save_folder): Folder for those results (default: 'Iteration_Results')
@@ -489,9 +495,15 @@ class OptimizerBase(OptimizerRestartMixin, ABC):
             if (self.iteration == self.maxiter) and (not optimization_converged):
                 self.conv_msg = 'Maximum number of iterations reached'
 
-            if update_step_failed or (not self.epf):
-                # If the update step failed or EPF is not enabled, we exit the loop.
+            if not self.epf:
                 break
+            if update_step_failed:
+                # A failed step ends the run, unless the penalty loop is asked to go on from it.
+                if not self.epf.get('advance_on_failure', False):
+                    break
+                # The penalty in the epf dict is that of the last trial point, which was
+                # rejected: evaluate it at the iterate before it is judged.
+                self.fk = self.fun(self.xk)
 
             # Check if EPF convergence is met
             if self.check_epf_convergence():

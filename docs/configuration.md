@@ -185,7 +185,7 @@ Options every optimizer takes (`popt.optimization_methods.OptimizerBase`):
 | `restart`, `restartsave`, `restart_file` | Checkpointing, as for the schemes. | off, off, `<optimizer>_restart.pkl` |
 | `logit`, `logger_name` | Whether to log, and the log file. | on, `OPTIM.log` |
 | `fun0`, `jac0`, `hess0` | Starting values to reuse instead of evaluating. | none |
-| `epf` | Exterior penalty: `r`, `r_factor`, `tol_factor`, `conv_crit`, `max_epf_iter`. `conv_crit` is compared against the mean penalty with `r` divided out, so the objective must write `penalty` into the `epf` dict it is handed. | none |
+| `epf` | Exterior penalty: `r`, `r_factor`, `tol_factor`, `conv_crit`, `max_epf_iter`, `advance_on_failure`. `conv_crit` is compared against the mean penalty with `r` divided out, so the objective must write `penalty` into the `epf` dict it is handed. A step that fails ends the run, whatever the violation; with `advance_on_failure = true` it ends only the current penalty iteration, so `r` is raised and the run goes on from the same point (default `false`). | none |
 
 Per optimizer:
 

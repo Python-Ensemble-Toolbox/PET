@@ -110,3 +110,60 @@ def test_the_outer_loop_runs_exactly_max_epf_iter_passes(tmp_path, monkeypatch):
     )
 
     assert sorted(set(penalty_factors)) == [1.0, 2.0, 4.0]        # three outer passes, r doubling
+
+
+# ----------------------------------------------------------------------
+# What a failed step does to the outer loop (`advance_on_failure`)
+# ----------------------------------------------------------------------
+class _FailsOncePerPass(OptimizerBase):
+    """Minimises x^2 + penalty for x >= 1 by one exact step per pass; the step after it fails."""
+
+    NAME = 'FailsOncePerPass'
+
+    def update_step(self):
+        r = self.epf['r']
+        x = np.array([r / (2.0 + r)])                # the minimiser of x^2 + r/2 (1 - x)^2
+        if np.allclose(x, self.xk):
+            self.fun(np.array([5.0]))                # a rejected trial point, far from the iterate
+            return StepReport(False, 'no step')
+        self._commit_step(x, self.fun(x))
+        return StepReport(True)
+
+    def _evaluate_missing_derivatives(self):
+        pass
+
+
+def _run(**epf):
+    epf = {'r': 2.0, 'r_factor': 10.0, 'conv_crit': 1e-6, 'max_epf_iter': 4, **epf}
+
+    def fun(x, epf=None, **kwargs):
+        violation = max(1.0 - float(np.ravel(x)[0]), 0.0)
+        penalty = 0.5 * epf['r'] * violation**2
+        epf['penalty'] = np.array([penalty])
+        return np.array([float(np.ravel(x)[0])**2 + penalty])
+
+    optimizer = _FailsOncePerPass(np.array([0.0]), lambda x, **kw: fun(x, epf=epf), epf=epf, ftol=0.0, xtol=0.0,
+                                  logit=False, restart=False, restartsave=False, saveit=False)
+    optimizer.run_optimization()
+    return optimizer, epf
+
+
+def test_a_failed_step_ends_the_run_by_default():
+    optimizer, epf = _run()
+
+    assert epf['r'] == 2.0                           # the penalty factor was never raised
+    assert optimizer.xk[0] == pytest.approx(0.5)     # still half way to the constraint
+
+
+def test_a_failed_step_can_advance_to_the_next_penalty_factor():
+    optimizer, epf = _run(advance_on_failure=True)
+
+    assert epf['r'] == pytest.approx(2000.0)         # raised in each of the three passes that followed
+    assert optimizer.xk[0] == pytest.approx(2000.0 / 2002.0)
+
+
+def test_advancing_judges_the_penalty_at_the_iterate_not_at_the_rejected_trial_point():
+    """The trial point x = 5 is feasible, so its penalty is zero: read as it stands, the loop would stop at once."""
+    optimizer, epf = _run(advance_on_failure=True, max_epf_iter=2)
+
+    assert epf['r'] == pytest.approx(20.0)

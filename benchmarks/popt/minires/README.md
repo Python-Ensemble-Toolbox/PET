@@ -38,7 +38,9 @@ water cap late.
 
 `EnSQP` is given the constraints as such, returned by the objective next to its value. `EnOpt`
 is given the objective plus the penalty $\tfrac{r}{2} \sum \max(-c, 0)^2$ on the scaled
-violations, with $r$ multiplied by 4 in each of up to 6 outer passes.
+violations, starting at $r = 10$, with $r$ multiplied by 4 in each of up to 6 outer passes. A step
+that fails ends such a run, whatever the violation; the "advance on failure" row sets
+`advance_on_failure` in `epf`, so that a failed step raises $r$ and the run goes on.
 
 ## Layout
 
