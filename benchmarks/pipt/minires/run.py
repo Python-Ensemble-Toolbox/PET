@@ -176,7 +176,7 @@ def commit() -> str:
         return subprocess.run(["git", *args], cwd=HERE, capture_output=True, text=True).stdout.strip()
 
     # The last commit of PET's code, which is what the numbers depend on (not of the benchmark itself)
-    src = str(HERE.parents[1] / "src")
+    src = str(HERE.parents[2] / "src")
     return git("log", "-1", "--format=%h", "--", src) + ("-dirty" if git("status", "--porcelain", "--", src) else "")
 
 

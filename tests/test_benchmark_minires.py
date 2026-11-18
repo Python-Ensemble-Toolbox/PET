@@ -1,4 +1,4 @@
-"""The MiniRes benchmark (benchmarks/minires) still runs: one tiny twin experiment per method."""
+"""The MiniRes benchmark (benchmarks/pipt/minires) still runs: one tiny twin experiment per method."""
 
 import sys
 from pathlib import Path
@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("minires", reason="pip install PET[minires]")
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "benchmarks" / "minires"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "benchmarks" / "pipt" / "minires"))
 from methods import METHODS  # noqa: E402
 from run import experiment  # noqa: E402
 

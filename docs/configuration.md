@@ -185,13 +185,14 @@ Options every optimizer takes (`popt.optimization_methods.OptimizerBase`):
 | `restart`, `restartsave`, `restart_file` | Checkpointing, as for the schemes. | off, off, `<optimizer>_restart.pkl` |
 | `logit`, `logger_name` | Whether to log, and the log file. | on, `OPTIM.log` |
 | `fun0`, `jac0`, `hess0` | Starting values to reuse instead of evaluating. | none |
-| `epf` | Exterior penalty: `r`, `r_factor`, `tol_factor`, `conv_crit`, `max_epf_iter`. `conv_crit` is compared against the mean penalty with `r` divided out, so the objective must write `penalty` into the `epf` dict it is handed. | none |
+| `epf` | Exterior penalty: `r`, `r_factor`, `tol_factor`, `conv_crit`, `max_epf_iter`, `advance_on_failure`. `conv_crit` is compared against the mean penalty with `r` divided out, so the objective must write `penalty` into the `epf` dict it is handed. A step that fails ends the run, whatever the violation; with `advance_on_failure = true` it ends only the current penalty iteration, so `r` is raised and the run goes on from the same point (default `false`). | none |
 
 Per optimizer:
 
 | Optimizer | Keys |
 | --- | --- |
-| `EnOpt` | `tol`, `alpha` (or `step_size`), `alpha_cov`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `hessian`, `normalize`, `optimizer` (`GD`, `Adam`, `AdaMax`, `Steihaug`), `natural_gradient` (whether `jac` is the ensemble gradient Cov(F, x), which under `transform` is divided by the bound range rather than multiplied like a derivative; default: the ensemble's own setting) |
+| `EnOpt` | `tol`, `alpha` (or `step_size`), `alpha_cov`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `hessian`, `normalize`, `optimizer` (`GD`, `Adam`, `AdaMax`, `Steihaug`), `natural_gradient` (whether `jac` is the ensemble gradient Cov(F, x), which under `transform` is divided by the bound range rather than multiplied like a derivative; default: the ensemble's own setting), `ftol` (relative objective-change stop of the base loop; defaults to `tol`, an explicit value wins; `ftol = 0` stops only when no improving step is found, as the old `popt.loop` did) |
+| `EnSQP` | `hessian` (`bfgs`, `ensemble`), `scaling` (`sample`, `cov`), `hess_min_eig`, `ctol`, `max_step`, `alpha_maxiter`, `armijo_c1`, `resample`, `cov_factor`, `mu0`, `natural_gradient`. Constrained optimization: the objective returns `{'f': ..., 'c_eq': ..., 'c_iq': ...}` (an inequality holds when `c_iq >= 0`), and the gradient, the constraint Jacobian and the Hessian of the Lagrangian all come from one ensemble. Not combined with `epf`. |
 | `GenOpt` | `tol`, `alpha` (or `step_size`), `alpha_theta`, `alpha_corr`, `beta`, `nesterov`, `alpha_maxiter`, `resample`, `cov_factor`, `normalize`, `optimizer` (`GD`, `Adam`). Takes `args = (theta, corr)`, a `jac_mut` mutation gradient, and an optional `corr_adapt` (a `CMA` instance or any callable). |
 | `LineSearch` | `step_size`, `step_size_max`, `step_size_adapt`, `c1`, `c2`, `rho`, `lsmaxiter`, `lsmethod` (0 backtracking, 1 Wolfe), `normalize`, `recompute_jac`, `hess0_inv` |
 | `TrustRegion` | `trust_radius`, `trust_radius_max`, `trust_radius_min`, `trust_radius_cuts`, `rho_tol`, `eta1`, `eta2`, `gam1`, `gam2`, `resample`, `convergence_criteria` |

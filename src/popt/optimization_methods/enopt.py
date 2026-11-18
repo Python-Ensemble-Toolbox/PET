@@ -37,7 +37,7 @@ class EnOpt(OptimizerBase):
             Callback invoked after successful updates.
         **options
             EnOpt configuration, plus everything :class:`OptimizerBase` takes.
-            - tol: Convergence tolerance for objective improvement (default: 1e-6). Also used as ``ftol`` when given.
+            - tol: Convergence tolerance for objective improvement (default: 1e-6). Also used as ``ftol`` unless ``ftol`` is given explicitly.
             - step_size: Initial optimizer step size. Overrides ``alpha`` when provided.
             - alpha: Initial optimizer step size (default: 0.1).
             - alpha_cov: Covariance update scaling factor (default: 0.001).
@@ -70,7 +70,9 @@ class EnOpt(OptimizerBase):
 
         # EnOpt controls
         self.obj_func_tol = options.get("tol", 1e-6)
-        self.ftol = options.get("tol", options.get("ftol", self.ftol))
+        # The relative function tolerance of the base loop: an explicit ftol wins,
+        # else tol doubles as ftol (ftol = 0 keeps only the improvement test above).
+        self.ftol = options.get("ftol", options.get("tol", self.ftol))
         self.alpha = options.get("step_size", options.get("alpha", 0.1))
         self.alpha_cov = options.get("alpha_cov", 0.001)
         self.beta = options.get("beta", 0.0)

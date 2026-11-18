@@ -40,7 +40,7 @@ class SmcOpt(OptimizerBase):
             SmcOpt configuration, plus everything :class:`OptimizerBase` takes
             (``transform`` is forced off: SmcOpt works in physical coordinates).
 
-            - tol: convergence tolerance for the objective function (default 1e-6). Also used as ``ftol`` when given.
+            - tol: convergence tolerance for the objective function (default 1e-6). Also used as ``ftol`` unless ``ftol`` is given explicitly.
             - alpha: weight between previous and new step (default 0.1)
             - alpha_maxiter: maximum number of backtracking trials (default 5)
             - resample: number indicating how many times resampling is tried if no improvement is found
@@ -63,7 +63,9 @@ class SmcOpt(OptimizerBase):
 
         # SmcOpt controls
         self.obj_func_tol = options.get("tol", 1e-6)
-        self.ftol = options.get("tol", options.get("ftol", self.ftol))
+        # The relative function tolerance of the base loop: an explicit ftol wins,
+        # else tol doubles as ftol (ftol = 0 keeps only the improvement test above).
+        self.ftol = options.get("ftol", options.get("tol", self.ftol))
         self.alpha = options.get("alpha", 0.1)
         self.alpha_iter_max = options.get("alpha_maxiter", 5)
         self.max_resample = options.get("resample", 0)

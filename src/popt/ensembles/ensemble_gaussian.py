@@ -23,6 +23,12 @@ class GaussianEnsemble(EnsembleOptimizationBase):
     hessian(x, *args, **kwargs)
         Ensemble hessian
 
+    constraint_jacobian(x, *args, **kwargs)
+        Ensemble Jacobian of the constraints the objective returns
+
+    lagrangian_hessian(x, *args, multipliers=None, **kwargs)
+        Ensemble hessian of the Lagrangian
+
     calc_ensemble_weights(self,x, *args, **kwargs):
         Calculate weights used in sequential monte carlo optimization
     """
@@ -94,12 +100,17 @@ class GaussianEnsemble(EnsembleOptimizationBase):
                 f"Covariance shape mismatch: expected {(self.dimX, self.dimX)}, got {cov.shape}."
             )
 
-        nr = self._aux_input()
+        # The values the members are compared with, when the caller keeps them (see `_set_reference`).
+        reference = kwargs.pop('reference', None)
+
+        self._aux_input()
 
         # Update internal state and covariance used by downstream methods.
         self.stateX = x
         self.covX = cov
         self.ne = self.num_samples
+        if reference is not None:
+            self._set_reference(reference)
 
         # Draw perturbations and recenter ensemble around current state.
         enX = self.rng.multivariate_normal(self.stateX, self.covX, self.ne).T
@@ -117,29 +128,154 @@ class GaussianEnsemble(EnsembleOptimizationBase):
         if len(self.enF) != len(self.levelF):
             raise RuntimeError(f'{len(self.enF)} objective arrays returned for {len(self.levelF)} levels with members')
 
-        start_idx = 0
-        nlevels = len(self.enF)
-        grad_ml = np.zeros((nlevels, self.dimX))
+        # Cross-covariance of the controls and the objective, per level (single level when not multilevel).
+        levels = self._level_differences()
+        grad_ml = np.zeros((len(levels), self.dimX))
+        for levelID, level in enumerate(levels):
+            grad_ml[levelID] = np.squeeze(level['dx'] @ level['dF']) / level['n']
 
-        # Loop over levels (single level when not multilevel).
-        for levelID in range(nlevels):
-            dF = self.enF[levelID] - np.repeat(self._reference(levelID), nr)
-            ne = dF.shape[0]
-
-            # Members with non-finite objective (failed simulation/eCalc) are skipped
-            ok = self._finite_members(dF)
-
-            dx = self.enX[:, start_idx:start_idx + ne] - self.stateX[:, None]
-            grad_ml[levelID] = np.squeeze(dx[:, ok] @ dF[ok]) / ok.sum()
-            start_idx += ne
-
-        grad = self._level_weights(nlevels) @ grad_ml
+        grad = self._level_weights(len(levels)) @ grad_ml
 
         # Check if natural or averaged gradient (default is natural).
         if not self.keys_en.get('natural_gradient', True):
             grad = np.linalg.solve(self.covX, grad)
 
         return grad
+
+    def constraint_jacobian(self, x=None, *args, **kwargs):
+        """
+        Ensemble estimate of the constraint Jacobian, from the ensemble of the last gradient.
+
+        The objective must return its constraints with the objective (see
+        ``EnsembleOptimizationBase.function``). Each row is the ensemble gradient of one
+        constraint, estimated exactly as :meth:`gradient` estimates the objective's and from
+        the same members, so it costs no simulations.
+
+        Parameters
+        ----------
+        x : ndarray
+            Control vector, shape (number of controls, ). If None, use the last x used in gradient.
+            If x is not None and it does not match the last x used in gradient, recompute the gradient first.
+
+        args : tuple
+            Additional arguments passed to gradient (the covariance).
+
+        Returns
+        -------
+        dict
+            ``'c_eq'`` and/or ``'c_iq'``, each of shape (number of constraints, number of controls).
+            Natural (covariance times Jacobian) unless ``natural_gradient`` is off.
+        """
+        if (x is not None) and (not np.array_equal(x, self.stateX)):
+            self.gradient(x, *args, **kwargs)
+
+        levels = self._level_differences()
+        weights = self._level_weights(len(levels))
+
+        jacobian = {}
+        for key in levels[0]['dC']:
+            jac_ml = np.array([level['dC'][key] @ level['dx'].T / level['n'] for level in levels])
+            jac = np.tensordot(weights, jac_ml, axes=1)
+            if not self.keys_en.get('natural_gradient', True):
+                jac = np.linalg.solve(self.covX, jac.T).T
+            jacobian[key] = jac
+        return jacobian
+
+    def sample_covariance(self):
+        """
+        Covariance of the perturbations of the last gradient, as sampled.
+
+        The ensemble gradient is this matrix times the gradient, exactly for a linear
+        function, so dividing by it rather than by the covariance the perturbations were
+        drawn from removes the sampling error of the perturbations themselves (a
+        linear-regression gradient). It is singular with fewer members than controls.
+
+        Returns
+        -------
+        ndarray
+            Shape (number of controls, number of controls); with levels, weighted as the gradient is.
+        """
+        levels = self._level_differences()
+        cov_ml = np.array([level['dx'] @ level['dx'].T / level['n'] for level in levels])
+        return np.tensordot(self._level_weights(len(levels)), cov_ml, axes=1)
+
+    def _set_reference(self, reference):
+        """Use ``reference`` (``'f'``, and ``'c_eq'``/``'c_iq'``) as the values at the mean state.
+
+        ``stateF`` is the value of the latest single-state evaluation, which after a failed
+        line search is a rejected trial point and not the state the ensemble is drawn around.
+        An optimizer that keeps the values of its current iterate passes them here.
+        """
+        f = np.atleast_1d(np.asarray(reference['f'], dtype=float))
+        if f.size == 1 and self.num_models > 1:
+            f = np.repeat(f, self.num_models)
+        self.stateF = f
+
+        constraints = {}
+        for key in ('c_eq', 'c_iq'):
+            if reference.get(key) is None:
+                continue
+            c = np.asarray(reference[key], dtype=float)
+            if c.ndim == 1:
+                c = np.repeat(c[:, None], self.num_models, axis=1)
+            constraints[key] = c
+        self.stateC = constraints or None
+
+    def _level_differences(self):
+        """Per level with members: the perturbations and what they did to the objective and the constraints.
+
+        Returns a list with, for each level, ``dx`` (number of controls, n), ``dF`` (n,), ``dC``
+        (a dict of (number of constraints, n) arrays, empty without constraints) and ``n``, the
+        number of members used. Members with a non-finite objective or constraint (a failed
+        simulation) are left out of all of them.
+        """
+        nr = self._aux_input()
+
+        # Make function ensemble to a list (for Multilevel)
+        if not isinstance(self.enF, list):
+            self.enF = [self.enF]
+        enC = getattr(self, 'enC', None)
+        enC = enC if isinstance(enC, list) else [enC]
+
+        levels = []
+        start_idx = 0
+        for levelID, enF in enumerate(self.enF):
+            dF = enF - np.repeat(self._reference(levelID), nr)
+            ne = dF.shape[0]
+            dC = self._constraint_differences(levelID, enC[levelID] if levelID < len(enC) else None, nr)
+
+            # Members with non-finite objective or constraints (failed simulation/eCalc) are skipped
+            finite = dF
+            for c in dC.values():
+                finite = np.where(np.isfinite(c).all(axis=0), finite, np.nan)
+            ok = self._finite_members(finite)
+
+            dx = self.enX[:, start_idx:start_idx + ne] - self.stateX[:, None]
+            levels.append({
+                'dx': dx[:, ok],
+                'dF': dF[ok],
+                'dC': {key: c[:, ok] for key, c in dC.items()},
+                'n': ok.sum(),
+            })
+            start_idx += ne
+        return levels
+
+    def _constraint_differences(self, levelID, constraints, nr):
+        """Constraint values of a level's members minus their values at the mean state."""
+        if constraints is None:
+            return {}
+        refs = getattr(self, 'levelC', None)
+        reference = refs[levelID] if (refs is not None and levelID < len(refs)) else getattr(self, 'stateC', None)
+
+        differences = {}
+        for key, c in constraints.items():
+            if reference is not None and key in reference:
+                ref = np.repeat(reference[key], nr, axis=1)
+            else:
+                # No value at the mean state: compare with the mean of the finite members
+                ref = np.nanmean(np.where(np.isfinite(c), c, np.nan), axis=1, keepdims=True)
+            differences[key] = c - ref
+        return differences
 
     def _level_reference_values(self, x, levels, **kwargs):
         """Objective at the mean state ``x`` on each of ``levels``, the reference the members of that level are compared against.
@@ -156,11 +292,14 @@ class GaussianEnsemble(EnsembleOptimizationBase):
         finite members is used instead and a warning is logged.
         """
         refs = []
+        self.levelC = []  # constraint values at the mean state, level by level
         for level in levels:
             if 'multilevel' not in self.keys_en or level == self.finest_level:
                 refs.append(np.asarray(self.stateF, dtype=float))
+                self.levelC.append(getattr(self, 'stateC', None))
                 continue
             value = np.asarray(self.function(x, level=level, **kwargs), dtype=float)
+            self.levelC.append(getattr(self, 'lastC', None) if np.all(np.isfinite(value)) else None)
             if not np.all(np.isfinite(value)):
                 msg = (f'Objective of the mean state on level {level} is not finite; '
                        f'the mean of the finite members on that level is used as reference instead')
@@ -234,31 +373,76 @@ class GaussianEnsemble(EnsembleOptimizationBase):
         if (not np.array_equal(x, self.stateX)) and (x is not None):
             self.gradient(x, *args, **kwargs)
 
-        nr = self._aux_input()
+        levels = self._level_differences()
+        return self._ensemble_hessian(levels, [level['dF'] for level in levels])
 
-        # Make function ensemble to a list (for Multilevel)
-        if not isinstance(self.enF, list):
-            self.enF = [self.enF]
+    def lagrangian_hessian(self, x=None, *args, multipliers=None, detrend=True, **kwargs):
+        '''
+        Ensemble-based Hessian of the Lagrangian ``f - lam_eq @ c_eq - lam_iq @ c_iq``.
 
-        # Define some variables for Hessian calculation
-        index = 0
-        nlevels = len(self.enF)
-        hess_ml = np.zeros((nlevels, self.dimX, self.dimX))
+        The ensemble Hessian is linear in the function it is taken of, so this is
+        :meth:`hessian` with the Lagrangian's change over the members in place of the
+        objective's, on the ensemble of the last gradient.
+
+        Parameters
+        ----------
+        x : ndarray
+            Control vector, shape (number of controls, ). If None, use the last x used in gradient.
+            If x is not None and it does not match the last x used in gradient, recompute the gradient first.
+
+        args : tuple
+            Additional arguments passed to gradient (the covariance).
+
+        multipliers : dict, optional
+            Lagrange multipliers ``'c_eq'`` and/or ``'c_iq'``, one per constraint. A kind left
+            out counts as zero; with none this is the Hessian of the objective.
+
+        detrend : bool, optional
+            Subtract the linear trend (a least-squares fit, or the ensemble gradient times the
+            perturbation with no more members than controls) from the Lagrangian's change
+            over the members before forming the Hessian (default True).
+            The trend contributes nothing to the Hessian on average, but its sampling error
+            is larger than the curvature term by a factor of about
+            ``|gradient| / (perturbation size * |Hessian|)``, which with small perturbations
+            leaves nothing but noise. With False this is :meth:`hessian` applied to the Lagrangian.
+
+        Returns
+        -------
+        hessian : ndarray
+            Ensemble hessian, shape (number of controls, number of controls)
+        '''
+        if (x is not None) and (not np.array_equal(x, self.stateX)):
+            self.gradient(x, *args, **kwargs)
+
+        levels = self._level_differences()
+        differences = []
+        for level in levels:
+            dL = level['dF']
+            for key, lam in (multipliers or {}).items():
+                if key in level['dC'] and lam is not None:
+                    dL = dL - np.asarray(lam, dtype=float) @ level['dC'][key]
+            if detrend:
+                if level['n'] > self.dimX:
+                    # Least-squares fit: removes a linear function exactly
+                    slope = np.linalg.lstsq(level['dx'].T, dL, rcond=None)[0]
+                else:
+                    # Too few members to fit; with them the fit would leave no residual at all
+                    slope = np.linalg.solve(self.covX, level['dx'] @ dL / level['n'])
+                dL = dL - slope @ level['dx']
+            differences.append(dL)
+        return self._ensemble_hessian(levels, differences)
+
+    def _ensemble_hessian(self, levels, differences):
+        """The ensemble Hessian of the function whose change over the members of each level is ``differences``."""
+        hess_ml = np.zeros((len(levels), self.dimX, self.dimX))
 
         # Loop over levels (only one level if not multilevel)
-        for levelID in range(nlevels):
-            dF = self.enF[levelID] - np.repeat(self._reference(levelID), nr)
-            ne = self.enF[levelID].shape[0]
-
-            # Members with non-finite objective (failed simulation/eCalc) are skipped
-            ok = self._finite_members(dF)
-
+        for levelID, (level, d) in enumerate(zip(levels, differences)):
+            dx = level['dx']
             # Vectorized Hessian estimate for this level.
-            dx = self.enX[:, index:index + ne][:, ok] - self.stateX[:, None]
-            hess_ml[levelID] = (dx * dF[ok]) @ dx.T / ok.sum() - self.covX * np.mean(dF[ok])
-            index += ne
+            hess_ml[levelID] = (dx * d) @ dx.T / level['n'] - self.covX * np.mean(d)
 
-        hessian = np.tensordot(self._level_weights(nlevels), hess_ml, axes=1)
+        hessian = np.tensordot(self._level_weights(len(levels)), hess_ml, axes=1)
 
         # Check if natural or averaged Hessian (default is natural)
         if not self.keys_en.get('natural_gradient', True):

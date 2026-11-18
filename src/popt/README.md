@@ -4,6 +4,7 @@ POPT is one part of the PET application. Here we solve the optimization problem.
 Currently, the following methods are implemented: 
 
 - EnOpt: The standard ensemble optimization method
+- EnSQP: Ensemble-based sequential quadratic programming for equality and inequality constraints, with the gradient, the constraint Jacobian and the Hessian of the Lagrangian estimated from one ensemble
 - GenOpt: Generalized ensemble optimization (using non-Gaussian distributions)
 - SmcOpt: Gradient-free optimization based on sequential Monte Carlo
 - LineSearch: Gradient based method satisfying the strong Wolfe conditions
