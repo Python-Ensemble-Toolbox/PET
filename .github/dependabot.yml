@@ -1,0 +1,12 @@
+# Keeps uv.lock up to date: once a quarter Dependabot opens one pull request that moves the locked
+# dependencies to their latest versions allowed by pyproject.toml. CI runs on it, so an update
+# that breaks the tests is seen before it is merged.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "quarterly"
+    groups:
+      all:
+        patterns: ["*"]
