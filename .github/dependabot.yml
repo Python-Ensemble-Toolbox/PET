@@ -10,3 +10,7 @@ updates:
     groups:
       all:
         patterns: ["*"]
+    # geostat is pinned to a git commit in pyproject.toml. Dependabot looks for it as a version
+    # on PyPI, finds none, and marks the whole update run as failed.
+    ignore:
+      - dependency-name: "geostat"
