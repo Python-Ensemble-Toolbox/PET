@@ -9,6 +9,12 @@ on:
     # tags:
     #   - '*'
 
+# One deploy at a time: two that push to gh-pages at once race, and one of them fails. A deploy
+# that is running finishes; of those waiting, only the newest is kept.
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Deploy MkDocs
