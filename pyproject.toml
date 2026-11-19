@@ -74,6 +74,14 @@ doc = [
 [project.urls]
 Homepage = "https://github.com/Python-Ensemble-Toolbox/PET"
 
+[tool.uv]
+# What uv.lock is resolved for. Not Windows: scikit-sparse (required by graphite-maps) has no
+# Windows wheel on PyPI, so Windows installs with conda (docs/installation_windows.md).
+environments = [
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin'",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

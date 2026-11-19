@@ -25,45 +25,47 @@ Alternatively, [click here to download ZIP](https://github.com/Python-Ensemble-T
 
 ### On Linux
 
-Before installing ensure you have python3 pre-requisites. On a Debian system run:
-
-```
-sudo apt-get update
-sudo apt-get install python3
-sudo apt-get install python3-pip
-sudo apt-get install python3-venv
-```
-
-Make sure you have the latest version of `pip` and `setuptools`:
+PET is installed with [uv](https://docs.astral.sh/uv/), which also provides Python itself.
+Install uv (see its [installation page](https://docs.astral.sh/uv/getting-started/installation/)
+for alternatives):
 
 ```sh
-python3 -m pip install --upgrade pip setuptools
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-
-Optionally (but recommended): Create and activate a virtual environment:
-
-```sh
-python3 -m venv venv-PET
-source venv-PET/bin/activate
-```
-
-If you do not install PET inside a virtual environment,
-you may have to include the `--user` option in the following
-(to install to your local Python site packages, usually located in `~/.local`).
 
 Inside the PET folder, run
 
 ```sh
-python3 -m pip install -e .
+uv sync
 ```
 
-- The dot is needed to point to the current directory.
-- The `-e` option installs PET such that changes to it take effect immediately
-  (without re-installation).
+- This creates a virtual environment in `.venv` and installs PET into it, with every dependency
+  at the version recorded in `uv.lock`, so that everyone runs the same versions.
+- PET is installed such that changes to it take effect immediately (without re-installation).
+- Run commands in the environment with `uv run`, e.g. `uv run pet ...`, or activate it with
+  `source .venv/bin/activate`.
 
 To also install the tools needed for running tests and linting locally:
 
 ```sh
+uv sync --extra dev --extra minires
+uv run pytest
+```
+
+`uv sync` removes packages that are not in `uv.lock`. If you have installed others into the
+environment yourself (e.g. `uv pip install -e ../SimulatorWrap`), keep them with `uv sync --inexact`.
+
+After changing the dependencies in `pyproject.toml`, run `uv lock` and commit `uv.lock`;
+`uv lock --upgrade` moves every dependency to its latest allowed version.
+
+#### With pip
+
+pip works as before, but ignores `uv.lock`: it installs the latest versions that
+`pyproject.toml` allows. In a virtual environment, inside the PET folder:
+
+```sh
+python3 -m venv venv-PET
+source venv-PET/bin/activate
 python3 -m pip install -e ".[dev]"
 ```
 
