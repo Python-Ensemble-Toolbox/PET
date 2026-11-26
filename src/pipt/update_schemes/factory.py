@@ -16,7 +16,7 @@ instance of exactly the same class as before.
 
 from pipt.update_schemes.registry import get_scheme
 
-__all__ = ["EnKF", "ES", "ESMDA", "LMEnRML", "GNEnRML", "build_scheme"]
+__all__ = ["EnKF", "ES", "ESMDA", "LMEnRML", "GNEnRML", "SVGD", "build_scheme"]
 
 
 def build_scheme(scheme, da_input, en_input, sim, analysis=None):
@@ -57,3 +57,4 @@ from pipt.update_schemes.enkf import EnKF  # noqa: E402
 from pipt.update_schemes.enrml import GNEnRML, LMEnRML  # noqa: E402
 from pipt.update_schemes.es import ES  # noqa: E402
 from pipt.update_schemes.esmda import ESMDA  # noqa: E402
+from pipt.update_schemes.svgd import SVGD  # noqa: E402

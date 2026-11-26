@@ -57,6 +57,13 @@ EXCLUDED = {
     # 2000 members, 1.14 x the posterior variance in 1D and 0.4 sd off the mean in 10D.
     ("lmenrml", "approx"): "approximation",
     ("gnenrml", "approx"): "approximation",
+    # SVGD needs a simulator that returns a weighted adjoint, which `Linear` does not, and
+    # hundreds of iterations a run; test_svgd compares it with the posterior of a linear-Gaussian
+    # problem in two unknowns. Measured on these problems with such a simulator and AdaGrad:
+    # within the tolerances in 1 and 2 unknowns after 300 iterations (three seeds); in 10
+    # unknowns still converging after 1500 (one seed: 0.3 sd off the mean, up to 1.65 x the
+    # posterior variance; 1.0 sd and 3 x after 300).
+    ("svgd", "adjoint"): "weighted adjoint, slow convergence",
 }
 
 #: Expected deviations from the posterior, per (scheme, analysis).

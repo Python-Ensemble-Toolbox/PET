@@ -54,3 +54,22 @@ Nikolaus Hansen\.
 `"The CMA evolution strategy: a comparing review"`\.
 *Towards a new evolutionary computation: Advances in the estimation of distribution algorithms*, pages 75–102, 2006\.
 
+### `liu2016`
+
+Qiang Liu and Dilin Wang\.
+`"Stein variational gradient descent: a general purpose Bayesian inference algorithm"`\.
+In *Advances in Neural Information Processing Systems*, volume 29\. 2016\.
+
+### `stordal2021`
+
+Andreas S\. Stordal, Rafael J\. Moraes, Patrick N\. Raanes, and Geir Evensen\.
+`"p-kernel Stein variational gradient descent for data assimilation and history matching"`\.
+*Mathematical Geosciences*, 53:375–393, 2021\.
+[doi:10\.1007/s11004-021-09937-x](https://doi.org/10.1007/s11004-021-09937-x)\.
+
+### `gorham2017`
+
+Jackson Gorham and Lester Mackey\.
+`"Measuring sample quality with kernels"`\.
+In *Proceedings of the 34th International Conference on Machine Learning*, volume 70 of Proceedings of Machine Learning Research, pages 1292–1301\. 2017\.
+
