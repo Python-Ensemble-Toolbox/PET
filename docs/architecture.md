@@ -73,7 +73,10 @@ Everything the analyses see is a matrix in one fixed row order:
   compressed vintages reduced on the way in. `pred_data.matrix` is what the
   schemes read; `pred_data.to_frame()` is the frame view.
 - Adjoints: an `(nd, nx, ne)` array in the same rows, when the simulator
-  computes them.
+  computes them. A simulator in weighted-adjoint mode returns one gradient per
+  parameter instead, the gradient of a weighted sum of its outputs, and the
+  array is `(nx, ne)`. `pipt.ensembles.DataMisfitWeights` gives the weights
+  that make it the gradient of the data misfit.
 - `StateLayout`: the `{variable: (start, stop)}` rows of the state array; the
   ensemble's `state_layout` converts to and from dictionaries, builds member
   inputs for the simulator, and clips to the prior's limits.

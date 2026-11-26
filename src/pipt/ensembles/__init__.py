@@ -3,6 +3,7 @@
 Mirrors the layout of :mod:`popt.ensembles`.
 """
 
+from .adjoint_weights import DataMisfitWeights
 from .ensemble_base import AssimilationEnsemble
 from .forecast import ForecastMixin, OutlierMixin
 from .local_analysis import LocalAnalysisMixin
@@ -13,6 +14,7 @@ Ensemble = AssimilationEnsemble
 __all__ = [
     "AssimilationEnsemble",
     "Ensemble",
+    "DataMisfitWeights",
     "ForecastMixin",
     "OutlierMixin",
     "LocalAnalysisMixin",

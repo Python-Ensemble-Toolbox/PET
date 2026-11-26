@@ -210,7 +210,7 @@ PET reads a few keys; the rest belong to the simulator wrapper.
 | `reporttype`, `reportpoint` | Name and values of the report labels: a list, a `.csv`/`.txt`/`.yaml` file, or `{start, end, freq}` for a date range. | required by most wrappers |
 | `parallel` | Members run at once in a local process pool; `1` runs them in sequence. | `1` |
 | `hpc` | Run the members through the wrapper's HPC queue in batches of `parallel`. Flag. | off |
-| `compute_adjoints` | The wrapper returns `(prediction, adjoint)` per member; the adjoints reach the analysis as an `(nd, nx, ne)` array. Flag. | off |
+| `compute_adjoints` | The wrapper returns `(prediction, adjoint)` per member; the adjoints reach the analysis as an `(nd, nx, ne)` array. A wrapper in weighted-adjoint mode returns one gradient per parameter instead (a Series indexed by parameter name), and they reach the scheme as an `(nx, ne)` array. Flag. | off |
 | `saveforecast` | Save each full forecast (`sim_results.pkl`) and the reconstructed compressed vintages (`rec_results.pkl`). *Presence.* | off |
 
 ## Legacy text files
