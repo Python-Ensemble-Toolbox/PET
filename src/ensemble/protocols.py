@@ -24,7 +24,10 @@ class ForwardSimulator(Protocol):
         - a ``pandas.DataFrame`` with report points as index and data types
           as columns,
         - ``False`` when the run failed, so the member can be replaced, or
-        - ``(output, adjoint)`` when ``compute_adjoints`` is true.
+        - ``(output, adjoint)`` when ``compute_adjoints`` is true. The adjoint
+          is a frame with the sensitivity of each observed value to the
+          state, or, from a simulator in weighted-adjoint mode, a
+          ``pandas.Series`` with one gradient per parameter name.
 
     Members the ensemble looks for with ``hasattr``/``getattr`` and uses only
     when present:
@@ -37,6 +40,13 @@ class ForwardSimulator(Protocol):
         Fallback column filter when the observed data has no columns yet.
     ``compute_adjoints``
         Whether ``run_fwd_sim`` returns ``(output, adjoint)``. Default False.
+    ``adjoint_weights``
+        Weighted-adjoint mode only: a callable ``(output, member_index)``
+        that the simulator calls with each member's output to get the
+        weights :math:`w`, as a frame laid out like the output. It then
+        returns the gradient of :math:`\\sum_i w_i d_i` per parameter. The
+        caller sets it; :class:`pipt.ensembles.DataMisfitWeights` gives the
+        weights of the data misfit.
 
     The ensemble also *assigns* ``redund_sim`` (a backup simulator, or
     ``None``) onto the simulator when it is constructed. The analytical models

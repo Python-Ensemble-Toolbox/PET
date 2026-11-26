@@ -134,10 +134,15 @@ class ForecastMixin:
         Each member's adjoint is a frame whose cells hold the sensitivity of
         that cell's values to the ``nx`` state variables. Only observed cells
         are taken, so the array lines up with ``pred_data`` row for row.
+
+        A weighted adjoint -- one gradient per parameter, a Series -- has no
+        data rows and comes out as ``(nx, ne)``; see :meth:`_weighted_gradient`.
         """
         members = self.member_adjoints
         if not members:
             return None
+        if isinstance(members[0], pd.Series):
+            return np.stack([self._weighted_gradient(member) for member in members], axis=-1)
 
         rows = self.data_layout.rows
         # The layout's rows are contiguous and in order, so stacking each member's
@@ -150,6 +155,37 @@ class ForecastMixin:
             span = self.data_df.scale_max - self.data_df.scale_min
             for row in rows:
                 out[row.rows] /= span[row.datatype]
+        return out
+
+    def _weighted_gradient(self, member):
+        """One member's weighted adjoint as an ``(nx,)`` gradient in state order.
+
+        A simulator in weighted-adjoint mode returns one gradient of
+        :math:`\\sum_i w_i d_i` per parameter, as a Series indexed by parameter
+        name, instead of one sensitivity per observed cell. Each parameter is
+        placed by name at its state variable's rows -- a ``log_`` prefix is the
+        simulator naming the log of the variable the state holds -- so a
+        parameter list in another order than ``state`` cannot pair a gradient
+        with the wrong variable.
+        """
+        by_state = {}
+        for name, gradient in member.items():
+            state = name if name in self.idX or not name.startswith("log_") else name[len("log_"):]
+            by_state[state] = np.ravel(np.asarray(gradient, dtype=float))
+        if set(by_state) != set(self.idX) or len(by_state) != len(member):
+            raise ValueError(
+                f"the weighted adjoint has gradients for {list(member.index)}, which do not "
+                f"name the state variables {list(self.idX)} one to one"
+            )
+        out = np.empty(max(stop for _, stop in self.idX.values()))
+        for state, (start, stop) in self.idX.items():
+            gradient = by_state[state]
+            if gradient.size != stop - start:
+                raise ValueError(
+                    f"the weighted adjoint for {state!r} has {gradient.size} values; "
+                    f"the state has {stop - start}"
+                )
+            out[start:stop] = gradient
         return out
 
     @staticmethod
