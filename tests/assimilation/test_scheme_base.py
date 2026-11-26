@@ -158,6 +158,14 @@ def test_stops_at_maxiter(in_tmp_dir):
     assert res.nit == 4
     assert res.success is False
     assert "Maximum number of iterations" in res.message
+    assert res.why_stop == {"maxiter": True}
+
+
+def test_a_run_stopped_at_maxiter_prints(in_tmp_dir):
+    """scipy's ``OptimizeResult`` cannot format an empty nested dict, which is
+    what ``why_stop`` was when no criterion had fired."""
+    res = NeverConvergingScheme(FakeEnsemble(), maxiter=2).run_assimilation()
+    assert "maxiter: True" in repr(res)
 
 
 def test_converges_on_misfit_tolerance(in_tmp_dir):
