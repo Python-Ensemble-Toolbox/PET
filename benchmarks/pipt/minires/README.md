@@ -49,6 +49,11 @@ between methods are often within the noise.
 The official run writes `results/` and `RESULTS.md`. It is redone from time to time, not with
 every change, so `RESULTS.md` may lag behind the methods and scores defined here.
 
+The coarse and fine tables combine two runs. The ten original methods and the
+prior row are from `4fca540` (2026-10-28), as recorded in the case metadata.
+Only the two Gauss–Newton/Laplace rows are from the 2026-11-25 run, recorded
+as `16921b1-dirty`; their raw scores were first committed in `6eda6bd`.
+
 ## Adding a method or a score
 
 - A method: an entry in `METHODS` of `methods.py`.
