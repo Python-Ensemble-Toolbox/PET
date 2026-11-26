@@ -124,13 +124,15 @@ class DataLayout:
         one-row observation, a vector or an ``(size, ne)`` block otherwise.
         """
         values = np.asarray(values)
-        frame = pd.DataFrame({datatype: [None] * len(self.labels) for datatype in self.datatypes},
-                             index=pd.Index(self.labels, name=self.label_name), dtype=object)
+        # Assemble cells before constructing the frame: pandas scalar assignment
+        # squeezes a one-direction weight vector to a zero-dimensional array.
+        columns = {datatype: dict.fromkeys(self.labels) for datatype in self.datatypes}
         for row in self.rows:
             block = values[row.rows]
             if row.size == 1:
                 block = float(block[0]) if values.ndim == 1 else block[0]   # a scalar, or its (ne,) ensemble
-            frame.at[row.label, row.datatype] = block
+            columns[row.datatype][row.label] = block
+        frame = pd.DataFrame(columns, index=pd.Index(self.labels, name=self.label_name), dtype=object)
         return PETDataFrame.from_pandas(frame, name=name, is_ensemble=values.ndim == 2)
 
 

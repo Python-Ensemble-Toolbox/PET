@@ -1,6 +1,7 @@
 """The MiniRes wrapper: the protocol, the state/report mappings, and the adjoint."""
 
 import pickle
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -262,7 +263,10 @@ class TestAdjoints:
                 weights.at[step, datatype] = rng.standard_normal(2)
                 expected += np.outer(weights.at[step, datatype], adjoint.at[step, datatype])
 
-        np.testing.assert_allclose(sim.run_vjp(state, weights)["permx"], expected, rtol=1e-8, atol=1e-12)
+        with patch.object(sim, "_simulate", wraps=sim._simulate) as forward:
+            products = sim.run_vjp(state, weights)
+        forward.assert_called_once_with(state)
+        np.testing.assert_allclose(products["permx"], expected, rtol=1e-8, atol=1e-12)
 
     def test_a_weighted_sum_is_also_differentiated_with_respect_to_a_scalar_of_the_fluid(self):
         cfg = bhp_config(reportpoint=[4, 6])

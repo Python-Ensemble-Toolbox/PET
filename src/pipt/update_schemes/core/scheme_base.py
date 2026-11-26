@@ -505,6 +505,9 @@ class AssimilationScheme(AnalysisBindingMixin, RestartMixin, ABC):
 
         if self.iteration >= self.maxiter and not converged:
             self.conv_msg = "Maximum number of iterations reached"
+            # Recorded like the criteria are, so `why_stop` is never empty
+            # here: scipy cannot print a result that holds an empty dict.
+            self.why_stop["maxiter"] = True
 
         self.after_loop(converged)
         return self._finalize(converged)

@@ -3,6 +3,7 @@
 import numpy as np
 
 import pipt.misc_tools.extract_tools as extract
+from pipt.ensembles.adjoint_weights import stack_vjps
 from pipt.update_schemes.core import AssimilationScheme, StepReport, restart_options
 from pipt.update_schemes.laplace_prior import PriorBlock, apply_cov, apply_root, build_prior, prior_cost
 
@@ -202,10 +203,7 @@ class LowRankGN(AssimilationScheme):
             weights = np.column_stack([residual, basis]) / sd[:, None]
         centre = self.state_layout.member_dicts(self.centre)[0]
         products = self.sim.run_vjp(centre, self.data_layout.to_frame(weights))
-        missing = [name for name in self.state_layout.variables if name not in products]
-        if missing:
-            raise NotImplementedError(f"The simulator's run_vjp gives no sensitivity to {missing}.")
-        rows = np.hstack([np.atleast_2d(products[name]) for name in self.state_layout.variables])
+        rows = stack_vjps(products, self.idX, weights.shape[1])
         weighted = apply_cov(self.prior_blocks, rows.T)
         if self.full_jacobian:
             A, W, data_term = rows, weighted, weighted @ residual

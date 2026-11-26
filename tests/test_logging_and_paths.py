@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from ensemble.ensemble import BaseEnsemble
-from ensemble.logger import PetLogger
+from ensemble.logger import PetLogger, block, change, format_duration, heading, items
 from pipt.ensembles.forecast import ForecastMixin
 
 
@@ -42,6 +42,31 @@ def test_the_log_file_is_written_as_utf8(tmp_path):
 
     assert [h.encoding for h in file_handlers] == ["utf-8"]
     assert "│" in (tmp_path / "encoding.log").read_text(encoding="utf-8")
+
+
+def test_a_list_of_items_lines_up_its_values():
+    assert items("Kernel", [("Exponent p", "1.82"), ("Bandwidth σ", 21.3)]) == [
+        "Kernel", "   Exponent p   1.82", "   Bandwidth σ  21.3"]
+
+
+def test_a_list_written_in_two_parts_lines_up_when_given_its_width():
+    first = items("Step", [("Size", "0.1")], width=12)
+    second = items(None, [("Misfit, mean", "3.5")], width=12)
+    assert first + second == ["Step", "   Size          0.1", "   Misfit, mean  3.5"]
+
+
+def test_a_block_has_a_column_for_symbols_only_when_a_row_has_one():
+    rule = "─" * 72
+    assert block("Problem", [("Members", "ne", 100), ("Kernel", "p-kernel")]) == [
+        rule, " Problem", rule, "   Members  ne  100", "   Kernel       p-kernel"]
+    assert block("Options", [("maxiter", 50)])[3:] == ["   maxiter  50"]
+    assert block("Done", [], heavy=True) == ["═" * 72, " Done", "═" * 72, "═" * 72]
+
+
+def test_heading_change_and_duration_read_as_in_the_log():
+    assert heading("Iteration 3") == "── Iteration 3 " + "─" * 57 and len(heading("Iteration 3")) == 72
+    assert change("λ", 100, 10, "step accepted", fmt="g") == "   ↳ λ  100 → 10  (step accepted)"
+    assert [format_duration(t) for t in (45.2, 725, 11220)] == ["45.2 s", "12 min 05 s", "3 h 07 min"]
 
 
 def test_save_folder_is_not_created_by_reading_it(tmp_path, monkeypatch):

@@ -63,7 +63,13 @@ member per trial and `posterior_samples` members for the final forecast. The dat
 a step is solved in come from the prior's predictions, among which each
 accepted point's prediction replaces a random one. It binds no analysis, and
 asks the simulator for `run_vjp`: weighted sums of the data's sensitivities,
-one adjoint sweep each.
+one adjoint sweep each. At one committed centre the low-rank scheme batches
+the gradient of the negative log likelihood and the curvature directions;
+full-Jacobian mode batches the whitened observation directions instead.
+SVGD needs only the opposite-signed likelihood gradient per member and asks
+for it during the forward run, when the trajectory is available. Both paths
+use `DataLayout` for the weights and check each returned block against its
+named state variable. The existing full-Jacobian forecast format is unchanged.
 
 ## Analyses
 
@@ -88,7 +94,10 @@ Everything the analyses see is a matrix in one fixed row order:
   compressed vintages reduced on the way in. `pred_data.matrix` is what the
   schemes read; `pred_data.to_frame()` is the frame view.
 - Adjoints: an `(nd, nx, ne)` array in the same rows, when the simulator
-  computes them.
+  computes them. A simulator in weighted-adjoint mode returns one gradient per
+  parameter instead, the gradient of a weighted sum of its outputs, and the
+  array is `(nx, ne)`. `pipt.ensembles.DataMisfitWeights` gives the weights
+  that make it the gradient of the data misfit.
 - `StateLayout`: the `{variable: (start, stop)}` rows of the state array; the
   ensemble's `state_layout` converts to and from dictionaries, builds member
   inputs for the simulator, and clips to the prior's limits.

@@ -19,8 +19,8 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 
 | Key | Meaning | Default |
 | --- | --- | --- |
-| `scheme` | Algorithm: `esmda`, `es`, `enkf`, `lmenrml`, `gnenrml`, `lowrankgn`. `pipt.available_schemes()` lists every `(scheme, analysis)` pair. | required |
-| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (all schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML); `enif` (ES-MDA, see the `[dataassim.enif]` block below); `laplace` (`lowrankgn`, its only one). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
+| `scheme` | Algorithm: `esmda`, `es`, `enkf`, `lmenrml`, `gnenrml`, `lowrankgn`, `svgd`. `pipt.available_schemes()` lists every `(scheme, analysis)` pair. | required |
+| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (ensemble Kalman schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML); `enif` (ES-MDA, see the `[dataassim.enif]` block below); `laplace` (`lowrankgn` only); `adjoint` (`svgd` only). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
 | `energy` | Truncation energy of the SVD in ES-MDA, ES and EnKF; a fraction, or a percentage when greater than 1. The iterative schemes read `iteration.energy`. | `0.98` |
 | `emp_cov` | The variance file holds an ensemble of observation errors; the analyses use that empirical covariance. Flag. | off |
 
@@ -129,6 +129,45 @@ step uses the same AW solve. Storage for W is one state-length vector per Jacobi
 | --- | --- | --- |
 | `tot_assim_steps` | Number of inflated assimilation steps; one update each. | required |
 | `inflation_param` | Inflation factor per step (a list) or one factor for all. The inverses must sum to 1. | `tot_assim_steps` for every step |
+
+### SVGD: the `[dataassim.svgd]` block
+
+Stein variational gradient descent (`scheme = "svgd"`, `analysis = "adjoint"`)
+moves the members along the simulator's adjoint gradient of the data misfit,
+one forward and one adjoint run per member per iteration. The simulator must
+return a weighted adjoint: for the JutulDarcy wrapper, set
+`weighted_adjoint = {parameters = [...]}` in `[fwdsim]` instead of `adjoints`;
+the scheme hands it the weights. Parameters are matched to the state by name,
+with `log_permx` also accepted for a state named `permx` **if that state
+already holds log-permeability**. Name matching does not convert units or
+apply a chain rule. For a state holding permeability itself, return its
+permeability derivative.
+Observations are not perturbed. Compressed data and `emp_cov` are not supported.
+
+The prior term of the gradient, `C_x⁻¹(μ − x)`, uses the mean and covariance of
+a large sample of the prior, `prior_cov_samples` realisations that are never
+simulated. The covariance is not formed; its inverse is applied through the
+singular value decomposition of the sample. A sample describes at most
+`prior_cov_samples − 1` directions of the state. In the others the prior term
+is zero and the members move with the data term and the repulsion only, so use
+more realisations than state variables where that is affordable.
+
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `maxiter` | Largest number of iterations. | `50` |
+| `stein_tol` | Stop when the root-mean-square size of the Stein direction is below this fraction of its size in the first iteration. The direction is what moves the members, so it is zero where SVGD has converged. On a linear-Gaussian problem with a known posterior the spread is within 1% of the posterior's at `0.001` and within 3 to 15% at `0.01`. With a fixed step size (`adagrad`, `gd`) the direction may level off above the tolerance, and the run then takes `maxiter` iterations. `0` switches the criterion off. The run table of the log shows the size in percent of the first, in the column `Φ (%)`. | `0.001` |
+| `stein_change` | A second condition for the stop on `stein_tol`. When given, the run stops only when the Stein direction is below `stein_tol` of its first size and has also changed by less than this fraction of its size since the iteration before, so a run whose direction is still falling goes on. | not used |
+| `optimizer` | How the Stein direction becomes a step: `adagrad` (as in the paper), `adam`, `gd` (plain gradient descent) or `lbfgs` (limited-memory BFGS without a line search; the step is capped at `step_size`). | `adagrad` |
+| `step_size` | Step size of the optimizer. With `adagrad` and `adam` a step is about this many prior standard deviations in every variable; with `gd` it multiplies the direction itself, so the right value depends on the size of the gradients; with `lbfgs` it is the largest root-mean-square step, in prior standard deviations. | `0.1` |
+| `autocorr` | `adagrad` only: memory of the squared direction. | `0.9` |
+| `beta1`, `beta2` | `adam` only: memory of the direction and of its square. | `0.9`, `0.999` |
+| `memory` | `lbfgs` only: number of earlier steps the curvature is estimated from. | `10` |
+| `prior_cov_samples` | Number of prior realisations the prior mean and covariance are estimated from. Drawn from the `prior_<name>` blocks; with `importstate`, the first `prior_cov_samples` realisations of that file (the members are its first `ne`). `0` switches the prior term off. | `1000`; with `importstate`, every realisation in the file |
+| `prior_cov_energy` | Truncation of the prior sample's singular values, as `energy`: a fraction, or a percentage when greater than 1. Truncated directions get no prior term. | `1` (keep all) |
+| `prior_cov_estimate` | How the prior covariance is estimated from the realisations. `sample`: their sample covariance, which has at most `prior_cov_samples − 1` directions. `graph`: a sparse factor of the inverse covariance fitted to them on the graphs of the state, as EnIF fits its prior precision (`graphite-maps`); it has every variable that varies in the realisations, also when there are fewer realisations than variables. The graphs and their reach are EnIF's: `parameter_graphs` and `neighbourhood_expansion` under `[dataassim.enif]`, or nearest neighbours from the `grid` of a `prior_<name>` block. A state without either gets independent variables. `prior_cov_energy` is not used with `graph`. | `sample` |
+| `kernel` | `p-kernel` (refitted each iteration), `gaussian` (median rule), `imq`, the inverse multiquadric `(1 + d²/σ²)^(-1/2)`, which falls off slowly with distance, or `p-imq`, its p-variant `(1 + (d/σ)^p)^(-1/2)` with `p` and `σ` refitted each iteration to the two percentiles of the p-kernel. | `p-kernel` |
+| `alpha` | Percentile level the p-kernel and `p-imq` are fitted to: the kernel is `1 - alpha` and `alpha` at the `alpha` and `1 - alpha` percentiles of the members' distances. | `0.05` |
+| `imq_level` | `imq` only: the value of the kernel for two members at the median distance from each other, between 0 and 1; `σ` is refitted to it each iteration. It is the weight such a member's gradient gets in the other's direction: a high value keeps the members spread, a low value lets each follow its own gradient and the ensemble narrows. By default `1/√N` for `N` members (`σ² = med(d)² / (N − 1)`): the gradients of the other members then weigh as much as a member's own when they point in unrelated directions. | `1/√N` |
 
 ### EnIF: the `[dataassim.enif]` block
 
@@ -281,7 +320,7 @@ PET reads a few keys; the rest belong to the simulator wrapper.
 | `reporttype`, `reportpoint` | Name and values of the report labels: a list, a `.csv`/`.txt`/`.yaml` file, or `{start, end, freq}` for a date range. | required by most wrappers |
 | `parallel` | Members run at once in a local process pool; `1` runs them in sequence. | `1` |
 | `hpc` | Run the members through the wrapper's HPC queue in batches of `parallel`. Flag. | off |
-| `compute_adjoints` | The wrapper returns `(prediction, adjoint)` per member; the adjoints reach the analysis as an `(nd, nx, ne)` array. Flag. | off |
+| `compute_adjoints` | The wrapper returns `(prediction, adjoint)` per member; the adjoints reach the analysis as an `(nd, nx, ne)` array. A wrapper in weighted-adjoint mode returns one gradient per parameter instead (a Series indexed by parameter name), and they reach the scheme as an `(nx, ne)` array. Flag. | off |
 | `saveforecast` | Save each full forecast (`sim_results.pkl`) and the reconstructed compressed vintages (`rec_results.pkl`). *Presence.* | off |
 
 ## Legacy text files
