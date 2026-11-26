@@ -38,7 +38,7 @@ class LowRankGN(AssimilationScheme):
 
     Where the ensemble schemes move every member, this one moves a single
     point, the *centre*, to the maximum of the posterior, and only then draws
-    an ensemble: ``ne`` samples of the Gaussian that the Gauss-Newton Hessian
+    an ensemble: ``posterior_samples`` draws (default ``ne``) of the Gaussian that the Gauss-Newton Hessian
     describes about that point. The prior is a Gaussian of full rank, so the
     update is not confined to the span of an ensemble and needs no
     localization.
@@ -148,9 +148,15 @@ class LowRankGN(AssimilationScheme):
             cells = [(r.label, r.datatype) for r in self.data_layout.rows if invalid[r.rows].any()]
             raise ValueError(f"lowrankgn needs finite, positive observation variance at {cells}.")
         self.ensemble.enX = np.asarray(self.enX, dtype=float)
+        if self.enX.shape[1] != self.ne:
+            raise ValueError(f"Expected {self.ne} prior members, got {self.enX.shape[1]}")
+        laplace = self.keys_da.get("laplace", {})
+        self.posterior_samples = laplace.get("posterior_samples", self.ne)
+        if type(self.posterior_samples) is not int or self.posterior_samples < 1:
+            raise ValueError("posterior_samples must be a positive integer")
         self.mu, self.prior_blocks = build_prior(
-            self.enX, self.state_layout, self.prior_info,
-            self.keys_da.get("laplace", {}), "importstate" in ensemble.keys_en, not ensemble.disable_tqdm,
+            self.enX, self.state_layout, self.prior_info, laplace, "importstate" in ensemble.keys_en,
+            not ensemble.disable_tqdm,
         )
         self.limits = {key: self.prior_info[key].get("limits", (None, None)) for key in self.idX}
 
@@ -179,7 +185,7 @@ class LowRankGN(AssimilationScheme):
 
     def _simulate(self, x):
         """The forecast of the single trial, or ``None`` if its simulation failed."""
-        success = self.ensemble.calc_prediction(x[:, None])
+        success = self.ensemble.calc_prediction(x[:, None], member_count=1)
         return self.ensemble._predicted_data() if success else None
 
     def _linearize(self):
@@ -270,7 +276,7 @@ class LowRankGN(AssimilationScheme):
                 self.centre = x
                 self.centre_pred = forecast.matrix[:, 0]
                 # The basis follows the centre: its prediction takes the place of a random one
-                self.basis_pred[:, self.ensemble.rng.choice(self.ne)] = self.centre_pred
+                self.basis_pred[:, self.ensemble.rng.choice(self.basis_pred.shape[1])] = self.centre_pred
                 self.ensemble.pred_data = forecast
                 self._linearization = None
                 self.lam = max(self.lam / self.lam_factor, self.lam_min)
@@ -296,7 +302,7 @@ class LowRankGN(AssimilationScheme):
         return {"λ": "" if prior_run else self.lam_used, "rank": "" if prior_run else self.rank}
 
     def after_loop(self, converged: bool) -> None:
-        """Replace the centre by ``ne`` draws of the Laplace posterior, and forecast them."""
+        """Replace the centre by the requested posterior draws, and forecast them."""
         if self.why_stop.get("all_trials_failed"):
             self.ensemble.enX = self.centre[:, None]
             if self._saving_enabled:
@@ -306,8 +312,10 @@ class LowRankGN(AssimilationScheme):
             self._linearization = self._linearize()
         _, A, W, gram = self._linearization
         rng = self.ensemble.rng
-        draws = apply_root(self.prior_blocks, rng.randn(self.mu.size, self.ne))
+        count = self.posterior_samples
+        draws = apply_root(self.prior_blocks, rng.randn(self.mu.size, count))
         samples = self._bounded(self.centre[:, None] + laplace_perturbations(
-            A, W, gram, draws, rng.randn(len(gram), self.ne)))
-        self.ensemble.enX = self.run_forecast(samples)
+            A, W, gram, draws, rng.randn(len(gram), count)))
+        self.ensemble.forecast(samples, member_count=count)
+        self.ensemble.enX = self.after_forecast(samples)
         super().after_loop(converged)

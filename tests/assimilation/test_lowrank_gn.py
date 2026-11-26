@@ -98,10 +98,27 @@ def test_only_the_prior_and_the_samples_are_simulated_as_an_ensemble():
             runs.append(member_index)
             return super().run_fwd_sim(state, member_index, *args, **kwargs)
 
-    _, result, *_ = run(sim=Counting)
-    assert runs[:NE] == runs[-NE:] == list(range(NE))  # the prior, and the samples
-    trials = runs[NE:-NE]  # each a single simulation, of the trial centre
+    scheme, result, *_ = run({"ne": 8}, sim=Counting, laplace={"posterior_samples": 100})
+    assert scheme.ne == 8 and scheme.basis_pred.shape == (ND, 8)
+    assert result.x.shape == (NX, 100)
+    assert runs[:8] == list(range(8)) and runs[-100:] == list(range(100))
+    trials = runs[8:-100]
     assert len(trials) >= result.nit and set(trials) == {0}
+    default, *_ = run({"ne": 8})
+    np.testing.assert_array_equal(scheme.centre, default.centre)
+    np.testing.assert_array_equal(scheme.basis_pred, default.basis_pred)
+
+
+def test_short_imported_prior_rejected():
+    np.savez("prior.npz", x=np.zeros((NX, 8)))
+    with pytest.raises(ValueError, match="Expected 100 prior members, got 8"):
+        run({"ne": 100, "importstate": "prior.npz"})
+
+
+def test_short_forecast_requires_explicit_member_count():
+    scheme = scalar_scheme()
+    with pytest.raises(ValueError, match="Expected a forecast with 20 members"):
+        scheme.ensemble.calc_prediction(scheme.centre[:, None])
 
 
 def test_the_basis_is_no_larger_than_max_rank():
@@ -250,15 +267,20 @@ def test_map_at_a_bound_scores_and_samples_about_the_feasible_centre():
 
 
 def test_restart_after_convergence_repeats_only_the_posterior(monkeypatch):
-    options = {"restartsave": True, "iteration": {"lambda": 10., "data_misfit_tol": .99}}
+    options = {"restartsave": True, "iteration": {"lambda": 10., "data_misfit_tol": .99},
+               "laplace": {"posterior_samples": 100}}
     reference = scalar_scheme(**options)
     result = reference.run_assimilation()
+    reference.ensemble.sim_data.to_pickle(reference.ensemble.RESTART_RESULTS_FILE)
     resumed = scalar_scheme(restart=True, **options)
     monkeypatch.setattr(resumed, "update_step", lambda: pytest.fail("repeated converged step"))
+    monkeypatch.setattr(resumed.sim, "run_fwd_sim", lambda *_: pytest.fail("repeated saved forecast"))
     restarted = resumed.run_assimilation()
     assert restarted.success and restarted.nit == result.nit == 1
     np.testing.assert_array_equal(resumed.centre, reference.centre)
     np.testing.assert_array_equal(restarted.x, result.x)
+    assert restarted.x.shape == (1, 100)
+    np.testing.assert_array_equal(resumed.pred_data.matrix, result.x)  # the scalar simulator is the identity
 
 
 @pytest.mark.parametrize("crash", [True, False])

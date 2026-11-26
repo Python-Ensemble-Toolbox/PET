@@ -171,7 +171,7 @@ class BaseEnsemble:
             except Exception:
                 pass
 
-    def calc_prediction(self, enX, save_prediction=None):
+    def calc_prediction(self, enX, save_prediction=None, *, member_count=None):
         """
         Function for running the simulator over several levels. We assume that it is sufficient to provide the level
         integer to the setup of the forward run. This will initiate the correct simulator fidelity.
@@ -187,24 +187,14 @@ class BaseEnsemble:
         ----------
         enX:
             If simulation is run stand-alone one can input any state.
+        member_count:
+            Expected width of an explicit single-level batch. Defaults to the configured ensemble size.
         """
 
         nparallel = int(self.sim.input_dict.get('parallel', 1))
-        self.member_outputs = []
-        self.member_adjoints = None
-        self._sim_data = None
-
-        # Simulators run each realisation in its own `En_<member>` folder and
-        # create it with `os.mkdir`, which fails rather than reuses if the
-        # folder is already there. Nothing else removes them between calls, so
-        # a second prediction collides with the first: an optimizer evaluating
-        # the mean control (member 0 alone) and then the perturbation ensemble
-        # (members 0..ne-1) hit `FileExistsError: 'En_0'` on its very first
-        # iteration. Clearing here rather than only in `__init__` makes each
-        # prediction independent of what the previous one left behind.
-        self._clear_member_run_folders()
-
         if hasattr(self, 'multilevel') and (self.multilevel is not None):
+            if member_count is not None:
+                raise ValueError("member_count applies only to single-level forecasts")
             is_multilevel = True
             # Iterate over level *indices*: `level` is used below to index both
             # `ne` and `enX`. Iterating the ml_ne values instead made `level`
@@ -215,19 +205,29 @@ class BaseEnsemble:
             # Members per level are counted from the state itself, not from `en_size`: a single
             # control vector placed on one level, or an `en_size` that does not add up to `ne`,
             # would otherwise send the wrong number of member indices to the simulator.
-            ne = [x.shape[1] for x in enX]
-            levels = tqdm(range(len(ne)), desc='Fidelity level', position=1, **progbar_settings)
+            members_per_level = [x.shape[1] for x in enX]
+            levels = tqdm(range(len(members_per_level)), desc='Fidelity level', position=1, **progbar_settings)
         else:
             levels = range(1)
             is_multilevel = False
             enX = np.asarray(enX)
-            # As for the levels above, the members are counted from the state: a scheme may
-            # forecast a single trial state, or fewer members than the ensemble holds.
-            ne = [enX.shape[1] if enX.ndim == 2 else self.ne]
+            if enX.ndim == 1:
+                enX = enX[:, None]
+            expected = self.ne if member_count is None else member_count
+            if (isinstance(expected, (bool, np.bool_)) or not isinstance(expected, (int, np.integer))
+                    or expected < 1 or enX.ndim != 2 or enX.shape[1] != expected):
+                raise ValueError(f"Expected a forecast with {expected} members, got state shape {enX.shape}")
+            members_per_level = [expected]
+
+        self.member_outputs = []
+        self.member_adjoints = None
+        self._sim_data = None
+        # Each call starts at member zero; an En_0 left by the previous forecast would collide.
+        self._clear_member_run_folders()
 
         # Which levels this forecast ran members on, in the order of `member_outputs`/`sim_data`
         # (levels without members produce no output and are left out).
-        self.run_levels = [level for level in range(len(ne)) if ne[level] > 0]
+        self.run_levels = [level for level, count in enumerate(members_per_level) if count > 0]
 
         # Loop over levels, if not multilevel, this loop will only run once.
         for level in levels:
@@ -241,9 +241,10 @@ class BaseEnsemble:
             if hasattr(self.sim, 'setup_fwd_run'):
                 self.sim.setup_fwd_run(level=level)
 
-            if ne[level] > 0:
-                sim_input = self._simulator_input(enX[level] if is_multilevel else enX, ne[level])
-                sim_output = self._run_members(sim_input, ne[level], nparallel)
+            count = members_per_level[level]
+            if count > 0:
+                sim_input = self._simulator_input(enX[level] if is_multilevel else enX, count)
+                sim_output = self._run_members(sim_input, count, nparallel)
 
                 # Replace crashed sims with successful ones, and give the
                 # crashed members the state of the member that replaced them,

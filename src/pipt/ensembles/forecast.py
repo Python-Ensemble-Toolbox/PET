@@ -31,7 +31,7 @@ class ForecastMixin:
     RESTART_RESULTS_FILE = "restart_sim_results.pkl"
     SIM_RESULTS_FILE = "sim_results.pkl"
 
-    def forecast(self, enX) -> None:
+    def forecast(self, enX, *, member_count=None) -> None:
         """Run forecast simulations and prepare predicted data for analysis.
 
         Parameters
@@ -41,10 +41,13 @@ class ForecastMixin:
             ensemble, so a scheme can forecast a *trial* state without first
             parking it somewhere for this method to find.
         """
-        if self._load_restart_prediction_if_available():
+        if self._load_restart_prediction_if_available(member_count):
             return
 
-        self.calc_prediction(enX)
+        if member_count is None:
+            self.calc_prediction(enX)
+        else:
+            self.calc_prediction(enX, member_count=member_count)
         self.pred_data = self._predicted_data()
         self.adjoints = self._adjoint_array()
 
@@ -211,7 +214,7 @@ class ForecastMixin:
     # ------------------------------------------------------------------
     # Forecast steps
     # ------------------------------------------------------------------
-    def _load_restart_prediction_if_available(self) -> bool:
+    def _load_restart_prediction_if_available(self, member_count=None) -> bool:
         # A hand-placed file: a saved forecast copied to this name in the
         # working directory supplies the forecast a crashed run had already
         # finished. It is honoured only on a restart, so a file left behind
@@ -222,7 +225,7 @@ class ForecastMixin:
         with open(self.RESTART_RESULTS_FILE, "rb") as file:
             self.sim_data = pickle.load(file)
 
-        self.pred_data = self._container_from_frame(self.sim_to_pred_data(self.sim_data))
+        self.pred_data = self._container_from_frame(self.sim_to_pred_data(self.sim_data), member_count)
 
         # Consumed once; it then lives with the other results under the name a
         # saved forecast gets (in the working directory when saving is off).
@@ -258,11 +261,11 @@ class ForecastMixin:
         with open(self._save_path(self.SIM_RESULTS_FILE), "wb") as file:
             pickle.dump(forecast, file)
 
-    def _container_from_frame(self, frame):
+    def _container_from_frame(self, frame, member_count=None):
         """A ``PredictedData`` (one per level) from a prediction frame, for paths that still produce frames."""
         if isinstance(frame, list):
             return [PredictedData.from_frame(self.data_layout, level, self.ne) for level in frame]
-        return PredictedData.from_frame(self.data_layout, frame, self.ne)
+        return PredictedData.from_frame(self.data_layout, frame, self.ne if member_count is None else member_count)
 
     def sim_to_pred_data(self, pred: Any) -> Any:
         '''

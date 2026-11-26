@@ -58,8 +58,8 @@ and the covariance-weighted full gradient. No state-sized Hessian or assembled
 B is required. At the final centre it conditions fresh centred prior draws
 using I + AW (without damping) and independent observation noise. Only the
 prior and those posterior samples are forecast as an
-ensemble; a trial step is a forecast of one state, which `calc_prediction`
-allows by counting the members from the state it is given. The data directions
+ensemble. The prior uses `ensemble.ne`; the scheme explicitly requests one
+member per trial and `posterior_samples` members for the final forecast. The data directions
 a step is solved in come from the prior's predictions, among which each
 accepted point's prediction replaces a random one. It binds no analysis, and
 asks the simulator for `run_vjp`: weighted sums of the data's sensitivities,

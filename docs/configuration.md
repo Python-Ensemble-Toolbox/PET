@@ -63,7 +63,13 @@ has `success=False` and `x` contains only the last feasible centre; no posterior
 MiniRes adjoints do not support rate-controlled multi-completion wells whose rate allocation
 depends on permeability.
 
-### Laplace: choosing the prior factor (`[dataassim.laplace]`, optional)
+### Laplace: prior factor and posterior samples (`[dataassim.laplace]`, optional)
+
+`ensemble.ne` sets the number of prior members. `posterior_samples` sets the
+number of final draws and defaults to `ensemble.ne`. For example, with `ne = 8`
+and `posterior_samples = 100`, PET forecasts eight prior members, one centre per
+trial, and 100 posterior members. Increasing only `posterior_samples` does not
+change the data basis or MAP estimate.
 
 Both Gauss–Newton variants choose the prior in the following order:
 
