@@ -19,8 +19,8 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 
 | Key | Meaning | Default |
 | --- | --- | --- |
-| `scheme` | Algorithm: `esmda`, `es`, `enkf`, `lmenrml`, `gnenrml`. `pipt.available_schemes()` lists every `(scheme, analysis)` pair. | required |
-| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (all schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML); `enif` (ES-MDA, see the `[dataassim.enif]` block below). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
+| `scheme` | Algorithm: `esmda`, `es`, `enkf`, `lmenrml`, `gnenrml`, `lowrankgn`. `pipt.available_schemes()` lists every `(scheme, analysis)` pair. | required |
+| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (all schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML); `enif` (ES-MDA, see the `[dataassim.enif]` block below); `laplace` (`lowrankgn`, its only one). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
 | `energy` | Truncation energy of the SVD in ES-MDA, ES and EnKF; a fraction, or a percentage when greater than 1. The iterative schemes read `iteration.energy`. | `0.98` |
 | `emp_cov` | The variance file holds an ensemble of observation errors; the analyses use that empirical covariance. Flag. | off |
 
@@ -51,6 +51,71 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 | `lambda_factor` | LM-EnRML: factor the damping is divided (accepted step) or multiplied (rejected step) by. | `5` |
 | `gamma` | GN-EnRML: step length. `auto` starts at `0.1`. | `0.2` |
 | `gamma_max`, `gamma_factor` | GN-EnRML: bound and update factor for the step length. | `1.0`, `2.0` |
+
+`lowrankgn` reads the same block: `max_iter`, `data_misfit_tol` (on the data misfit of its one point), `energy` (of
+the data basis), `max_rank` (an upper bound on the size of that basis; default none), `full_jacobian` (no basis: the sensitivity of every datum, one backward sweep each; default false), `max_inner_iter`, and `lambda`, `lambda_min`, `lambda_factor` with the defaults
+`10`, `0.01`, `10`. It needs a simulator with `run_vjp`. It
+refuses `multilevel`, `localization`, `localanalysis`, `compress`, `scale_data`, `scale`, `emp_cov` and
+`remove_outliers`, as well as `post_process_forecast`. Observation variances must be finite and
+strictly positive. The prior cost, forecast and accepted MAP use the same bounded trial; final
+Gaussian draws are clipped to the configured limits. If all trial forecasts fail, the result
+has `success=False` and `x` contains only the last feasible centre; no posterior is forecast.
+MiniRes adjoints do not support rate-controlled multi-completion wells whose rate allocation
+depends on permeability.
+
+### Laplace: choosing the prior factor (`[dataassim.laplace]`, optional)
+
+Both Gauss–Newton variants choose the prior in the following order:
+
+1. **Supplied sparse precision.** `precision = "Q.npz"` factors the joint precision in PET state-row order,
+   including correlations between variables. Alternatively, `precision = { permx = "Qk.npz" }` supplies a
+   block in that variable's row order. Use `scipy.sparse.save_npz` (or pass a SciPy sparse matrix from
+   Python). Supply both triangles of a symmetric positive-definite matrix. The solver uses sparse
+   Cholesky with a fill-reducing permutation; it never forms the inverse.
+   If you already have a lower triangular factor C with Q = CᵀC (e.g. from a
+   Vecchia estimator), set `precision_factor = { permx = "C.npz" }` instead.
+   Supply the factor in the variable's PET row order, with positive diagonal; PET does not refit it.
+   Alternatively, use a `[dataassim.laplace.matern.<variable>]` block as below.
+2. **Known covariance.** For a variable with at most `max_dense_size` rows (default `4096`), use a supplied
+   covariance, e.g. `covariance = { permx = "K.npy" }`, or reconstruct the model covariance if PET drew
+   that variable from `prior_<name>`. The `.npy` contains a square covariance or a vector of variances.
+   The model route uses its specified mean and independent layers, as in PET's prior draw; the other
+   routes use the ensemble mean. Set `max_dense_size = 0` to skip this step.
+3. **Ensemble only or above the size limit.** Fit a sparse precision factor with graphite-maps. The
+   default graph connects grid neighbours, expanded by two hops; without grid metadata the rows are
+   independent. Override `parameter_graphs` (per-variable symmetric adjacency `.npz` files),
+   `neighbourhood_expansion`, or `ridge_per_entry` (default `2.0`, graphite-maps' regularization per
+   fitted row entry). Smaller ridge values weaken regularization; zero can fail with collinear samples.
+   Every fitted row needs positive ensemble spread.
+
+For example, with an imported ensemble:
+
+```toml
+[dataassim.laplace]
+precision = { permx = "permx_precision.npz" }
+covariance = { sor = "sor_variance.npy" }
+neighbourhood_expansion = 2
+```
+
+These settings select the solver factor, not the generator for the initial ensemble. For large cases
+where PET's variogram draw would itself be dense, supply the members via `ensemble.importstate`.
+No EnIF configuration is read.
+
+Example for a field in EGRID active-cell order, using the optional
+[`matern-egrid`](https://github.com/KriFos1/Matern) Python package:
+
+```toml
+[dataassim.laplace.matern.permx]
+egrid = "MODEL.EGRID"
+field = { sigma = 0.8, range = 300.0 }
+operator = { boundary = "robin" }
+```
+
+`field` configures `MaternField3` and `operator` supplies optional `build_operator` arguments.
+The same SPDE operator defines covariance products, prior costs and draws. PET caches the
+solver for K and uses transpose solves for nonsymmetric operators. For every prior the MAP
+step uses the same AW solve. Storage for W is one state-length vector per Jacobian row:
+`max_rank` bounds this for the projected variant; full Jacobian uses one per observation.
 
 ### ES-MDA: the `[dataassim.mda]` block
 

@@ -50,6 +50,21 @@ Registration is one line: `register_scheme(name, analysis, cls)` in
 iterative family shares `IterativeEnRML`, where LM-EnRML and GN-EnRML differ
 only in ten small hooks around their control parameter.
 
+`LowRankGN` (`lowrankgn`) is the one scheme that does not update an ensemble. It
+moves a single point to the posterior mode in physical coordinates. For the
+noise-scaled Jacobian rows A, it applies the prior covariance B to form
+W = B Aᵀ and solves in data space using AW. A damping retry reuses A, W, AW
+and the covariance-weighted full gradient. No state-sized Hessian or assembled
+B is required. At the final centre it conditions fresh centred prior draws
+using I + AW (without damping) and independent observation noise. Only the
+prior and those posterior samples are forecast as an
+ensemble; a trial step is a forecast of one state, which `calc_prediction`
+allows by counting the members from the state it is given. The data directions
+a step is solved in come from the prior's predictions, among which each
+accepted point's prediction replaces a random one. It binds no analysis, and
+asks the simulator for `run_vjp`: weighted sums of the data's sensitivities,
+one adjoint sweep each.
+
 ## Analyses
 
 An analysis (`pipt.update_schemes.analysis`) is a class with

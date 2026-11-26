@@ -219,9 +219,11 @@ class BaseEnsemble:
             levels = tqdm(range(len(ne)), desc='Fidelity level', position=1, **progbar_settings)
         else:
             levels = range(1)
-            ne = [self.ne]
             is_multilevel = False
             enX = np.asarray(enX)
+            # As for the levels above, the members are counted from the state: a scheme may
+            # forecast a single trial state, or fewer members than the ensemble holds.
+            ne = [enX.shape[1] if enX.ndim == 2 else self.ne]
 
         # Which levels this forecast ran members on, in the order of `member_outputs`/`sim_data`
         # (levels without members produce no output and are left out).
@@ -250,7 +252,7 @@ class BaseEnsemble:
                 # forecasting and will commit.
                 sim_output, enX, success = self._replace_failed_simulations(sim_output, enX, level, is_multilevel)
 
-                if (not is_multilevel) and getattr(self.sim, 'compute_adjoints', False):
+                if success and not is_multilevel and getattr(self.sim, 'compute_adjoints', False):
                     sim_output, adjoints = zip(*sim_output)
                     self.member_adjoints = list(adjoints)
 
@@ -491,4 +493,3 @@ class BaseEnsemble:
                 sim_output[list_crash[index]] = deepcopy(sim_output[element])
 
         return sim_output, enX, success
-

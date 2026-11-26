@@ -82,7 +82,7 @@ WELL_QUANTITIES = ("WOPR", "WWPR", "WLPR", "WWIR", "WWCT", "WBHP")
 FIELD_QUANTITIES = ("FOPR", "FWPR", "FWIR", "FOPT", "FWPT", "FWIT")
 """Field rates and their cumulatives."""
 
-DIFFERENTIABLE = ("WOPR", "WWPR", "WWCT")
+DIFFERENTIABLE = ("WOPR", "WWPR", "WWCT", "WBHP")
 """The quantities :meth:`MiniRes.run_fwd_sim` can also produce an adjoint for."""
 
 
@@ -268,10 +268,8 @@ class MiniRes:
     # ------------------------------------------------------------------
     def run_fwd_sim(self, state: dict, member_index: int = 0, **kwargs):
         """Simulate one realisation; return its records (and adjoint), or ``False`` if it failed."""
-        model = deepcopy(self.model)
         try:
-            self.set_state(model, state)
-            SS, PP = model.sim(self.dt, self.nSteps, self.S0, self.P0, pbar=False)
+            model, SS, PP = self._simulate(state)
         except Exception:
             logger.exception("MiniRes failed on member %s; it will be replaced.", member_index)
             return False
@@ -402,51 +400,176 @@ class MiniRes:
         Jacobian costs one sweep per datum. That is affordable on the grids this
         simulator is for, and is what PET's adjoint-based analyses want.
 
-        Only quantities that are a function of the saturation at the well's
-        cells are covered (:data:`DIFFERENTIABLE`), and only at rate-controlled
-        completions, whose rate is then a constant of the objective. A
-        BHP-controlled well's rate is itself a function of ``(S, P)``; that
-        derivative has to be worked into the seed by hand, so it is refused
-        rather than silently dropped.
+        The quantities covered are those of :data:`DIFFERENTIABLE`, on either
+        control: MiniRes differentiates the states, and the well model that
+        turns them into rates and bottom-hole pressures is differentiated here
+        (:meth:`_add_seed`), as is the well indices' dependence on the
+        permeability (:meth:`_state_gradient`).
         """
-        from minires import tlm
-
-        wells = model.wells
-        cells = model.xy2ind(wells.xy[:, 0], wells.xy[:, 1])
-        group = np.arange(wells.nComp) if wells.group is None else np.asarray(wells.group)
-        rates = np.asarray(wells.actual_rates)
-        report = self.well_report(model, SS)
-
+        seeds = self._seed_buffers(model, SS, PP)
         rows = []
         for step in self.report:
             row = {}
             for dtype, (quantity, well) in zip(self.datatype, self._parsed):
-                seed = np.zeros((self.nSteps + 1, model.Nxy))
-                k = step  # the datum is the end of step `step`, i.e. SS[step]
-                for comp in np.flatnonzero(group == well):
-                    if np.isfinite(wells.at_time("bhp", np.nan, min(k, self.nSteps) - 1)[comp]):
-                        raise NotImplementedError(
-                            f"'{dtype}' is on BHP control; its rate is itself a function of the state. "
-                            "Seed minires.tlm.adjoint by hand for it."
-                        )
-                    s = SS[k][cells[comp]]
-                    dfw = model.fluid.dfractional_flow(np.array([s]))[0]
-                    produced = max(-rates[comp, k - 1], 0.0)
-                    if quantity == "WWPR":
-                        seed[k, cells[comp]] += produced * dfw
-                    elif quantity == "WOPR":
-                        seed[k, cells[comp]] -= produced * dfw
-                    elif quantity == "WWCT":
-                        liquid = report["WLPR"][well, k - 1]
-                        seed[k, cells[comp]] += produced * dfw / liquid if liquid > 0 else 0.0
-
-                grad = tlm.adjoint(model, self.dt, SS, PP, seed)
-                dlogK = grad.logK.sum(0)  # isotropic: the state feeds both components
-                if not self.log_perm:
-                    dlogK = dlogK / model.K[0]
-                row[dtype] = dlogK.ravel(order=self.field_order)
+                for buf in seeds:
+                    buf.fill(0)
+                self._add_seed(model, SS, PP, dtype, quantity, well, step, 1.0, seeds)
+                row[dtype] = self._state_gradient(model, SS, PP, *seeds)
             rows.append(row)
 
         frame = pd.DataFrame(rows, index=self.true_order[1])
         frame.index.name = self.report_type
         return frame
+
+    def run_vjp(self, state: dict, weights) -> dict:
+        """Weighted sums of the data's sensitivities to the state: ``{variable: (k, n)}``.
+
+        ``weights`` is a frame indexed as the records are, report points by
+        data types; each cell holds the ``(k,)`` weights of that datum in the
+        ``k`` sums, or ``None`` for a datum that is in none of them. For the
+        permeability the cost is one simulation and then one backward sweep per
+        sum, whatever the number of data, since the seeds of the adjoint add
+        up. A scalar of the fluid in the state costs two more simulations.
+        """
+        fluid_parameters = {f.name for f in dataclass_fields(self.model.fluid)}
+        scalars = sorted(set(state) - {self.state_variable})
+        if set(scalars) - fluid_parameters:
+            raise NotImplementedError(
+                f"The state also has {sorted(set(scalars) - fluid_parameters)}; the sensitivity is only "
+                "with respect to the permeability and the scalars of the fluid."
+            )
+        position = {label: i for i, label in enumerate(self.true_order[1])}
+        parsed = dict(zip(self.datatype, self._parsed))
+        cells = [(label, dtype, np.ravel(w)) for label, row in weights.iterrows() for dtype, w in row.items()
+                 if w is not None]
+
+        model, SS, PP = self._simulate(state)
+        seeds = self._seed_buffers(model, SS, PP)
+        directions = []
+        for j in range(len(cells[0][2])):
+            for buf in seeds:
+                buf.fill(0)
+            for label, dtype, w in cells:
+                if w[j]:
+                    self._add_seed(model, SS, PP, dtype, *parsed[dtype], self.report[position[label]], w[j], seeds)
+            directions.append(self._state_gradient(model, SS, PP, *seeds))
+        products = {self.state_variable: np.asarray(directions)}
+
+        def sums(perturbed):
+            model, SS, _ = self._simulate(perturbed)
+            records = self.records(model, SS)
+            return sum(w * records[position[label]][dtype][0] for label, dtype, w in cells)
+
+        for name in scalars:
+            # shortcut: a central difference, at two simulations per scalar. The step is wide
+            # because the response is only piecewise smooth (the number of transport sub-steps
+            # follows the CFL number, which the fluid sets): a narrow one measures the jumps. That
+            # leaves an error of some 10 %. An exact derivative needs MiniRes's adjoint to
+            # differentiate the relative permeabilities with respect to their parameters.
+            value = float(np.ravel(state[name])[0])
+            h = 1e-2 * max(1.0, abs(value))
+            plus, minus = (sums({**state, name: np.array([value + d])}) for d in (h, -h))
+            products[name] = ((plus - minus) / (2 * h))[:, None]
+        return products
+
+    def _simulate(self, state: dict) -> tuple:
+        """Run the member on its own copy of the model: ``(model, SS, PP)``."""
+        model = deepcopy(self.model)
+        self.set_state(model, state)
+        SS, PP = model.sim(self.dt, self.nSteps, self.S0, self.P0, pbar=False)
+        return model, SS, PP
+
+    def _seed_buffers(self, model, SS, PP):
+        wells = model.wells
+        if any("aquifer" in record for record in self.well_records):
+            raise NotImplementedError("The adjoint does not cover a model with an aquifer.")
+        for i, record in enumerate(self.well_records):
+            if "rw" not in record or "WI" in record or wells.group is None:
+                continue
+            comps = np.flatnonzero(np.asarray(wells.group) == i)
+            if len(comps) > 1 and (wells.bhp is None or not np.isfinite(wells.bhp[comps]).all()):
+                raise NotImplementedError("The adjoint does not differentiate rate allocation for "
+                                          f"rate-controlled multi-completion well {wells.names[i]}.")
+        return np.zeros_like(SS), np.zeros_like(PP), np.zeros(wells.nComp)
+
+    def _add_seed(self, model, SS, PP, dtype, quantity, well, step, weight, seeds):
+        """Accumulate one weighted datum into ``(dS, dP, dlogWI)``.
+
+        ``dS`` and ``dP``, shaped as ``SS`` and ``PP``, are the seeds of
+        ``minires.tlm.adjoint``; ``dlogWI`` is with respect to the log of the
+        completions' well indices, ``(nComp,)``. The well operates over a step
+        on the saturation at its start and the pressure at its end, with a rate
+        of ``WI λ_t (p_bh - p_cell)``; the water cut is of the saturation at the
+        end.
+        """
+        if quantity not in DIFFERENTIABLE:
+            raise NotImplementedError(
+                f"'{dtype}' is not among the differentiated quantities {DIFFERENTIABLE}. "
+                "Seed minires.tlm.adjoint by hand for others."
+            )
+        wells = model.wells
+        group = np.arange(wells.nComp) if wells.group is None else np.asarray(wells.group)
+        cells = model.xy2ind(wells.xy[:, 0], wells.xy[:, 1])
+        k = step - 1
+        rates = np.asarray(wells.actual_rates)[:, k]
+        on_bhp = np.isfinite(wells.at_time("bhp", np.nan, k))
+        mobility = np.sum(model.fluid.RelPerm(SS[k][cells]), axis=0)
+        dlog_mobility = np.sum(model.fluid.dRelPerm(SS[k][cells]), axis=0) / mobility
+        dS, dP, dlogWI = seeds
+
+        if quantity == "WBHP":
+            i = np.flatnonzero(group == well)[0]  # a wellbore's completions share one BHP
+            if not on_bhp[i]:  # on BHP control it is the control: a constant
+                drawdown = np.asarray(wells.actual_bhp)[i, k] - PP[step][cells[i]]  # rate / (WI λ_t)
+                if not np.isfinite(drawdown):
+                    raise NotImplementedError(f"'{dtype}': the well has no well index, hence no BHP.")
+                dP[step, cells[i]] += weight
+                dS[k, cells[i]] -= weight * drawdown * dlog_mobility[i]
+                dlogWI[i] -= weight * drawdown
+            return
+
+        comps = np.flatnonzero(group == well)
+        produced = np.maximum(-rates[comps], 0.0)
+        fw = model.fluid.fractional_flow(SS[step][cells[comps]])
+        liquid = produced.sum()
+        # The datum's derivatives with respect to each completion's produced rate and water cut
+        if quantity == "WWPR":
+            d_rate, d_cut = fw, produced
+        elif quantity == "WOPR":
+            d_rate, d_cut = 1.0 - fw, -produced
+        elif liquid > 0:  # WWCT
+            d_rate, d_cut = (fw - produced @ fw / liquid) / liquid, produced / liquid
+        else:
+            d_rate, d_cut = 0.0 * fw, 0.0 * fw
+        np.add.at(dS[step], cells[comps], weight * d_cut * model.fluid.dfractional_flow(SS[step][cells[comps]]))
+
+        # On rate control the produced rate is given; on BHP control it follows from the state
+        free = comps[on_bhp[comps] & (rates[comps] < 0)]
+        d_rate = weight * d_rate[np.isin(comps, free)] * -rates[free]
+        np.add.at(dS[k], cells[free], d_rate * dlog_mobility[free])
+        np.add.at(dP[step], cells[free], d_rate / (PP[step][cells[free]] - np.asarray(wells.actual_bhp)[free, k]))
+        dlogWI[free] += d_rate
+
+    def _state_gradient(self, model, SS, PP, dS: np.ndarray, dP: np.ndarray, dlogWI: np.ndarray) -> np.ndarray:
+        """The backward sweep from the seeds, as a gradient with respect to the state vector."""
+        from minires import tlm
+
+        wells = model.wells
+        grad = tlm.adjoint(model, self.dt, SS, PP, dS, dP)
+        dlogK = grad.logK.sum(0).ravel()  # isotropic: the state feeds both components
+
+        # MiniRes holds the well indices fixed, but those derived from K (Peaceman's, of the wells
+        # given an `rw`) are proportional to it. A well index only enters as WI λ_t (p_bh - p_cell),
+        # as the BHP control does, so its gradient follows from that of the control.
+        group = np.arange(wells.nComp) if wells.group is None else np.asarray(wells.group)
+        cells = model.xy2ind(wells.xy[:, 0], wells.xy[:, 1])
+        drawdown = np.asarray(wells.actual_bhp) - PP[1:, cells].T
+        dlogWI = dlogWI + np.nansum(grad.bhp * drawdown, axis=1)
+        from_K = np.array([("rw" in record or "path" in record) and "WI" not in record
+                           for record in self.well_records], dtype=bool)[group]
+        np.add.at(dlogK, cells[from_K], dlogWI[from_K])
+
+        dlogK = dlogK.reshape(model.shape)
+        if not self.log_perm:
+            dlogK = dlogK / model.K[0]
+        return dlogK.ravel(order=self.field_order)

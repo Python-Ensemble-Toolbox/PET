@@ -56,6 +56,12 @@ class CountingMiniRes(MiniRes):
         self.runs += 1
         return super().run_fwd_sim(state, member_index, **kwargs)
 
+    def run_vjp(self, state, weights):
+        products = super().run_vjp(state, weights)
+        # A backward sweep costs about a simulation; a scalar's sensitivity, two of them
+        self.runs += 1 + len(products[self.state_variable]) + 2 * (len(products) - 1)
+        return products
+
 
 def experiment(case_name: str, method: dict, i: int, ne: int) -> dict:
     """One twin experiment: the prior's and the posterior's scores, and the simulations spent."""
@@ -90,7 +96,9 @@ def experiment(case_name: str, method: dict, i: int, ne: int) -> dict:
         scheme = get_scheme(keys_da["scheme"], keys_da["analysis"])(keys_da, keys_en, sim)
         idX = scheme.ensemble.idX
         prior = np.array(scheme.ensemble.enX, copy=True)
-        scheme.run_assimilation()
+        result = scheme.run_assimilation()
+        if result.why_stop.get("all_trials_failed"):
+            raise RuntimeError(result.message)
         posterior = np.array(scheme.ensemble.enX)
 
         out = {"runs": sim.runs}

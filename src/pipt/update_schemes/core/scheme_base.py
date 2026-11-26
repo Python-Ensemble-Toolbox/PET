@@ -442,9 +442,9 @@ class AssimilationScheme(AnalysisBindingMixin, RestartMixin, ABC):
             if self.restartsave:
                 self.save_restart()  # the prior forecast is the expensive part of a short run
 
-        converged = False
+        converged = self.restart and self.check_convergence()
 
-        while self.iteration < self.maxiter:
+        while not converged and self.iteration < self.maxiter:
             # Guarded: enX is (nx, ne), so schemes that never opt in pay nothing.
             if self.step_tol > 0:
                 self.enX_old = deepcopy(self.ensemble.enX)
@@ -865,7 +865,7 @@ class AssimilationScheme(AnalysisBindingMixin, RestartMixin, ABC):
         if converged:
             reason = "Convergence criteria met. Stopping assimilation loop."
         else:
-            reason = "Maximum iterations reached without convergence."
+            reason = self.conv_msg or "Maximum iterations reached without convergence."
         self.logger.info(reason)
 
         why = self.why_stop.copy() if isinstance(self.why_stop, dict) else self.why_stop

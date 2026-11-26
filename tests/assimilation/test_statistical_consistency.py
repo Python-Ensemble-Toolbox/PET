@@ -71,6 +71,8 @@ DEVIATIONS = {
     "lambda, barely moves the misfit, which reads as convergence",
     ("esmda", "enif"): "About 0.2 sd off the mean in 10D at 100 members, though exact at 2000: "
     "presumably its regularised estimators",
+    ("lowrankgn", "laplace"): "Exact for the prior it fits to the ensemble (test_lowrank_gn), but that fit, "
+    "graphite-maps' as for EnIF, is regularised: 0.5 sd off the mean in 10D at 100 members",
 }
 
 #: Deviations about the size of the tolerance: non-strict, so a change in the noise does not fail them.
@@ -93,6 +95,10 @@ class Linear:
 
     def run_fwd_sim(self, state, member_index, *args, **kwargs):
         return [{"value": np.array([y])} for y in self.G @ state["x"]]
+
+    def run_vjp(self, state, weights):
+        """The weighted adjoint, `W^T G`, that `lowrankgn` asks for."""
+        return {"x": np.stack(list(weights["value"])).T @ self.G}
 
 
 def problem(nx):
@@ -142,6 +148,7 @@ def assimilate(scheme, analysis, P, seed):
         "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]},
         "iteration": {"max_iter": 20, "energy": 1.0},
         "enif": {"parameter_graphs": {"x": networkx.complete_graph(nx)}},
+        "laplace": {"parameter_graphs": {"x": networkx.complete_graph(nx)}},
     }
     keys_en = {
         "ne": NE, "state": ["x"], "importstate": "prior.npz", "seed": seed, "disable_tqdm": True,

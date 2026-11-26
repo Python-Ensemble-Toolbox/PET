@@ -38,6 +38,15 @@ class ForwardSimulator(Protocol):
     ``compute_adjoints``
         Whether ``run_fwd_sim`` returns ``(output, adjoint)``. Default False.
 
+    One more is called by a scheme, not by the ensemble; ``lowrankgn`` requires it:
+
+    ``run_vjp(state, weights)``
+        Weighted sums of the data's sensitivities to ``state``, at one
+        backward sweep each. ``weights`` is a frame of the observed report
+        points by data types, each cell the ``(k,)`` weights of that datum in
+        the ``k`` sums, or ``None``. Returns ``{variable: (k, n)}``, the
+        gradients of the sums with respect to each state variable.
+
     The ensemble also *assigns* ``redund_sim`` (a backup simulator, or
     ``None``) onto the simulator when it is constructed. The analytical models
     in :mod:`simulator` are the smallest complete examples.

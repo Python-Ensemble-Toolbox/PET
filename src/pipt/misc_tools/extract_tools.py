@@ -38,14 +38,14 @@ def extract_prior_info(keys: dict) -> dict:
     # Check if PRIOR_<state names> exists for each entry in state
     for name in state_names:
         assert_msg = f'PRIOR_{name.upper()} is missing! This keyword is needed to make initial ensemble for {name.upper()} entered in STATE'
-        assert f'prior_{name}' in keys, assert_msg
+        assert f'prior_{name}' in keys or 'importstate' in keys, assert_msg
 
     # Sefine dict to store prior information in
     prior_info = {name: None for name in state_names}
 
     # loop over state priors
     for name in state_names:
-        prior = keys[f'prior_{name}']
+        prior = keys.get(f'prior_{name}', {})
 
         # Check if is a list (old way)
         if isinstance(prior, list):

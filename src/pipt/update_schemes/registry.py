@@ -44,6 +44,7 @@ from pipt.update_schemes.enkf import EnKF
 from pipt.update_schemes.enrml import GNEnRML, LMEnRML, co_lm_enrml, gn_enrml
 from pipt.update_schemes.es import ES
 from pipt.update_schemes.esmda import ESMDA
+from pipt.update_schemes.lowrank_gn import LowRankGN
 # esmda_hybrid is a multilevel variant and lives with the multilevel machinery.
 from pipt.update_schemes.multilevel import esmda_hybrid
 
@@ -76,6 +77,8 @@ ALGORITHMS: dict[str, type] = {
 #: so also the way to override or add a genuinely different scheme.
 SPECIAL_SCHEMES: dict[tuple[str, str], type] = {
     ("esmda", "hybrid"): esmda_hybrid,
+    # Moves one point and samples about it; no analysis of an ensemble to choose.
+    ("lowrankgn", "laplace"): LowRankGN,
 }
 
 
@@ -158,13 +161,14 @@ def get_scheme(scheme: str, analysis: str):
     if resolved is not None:
         return resolved
 
-    if key[0] not in ALGORITHMS:
+    combos = available_schemes()
+    flavours = [flavour for name, flavour in combos if name == key[0]]
+    if not flavours:
         raise KeyError(
             f"Unknown assimilation scheme '{scheme}'. "
-            f"Available schemes: {', '.join(sorted(ALGORITHMS))}."
+            f"Available schemes: {', '.join(sorted({name for name, _ in combos}))}."
         )
 
-    flavours = sorted(flavour for name, flavour in available_schemes() if name == key[0])
     raise KeyError(
         f"Scheme '{scheme}' has no '{analysis}' analysis flavour. "
         f"Available flavours for '{scheme}': {', '.join(flavours)}."
