@@ -1,7 +1,10 @@
-"""Run logging: a table-formatting file logger and a no-op stand-in for when logging is off."""
+"""Run logging: a table-formatting file logger, a no-op stand-in for when logging is off, and
+helpers that format the lines of a detailed log."""
 import logging
 
-__all__ = ["PetLogger", "NullLogger"]
+import numpy as np
+
+__all__ = ["PetLogger", "NullLogger", "block", "change", "format_duration", "format_value", "heading", "items"]
 
 
 class NullLogger:
@@ -128,3 +131,111 @@ class PetLogger:
                 value_len = 0
 
             self.ns = max(self.ns, len(key) + 2, value_len + 2)
+
+
+# ---------------------------------------------------------------------- #
+# Lines of a detailed log
+# ---------------------------------------------------------------------- #
+# Each helper returns text, one line or a list of lines, and logs nothing: a
+# scheme hands the lines to its logger one by one. Together they give a log
+# with a block for the problem, a heading for every iteration and under it
+# short lists of what was computed, for example
+#
+#     ── Iteration 3  (12 min 05 s) ──────────────────────────────────────────
+#     Kernel
+#        Exponent p     1.82
+#        Bandwidth σ    21.3
+RULE_WIDTH = 72
+
+
+def format_value(value) -> str:
+    """Short text for a value. Arrays, lists and tuples are described by their size, never by their elements."""
+    if isinstance(value, (bool, np.bool_)) or value is None:
+        return str(value)
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        return f"{float(value):.6g}"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, np.ndarray):
+        return format_value(value.item()) if value.ndim == 0 else f"array of shape {value.shape}"
+    if isinstance(value, (list, tuple)):
+        return f"{type(value).__name__} of length {len(value)}"
+    if callable(value):
+        return getattr(value, "__name__", type(value).__name__)
+    return type(value).__name__
+
+
+def heading(title: str) -> str:
+    """A rule with a title, e.g. ``── Iteration 3 ─────``."""
+    text = f"── {title} "
+    return text + "─" * max(RULE_WIDTH - len(text), 3)
+
+
+def block(title: str, rows, heavy: bool = False) -> list:
+    """The lines of a titled block of aligned rows, between rules.
+
+    Parameters
+    ----------
+    title : str
+        Title of the block.
+    rows : sequence of tuples
+        ``(label, value)`` or ``(label, symbol, value)``. A value that is not
+        a string is formatted with :func:`format_value`.
+    heavy : bool
+        Double rules, and one below the rows: for the start and the end of a run.
+    """
+    rule = ("═" if heavy else "─") * RULE_WIDTH
+    rows = [(row[0], "", row[1]) if len(row) == 2 else tuple(row) for row in rows]
+    label_width = max([len(label) for label, _, _ in rows], default=0)
+    symbol_width = max([len(symbol) for _, symbol, _ in rows], default=0)
+    lines = [rule, f" {title}", rule]
+    for label, symbol, value in rows:
+        text = value if isinstance(value, str) else format_value(value)
+        symbol = f"{symbol:<{symbol_width}}  " if symbol_width else ""
+        lines.append(f"   {label:<{label_width}}  {symbol}{text}")
+    if heavy:
+        lines.append(rule)
+    return lines
+
+
+def items(title, rows, width=None) -> list:
+    """The lines of a titled list with one value per line.
+
+    Parameters
+    ----------
+    title : str or None
+        The line above the list; ``None`` continues a list begun earlier.
+    rows : sequence of tuples
+        ``(label, value)``. A value that is not a string is formatted with
+        :func:`format_value`.
+    width : int, optional
+        Width of the labels, so that a list written in two parts lines up.
+        Default: that of the longest label.
+    """
+    if width is None:
+        width = max([len(label) for label, _ in rows], default=0)
+    lines = [] if title is None else [title]
+    for label, value in rows:
+        text = value if isinstance(value, str) else format_value(value)
+        lines.append(f"   {label:<{width}}  {text}")
+    return lines
+
+
+def change(name: str, old, new, note: str = "", fmt: str = ".3e") -> str:
+    """One line for a quantity that changed, e.g. ``↳ λ  100 → 10  (step accepted)``."""
+    note = f"  ({note})" if note else ""
+    return f"   ↳ {name}  {old:{fmt}} → {new:{fmt}}{note}"
+
+
+def format_duration(seconds) -> str:
+    """Wall time as ``45.2 s``, ``12 min 05 s`` or ``3 h 07 min``."""
+    seconds = float(seconds)
+    if seconds < 60:
+        return f"{seconds:.1f} s"
+    minutes, seconds = divmod(int(round(seconds)), 60)
+    if minutes < 60:
+        return f"{minutes} min {seconds:02d} s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} h {minutes:02d} min"

@@ -15,6 +15,8 @@ from pipt.update_schemes.enkf import EnKF  # noqa: E402
 from pipt.update_schemes.enrml import GNEnRML, LMEnRML  # noqa: E402
 from pipt.update_schemes.es import ES  # noqa: E402
 from pipt.update_schemes.esmda import ESMDA  # noqa: E402
+from pipt.update_schemes.lowrank_gn import LowRankGN  # noqa: E402
+from pipt.update_schemes.svgd import SVGD  # noqa: E402
 from pipt.update_schemes.registry import (  # noqa: E402
     available_schemes,
     get_scheme,
@@ -27,6 +29,8 @@ __all__ = [
     "ESMDA",
     "LMEnRML",
     "GNEnRML",
+    "LowRankGN",
+    "SVGD",
     "build_scheme",
     "available_schemes",
     "get_scheme",

@@ -57,6 +57,13 @@ EXCLUDED = {
     # 2000 members, 1.14 x the posterior variance in 1D and 0.4 sd off the mean in 10D.
     ("lmenrml", "approx"): "approximation",
     ("gnenrml", "approx"): "approximation",
+    # SVGD needs a simulator that returns a weighted adjoint, which `Linear` does not, and
+    # hundreds of iterations a run; test_svgd compares it with the posterior of a linear-Gaussian
+    # problem in two unknowns. Measured on these problems with such a simulator and AdaGrad:
+    # within the tolerances in 1 and 2 unknowns after 300 iterations (three seeds); in 10
+    # unknowns still converging after 1500 (one seed: 0.3 sd off the mean, up to 1.65 x the
+    # posterior variance; 1.0 sd and 3 x after 300).
+    ("svgd", "adjoint"): "weighted adjoint, slow convergence",
 }
 
 #: Expected deviations from the posterior, per (scheme, analysis).
@@ -71,6 +78,8 @@ DEVIATIONS = {
     "lambda, barely moves the misfit, which reads as convergence",
     ("esmda", "enif"): "About 0.2 sd off the mean in 10D at 100 members, though exact at 2000: "
     "presumably its regularised estimators",
+    ("lowrankgn", "laplace"): "Exact for the prior it fits to the ensemble (test_lowrank_gn), but that fit, "
+    "graphite-maps' as for EnIF, is regularised: 0.5 sd off the mean in 10D at 100 members",
 }
 
 #: Deviations about the size of the tolerance: non-strict, so a change in the noise does not fail them.
@@ -93,6 +102,10 @@ class Linear:
 
     def run_fwd_sim(self, state, member_index, *args, **kwargs):
         return [{"value": np.array([y])} for y in self.G @ state["x"]]
+
+    def run_vjp(self, state, weights):
+        """The weighted adjoint, `W^T G`, that `lowrankgn` asks for."""
+        return {"x": np.stack(list(weights["value"])).T @ self.G}
 
 
 def problem(nx):
@@ -142,6 +155,7 @@ def assimilate(scheme, analysis, P, seed):
         "mda": {"tot_assim_steps": 4, "inflation_param": [4, 4, 4, 4]},
         "iteration": {"max_iter": 20, "energy": 1.0},
         "enif": {"parameter_graphs": {"x": networkx.complete_graph(nx)}},
+        "laplace": {"parameter_graphs": {"x": networkx.complete_graph(nx)}},
     }
     keys_en = {
         "ne": NE, "state": ["x"], "importstate": "prior.npz", "seed": seed, "disable_tqdm": True,

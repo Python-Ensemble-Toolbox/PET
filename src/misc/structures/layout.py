@@ -124,14 +124,38 @@ class DataLayout:
         one-row observation, a vector or an ``(size, ne)`` block otherwise.
         """
         values = np.asarray(values)
-        frame = pd.DataFrame({datatype: [None] * len(self.labels) for datatype in self.datatypes},
-                             index=pd.Index(self.labels, name=self.label_name), dtype=object)
+        # Assemble cells before constructing the frame: pandas scalar assignment
+        # squeezes a one-direction weight vector to a zero-dimensional array.
+        columns = {datatype: dict.fromkeys(self.labels) for datatype in self.datatypes}
         for row in self.rows:
             block = values[row.rows]
             if row.size == 1:
                 block = float(block[0]) if values.ndim == 1 else block[0]   # a scalar, or its (ne,) ensemble
-            frame.at[row.label, row.datatype] = block
+            columns[row.datatype][row.label] = block
+        frame = pd.DataFrame(columns, index=pd.Index(self.labels, name=self.label_name), dtype=object)
         return PETDataFrame.from_pandas(frame, name=name, is_ensemble=values.ndim == 2)
+
+
+def prior_layers(info):
+    """Yield the mean and (co)variance used to draw each independent PET layer."""
+    from geostat.decomp import Cholesky
+
+    mean, var = info['mean'], info['variance']
+    nx, ny, nz = info.get('nx', 0), info.get('ny', 0), info.get('nz', 0)
+    gridded = bool(nx or ny)
+    if not gridded:
+        nz = 1
+    for z in range(nz):
+        if not gridded and len(mean) > 1:
+            cov = np.full(len(mean), var[z])
+        elif gridded and len(mean) > 1:
+            cov = Cholesky().gen_cov2d(
+                x_size=nx, y_size=ny, variance=var[z], var_range=info['corr_length'][z],
+                aspect=info['aniso'][z], angle=info['angle'][z], var_type=info['vario'][z],
+            )
+        else:
+            cov = np.array(var[z])
+        yield mean[int(z * (len(mean) / nz)):int((z + 1) * (len(mean) / nz))], cov
 
 
 def _gen_real_limits(limits, layer):
@@ -213,34 +237,10 @@ class StateLayout:
         save : bool, optional
             Write the prior to ``prior_ensemble.npz`` (default True).
         """
-        from geostat.decomp import Cholesky
-
         enX, idX = None, {}
         for name, info in prior_info.items():
-            mean = info['mean']
-            var = info['variance']
-            nx, ny, nz = info.get('nx', 0), info.get('ny', 0), info.get('nz', 0)
-            gridded = not (nx == ny == 0)
-            if not gridded:  # independent scalars, one per entry of the mean
-                nz = 1
-
-            j = 0
             field = None
-            for z in range(nz):
-                if not gridded and len(mean) > 1:
-                    cov = np.full(len(mean), var[z])
-                elif gridded and isinstance(mean, (list, np.ndarray)) and len(mean) > 1:
-                    cov = Cholesky().gen_cov2d(
-                        x_size=nx, y_size=ny, variance=var[z], var_range=info['corr_length'][z],
-                        aspect=info['aniso'][z], angle=info['angle'][z], var_type=info['vario'][z],
-                    )
-                else:
-                    cov = np.array(var[z])
-
-                i = j
-                j = int((z + 1) * (len(mean) / nz))
-                meanz = mean[i:j]
-
+            for z, (meanz, cov) in enumerate(prior_layers(info)):
                 if info.get('limits', None) is None:
                     fieldz = gen_real(meanz, cov, ne, rng=rng)
                 else:

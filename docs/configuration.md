@@ -19,8 +19,8 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 
 | Key | Meaning | Default |
 | --- | --- | --- |
-| `scheme` | Algorithm: `esmda`, `es`, `enkf`, `lmenrml`, `gnenrml`. `pipt.available_schemes()` lists every `(scheme, analysis)` pair. | required |
-| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (all schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML); `enif` (ES-MDA, see the `[dataassim.enif]` block below). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
+| `scheme` | Algorithm: `esmda`, `es`, `enkf`, `lmenrml`, `gnenrml`, `lowrankgn`, `svgd`. `pipt.available_schemes()` lists every `(scheme, analysis)` pair. | required |
+| `analysis` | Analysis flavour the scheme runs: `approx`, `full`, `subspace` (ensemble Kalman schemes); `subspace2` (ES-MDA, LM-EnRML, GN-EnRML); `margis` (GN-EnRML); `enif` (ES-MDA, see the `[dataassim.enif]` block below); `laplace` (`lowrankgn` only); `adjoint` (`svgd` only). `subspace2` solves for the ensemble transform directly and uses the analytic data covariance, so it reads neither `energy` nor `iteration.energy`. | `approx` |
 | `energy` | Truncation energy of the SVD in ES-MDA, ES and EnKF; a fraction, or a percentage when greater than 1. The iterative schemes read `iteration.energy`. | `0.98` |
 | `emp_cov` | The variance file holds an ensemble of observation errors; the analyses use that empirical covariance. Flag. | off |
 
@@ -52,12 +52,122 @@ Flags accept `true`/`false`, `yes`/`no` and the Python booleans. A key marked
 | `gamma` | GN-EnRML: step length. `auto` starts at `0.1`. | `0.2` |
 | `gamma_max`, `gamma_factor` | GN-EnRML: bound and update factor for the step length. | `1.0`, `2.0` |
 
+`lowrankgn` reads the same block: `max_iter`, `data_misfit_tol` (on the data misfit of its one point), `energy` (of
+the data basis), `max_rank` (an upper bound on the size of that basis; default none), `full_jacobian` (no basis: the sensitivity of every datum, one backward sweep each; default false), `max_inner_iter`, and `lambda`, `lambda_min`, `lambda_factor` with the defaults
+`10`, `0.01`, `10`. It needs a simulator with `run_vjp`. It
+refuses `multilevel`, `localization`, `localanalysis`, `compress`, `scale_data`, `scale`, `emp_cov` and
+`remove_outliers`, as well as `post_process_forecast`. Observation variances must be finite and
+strictly positive. The prior cost, forecast and accepted MAP use the same bounded trial; final
+Gaussian draws are clipped to the configured limits. If all trial forecasts fail, the result
+has `success=False` and `x` contains only the last feasible centre; no posterior is forecast.
+MiniRes adjoints do not support rate-controlled multi-completion wells whose rate allocation
+depends on permeability.
+
+### Laplace: prior factor and posterior samples (`[dataassim.laplace]`, optional)
+
+`ensemble.ne` sets the number of prior members. `posterior_samples` sets the
+number of final draws and defaults to `ensemble.ne`. For example, with `ne = 8`
+and `posterior_samples = 100`, PET forecasts eight prior members, one centre per
+trial, and 100 posterior members. Increasing only `posterior_samples` does not
+change the data basis or MAP estimate.
+
+Both Gauss–Newton variants choose the prior in the following order:
+
+1. **Supplied sparse precision.** `precision = "Q.npz"` factors the joint precision in PET state-row order,
+   including correlations between variables. Alternatively, `precision = { permx = "Qk.npz" }` supplies a
+   block in that variable's row order. Use `scipy.sparse.save_npz` (or pass a SciPy sparse matrix from
+   Python). Supply both triangles of a symmetric positive-definite matrix. The solver uses sparse
+   Cholesky with a fill-reducing permutation; it never forms the inverse.
+   If you already have a lower triangular factor C with Q = CᵀC (e.g. from a
+   Vecchia estimator), set `precision_factor = { permx = "C.npz" }` instead.
+   Supply the factor in the variable's PET row order, with positive diagonal; PET does not refit it.
+   Alternatively, use a `[dataassim.laplace.matern.<variable>]` block as below.
+2. **Known covariance.** For a variable with at most `max_dense_size` rows (default `4096`), use a supplied
+   covariance, e.g. `covariance = { permx = "K.npy" }`, or reconstruct the model covariance if PET drew
+   that variable from `prior_<name>`. The `.npy` contains a square covariance or a vector of variances.
+   The model route uses its specified mean and independent layers, as in PET's prior draw; the other
+   routes use the ensemble mean. Set `max_dense_size = 0` to skip this step.
+3. **Ensemble only or above the size limit.** Fit a sparse precision factor with graphite-maps. The
+   default graph connects grid neighbours, expanded by two hops; without grid metadata the rows are
+   independent. Override `parameter_graphs` (per-variable symmetric adjacency `.npz` files),
+   `neighbourhood_expansion`, or `ridge_per_entry` (default `2.0`, graphite-maps' regularization per
+   fitted row entry). Smaller ridge values weaken regularization; zero can fail with collinear samples.
+   Every fitted row needs positive ensemble spread.
+
+For example, with an imported ensemble:
+
+```toml
+[dataassim.laplace]
+precision = { permx = "permx_precision.npz" }
+covariance = { sor = "sor_variance.npy" }
+neighbourhood_expansion = 2
+```
+
+These settings select the solver factor, not the generator for the initial ensemble. For large cases
+where PET's variogram draw would itself be dense, supply the members via `ensemble.importstate`.
+No EnIF configuration is read.
+
+Example for a field in EGRID active-cell order, using the optional
+[`matern-egrid`](https://github.com/KriFos1/Matern) Python package:
+
+```toml
+[dataassim.laplace.matern.permx]
+egrid = "MODEL.EGRID"
+field = { sigma = 0.8, range = 300.0 }
+operator = { boundary = "robin" }
+```
+
+`field` configures `MaternField3` and `operator` supplies optional `build_operator` arguments.
+The same SPDE operator defines covariance products, prior costs and draws. PET caches the
+solver for K and uses transpose solves for nonsymmetric operators. For every prior the MAP
+step uses the same AW solve. Storage for W is one state-length vector per Jacobian row:
+`max_rank` bounds this for the projected variant; full Jacobian uses one per observation.
+
 ### ES-MDA: the `[dataassim.mda]` block
 
 | Key | Meaning | Default |
 | --- | --- | --- |
 | `tot_assim_steps` | Number of inflated assimilation steps; one update each. | required |
 | `inflation_param` | Inflation factor per step (a list) or one factor for all. The inverses must sum to 1. | `tot_assim_steps` for every step |
+
+### SVGD: the `[dataassim.svgd]` block
+
+Stein variational gradient descent (`scheme = "svgd"`, `analysis = "adjoint"`)
+moves the members along the simulator's adjoint gradient of the data misfit,
+one forward and one adjoint run per member per iteration. The simulator must
+return a weighted adjoint: for the JutulDarcy wrapper, set
+`weighted_adjoint = {parameters = [...]}` in `[fwdsim]` instead of `adjoints`;
+the scheme hands it the weights. Parameters are matched to the state by name,
+with `log_permx` also accepted for a state named `permx` **if that state
+already holds log-permeability**. Name matching does not convert units or
+apply a chain rule. For a state holding permeability itself, return its
+permeability derivative.
+Observations are not perturbed. Compressed data and `emp_cov` are not supported.
+
+The prior term of the gradient, `C_x⁻¹(μ − x)`, uses the mean and covariance of
+a large sample of the prior, `prior_cov_samples` realisations that are never
+simulated. The covariance is not formed; its inverse is applied through the
+singular value decomposition of the sample. A sample describes at most
+`prior_cov_samples − 1` directions of the state. In the others the prior term
+is zero and the members move with the data term and the repulsion only, so use
+more realisations than state variables where that is affordable.
+
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `maxiter` | Largest number of iterations. | `50` |
+| `stein_tol` | Stop when the root-mean-square size of the Stein direction is below this fraction of its size in the first iteration. The direction is what moves the members, so it is zero where SVGD has converged. On a linear-Gaussian problem with a known posterior the spread is within 1% of the posterior's at `0.001` and within 3 to 15% at `0.01`. With a fixed step size (`adagrad`, `gd`) the direction may level off above the tolerance, and the run then takes `maxiter` iterations. `0` switches the criterion off. The run table of the log shows the size in percent of the first, in the column `Φ (%)`. | `0.001` |
+| `stein_change` | A second condition for the stop on `stein_tol`. When given, the run stops only when the Stein direction is below `stein_tol` of its first size and has also changed by less than this fraction of its size since the iteration before, so a run whose direction is still falling goes on. | not used |
+| `optimizer` | How the Stein direction becomes a step: `adagrad` (as in the paper), `adam`, `gd` (plain gradient descent) or `lbfgs` (limited-memory BFGS without a line search; the step is capped at `step_size`). | `adagrad` |
+| `step_size` | Step size of the optimizer. With `adagrad` and `adam` a step is about this many prior standard deviations in every variable; with `gd` it multiplies the direction itself, so the right value depends on the size of the gradients; with `lbfgs` it is the largest root-mean-square step, in prior standard deviations. | `0.1` |
+| `autocorr` | `adagrad` only: memory of the squared direction. | `0.9` |
+| `beta1`, `beta2` | `adam` only: memory of the direction and of its square. | `0.9`, `0.999` |
+| `memory` | `lbfgs` only: number of earlier steps the curvature is estimated from. | `10` |
+| `prior_cov_samples` | Number of prior realisations the prior mean and covariance are estimated from. Drawn from the `prior_<name>` blocks; with `importstate`, the first `prior_cov_samples` realisations of that file (the members are its first `ne`). `0` switches the prior term off. | `1000`; with `importstate`, every realisation in the file |
+| `prior_cov_energy` | Truncation of the prior sample's singular values, as `energy`: a fraction, or a percentage when greater than 1. Truncated directions get no prior term. | `1` (keep all) |
+| `prior_cov_estimate` | How the prior covariance is estimated from the realisations. `sample`: their sample covariance, which has at most `prior_cov_samples − 1` directions. `graph`: a sparse factor of the inverse covariance fitted to them on the graphs of the state, as EnIF fits its prior precision (`graphite-maps`); it has every variable that varies in the realisations, also when there are fewer realisations than variables. The graphs and their reach are EnIF's: `parameter_graphs` and `neighbourhood_expansion` under `[dataassim.enif]`, or nearest neighbours from the `grid` of a `prior_<name>` block. A state without either gets independent variables. `prior_cov_energy` is not used with `graph`. | `sample` |
+| `kernel` | `p-kernel` (refitted each iteration), `gaussian` (median rule), `imq`, the inverse multiquadric `(1 + d²/σ²)^(-1/2)`, which falls off slowly with distance, or `p-imq`, its p-variant `(1 + (d/σ)^p)^(-1/2)` with `p` and `σ` refitted each iteration to the two percentiles of the p-kernel. | `p-kernel` |
+| `alpha` | Percentile level the p-kernel and `p-imq` are fitted to: the kernel is `1 - alpha` and `alpha` at the `alpha` and `1 - alpha` percentiles of the members' distances. | `0.05` |
+| `imq_level` | `imq` only: the value of the kernel for two members at the median distance from each other, between 0 and 1; `σ` is refitted to it each iteration. It is the weight such a member's gradient gets in the other's direction: a high value keeps the members spread, a low value lets each follow its own gradient and the ensemble narrows. By default `1/√N` for `N` members (`σ² = med(d)² / (N − 1)`): the gradients of the other members then weigh as much as a member's own when they point in unrelated directions. | `1/√N` |
 
 ### EnIF: the `[dataassim.enif]` block
 
@@ -210,7 +320,7 @@ PET reads a few keys; the rest belong to the simulator wrapper.
 | `reporttype`, `reportpoint` | Name and values of the report labels: a list, a `.csv`/`.txt`/`.yaml` file, or `{start, end, freq}` for a date range. | required by most wrappers |
 | `parallel` | Members run at once in a local process pool; `1` runs them in sequence. | `1` |
 | `hpc` | Run the members through the wrapper's HPC queue in batches of `parallel`. Flag. | off |
-| `compute_adjoints` | The wrapper returns `(prediction, adjoint)` per member; the adjoints reach the analysis as an `(nd, nx, ne)` array. Flag. | off |
+| `compute_adjoints` | The wrapper returns `(prediction, adjoint)` per member; the adjoints reach the analysis as an `(nd, nx, ne)` array. A wrapper in weighted-adjoint mode returns one gradient per parameter instead (a Series indexed by parameter name), and they reach the scheme as an `(nx, ne)` array. Flag. | off |
 | `saveforecast` | Save each full forecast (`sim_results.pkl`) and the reconstructed compressed vintages (`rec_results.pkl`). *Presence.* | off |
 
 ## Legacy text files

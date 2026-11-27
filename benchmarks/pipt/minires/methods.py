@@ -70,4 +70,21 @@ METHODS = [
             "localization": {"name": "distance_loc", "taper_func": "gc", "radius": 300.0, "unlocalized": ["sor"]},
         },
     },
+    # The two below move one point to the posterior mode and sample about it. They use the
+    # simulator's adjoint, and their simulations include its backward sweeps, at one each. Like
+    # LM-EnRML they stop on the change of the data misfit, or after 4 iterations.
+    {
+        # The sensitivity in 12 data directions: 12 sweeps an iteration
+        "label": "LowRank-GN (4 iterations, rank 12), Laplace posterior",
+        "dataassim": {
+            "scheme": "lowrankgn",
+            "analysis": "laplace",
+            "iteration": {"max_iter": 4, "energy": 100.0, "max_rank": 12},
+        },
+    },
+    {
+        # The sensitivity of every datum: as many sweeps an iteration as there are data
+        "label": "Full-Jacobian GN (4 iterations), Laplace posterior",
+        "dataassim": {"scheme": "lowrankgn", "analysis": "laplace", "iteration": {"max_iter": 4, "full_jacobian": True}},
+    },
 ]

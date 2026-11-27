@@ -8,5 +8,6 @@ from .enkf import *
 from .enrml import *
 from .es import *
 from .esmda import *
+from .lowrank_gn import *
 from .multilevel import *
 from . import analysis

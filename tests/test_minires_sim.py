@@ -1,8 +1,10 @@
 """The MiniRes wrapper: the protocol, the state/report mappings, and the adjoint."""
 
 import pickle
+from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from ensemble import ForwardSimulator
@@ -203,11 +205,103 @@ class TestAdjoints:
             difference = (plus[i][datatype][0] - minus[i][datatype][0]) / (2 * eps)
             assert adjoint.loc[step, datatype] @ v == pytest.approx(difference, rel=1e-4)
 
+    @pytest.mark.parametrize("datatype", ["WOPR:PRD1", "WWPR:PRD1", "WWCT:PRD1", "WBHP:INJ1"])
+    def test_it_covers_the_well_model_and_the_well_indices_that_follow_the_permeability(self, datatype):
+        # A producer on BHP control, and the pressure of an injector on rate: both go through
+        # well indices that the wrapper derives from the member's permeability.
+        cfg = bhp_config(compute_adjoints=True, datatype=[datatype], reportpoint=[4, 6])
+        cfg["model"]["cached_precond"] = False
+        sim = MiniRes(cfg)
+        rng = np.random.default_rng(0)
+        x, v, eps = a_field(), rng.standard_normal(NX * NY), 1e-6
+
+        _records, adjoint = sim.run_fwd_sim({"permx": x}, 0)
+        plus = sim.run_fwd_sim({"permx": x + eps * v}, 0)[0]
+        minus = sim.run_fwd_sim({"permx": x - eps * v}, 0)[0]
+
+        for i, step in enumerate(sim.report):
+            difference = (plus[i][datatype][0] - minus[i][datatype][0]) / (2 * eps)
+            assert adjoint.loc[step, datatype] @ v == pytest.approx(difference, rel=1e-4)
+
     def test_a_state_beyond_the_permeability_is_refused_rather_than_left_out(self, caplog):
         sim = MiniRes(config(compute_adjoints=True, datatype=["WWCT:PRD1"]))
         assert sim.run_fwd_sim({"permx": a_field(), "sor": np.array([0.1])}, 0) is False
         assert "only with respect to the permeability" in caplog.text
 
+    def test_rate_controlled_path_is_refused_by_both_adjoint_entry_points(self):
+        cfg = bhp_config(datatype=["WBHP:INJ1"], reportpoint=[4])
+        injector = cfg["model"]["wells"][0]
+        injector.pop("xy")
+        injector["path"] = [[.05, .05], [.45, .05]]
+        state = {"permx": a_field()}
+        sim = MiniRes(cfg)
+        assert np.isfinite(sim.run_fwd_sim(state, 0)[0]["WBHP:INJ1"]).all()
+        with pytest.raises(NotImplementedError, match="rate allocation.*INJ1"):
+            sim.run_vjp(state, pd.DataFrame({"WBHP:INJ1": [np.ones(1)]}, index=[4]))
+        with pytest.raises(NotImplementedError, match="rate allocation.*INJ1"):
+            MiniRes({**cfg, "compute_adjoints": True}).run_fwd_sim(state, 0)
+
     def test_a_quantity_it_cannot_differentiate_is_refused_rather_than_dropped(self):
         with pytest.raises(NotImplementedError, match="not among the differentiated"):
             MiniRes(config(compute_adjoints=True, datatype=["FWIR"]))
+
+    def test_a_weighted_sum_of_the_data_costs_one_sweep_and_agrees_with_the_frame(self):
+        datatypes = ["WWCT:PRD1", "WOPR:PRD1"]
+        sim = MiniRes(config(compute_adjoints=True, datatype=datatypes))
+        state = {"permx": a_field()}
+        _records, adjoint = sim.run_fwd_sim(state, 0)
+
+        # Two sums; the last report point of the second data type is in neither
+        weights = pd.DataFrame(index=adjoint.index, columns=datatypes, dtype=object)
+        rng = np.random.default_rng(0)
+        expected = np.zeros((2, NX * NY))
+        for step in sim.report:
+            for datatype in datatypes:
+                if (step, datatype) == (sim.report[-1], datatypes[1]):
+                    weights.at[step, datatype] = None
+                    continue
+                weights.at[step, datatype] = rng.standard_normal(2)
+                expected += np.outer(weights.at[step, datatype], adjoint.at[step, datatype])
+
+        with patch.object(sim, "_simulate", wraps=sim._simulate) as forward:
+            products = sim.run_vjp(state, weights)
+        forward.assert_called_once_with(state)
+        np.testing.assert_allclose(products["permx"], expected, rtol=1e-8, atol=1e-12)
+
+    def test_a_weighted_sum_is_also_differentiated_with_respect_to_a_scalar_of_the_fluid(self):
+        cfg = bhp_config(reportpoint=[4, 6])
+        cfg["model"]["cached_precond"] = False
+        sim = MiniRes(cfg)
+        rng = np.random.default_rng(0)
+        weights = pd.DataFrame(
+            [[rng.standard_normal(1) for _ in sim.datatype] for _ in sim.report],
+            index=sim.report, columns=sim.datatype, dtype=object,
+        )
+
+        def weighted_sum(state):
+            records = sim.run_fwd_sim(state, 0)
+            return sum(weights.at[step, d][0] * row[d][0] for step, row in zip(sim.report, records) for d in sim.datatype)
+
+        state = {"permx": a_field(), "sor": np.array([0.2])}
+        products = sim.run_vjp(state, weights)
+        assert products["permx"].shape == (1, NX * NY) and products["sor"].shape == (1, 1)
+
+        v, eps = rng.standard_normal(NX * NY), 1e-6
+        along_field = (weighted_sum({**state, "permx": state["permx"] + eps * v})
+                       - weighted_sum({**state, "permx": state["permx"] - eps * v})) / (2 * eps)
+        assert products["permx"][0] @ v == pytest.approx(along_field, rel=1e-4)
+        # Only roughly: the response to the fluid has small jumps, so its slope depends on the step
+        along_sor = (weighted_sum({**state, "sor": np.array([0.22])}) - weighted_sum({**state, "sor": np.array([0.18])})) / 0.04
+        assert products["sor"][0, 0] == pytest.approx(along_sor, rel=0.2)
+
+    def test_a_field_beyond_the_permeability_is_refused_by_the_weighted_sum(self):
+        sim = MiniRes(config(datatype=["WWCT:PRD1"]))
+        weights = pd.DataFrame({"WWCT:PRD1": [np.ones(1)]}, index=[2], dtype=object)
+        with pytest.raises(NotImplementedError, match="scalars of the fluid"):
+            sim.run_vjp({"permx": a_field(), "por": np.full(NX * NY, 0.2)}, weights)
+
+    def test_a_weighted_datum_it_cannot_differentiate_is_refused(self):
+        sim = MiniRes(config(datatype=["FWIR"]))
+        weights = pd.DataFrame({"FWIR": [np.ones(1)]}, index=[2], dtype=object)
+        with pytest.raises(NotImplementedError, match="not among the differentiated"):
+            sim.run_vjp({"permx": a_field()}, weights)

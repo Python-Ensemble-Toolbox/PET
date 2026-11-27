@@ -30,7 +30,64 @@ from sklearn.preprocessing import StandardScaler
 from pipt.update_schemes.analysis.base import AnalysisBase, AnalysisResult
 import pipt.misc_tools.extract_tools as extract
 
-__all__ = ["enif_update"]
+__all__ = ["enif_update", "parameter_graph"]
+
+
+def parameter_graph(name, size, options, prior_info):
+    """Load a state variable's graph, or build nearest-neighbour connectivity from its grid.
+
+    Graph nodes are local parameter rows, numbered ``0 .. size-1``.
+    Regular grids use y-fastest ordering, then x, then z, matching PET's
+    layered prior ensembles. Without grid metadata, parameters are
+    independent.
+
+    Parameters
+    ----------
+    name : str
+        State-variable name whose graph to build.
+    size : int
+        Number of parameter rows in the group.
+    options : dict
+        The analysis settings; ``parameter_graphs`` may hold the graph.
+    prior_info : dict
+        The prior description, for the variable's grid.
+
+    Returns
+    -------
+    networkx.Graph
+    """
+    graph = options.get('parameter_graphs', {}).get(name)
+    if graph is not None:
+        if isinstance(graph, (str, PathLike)):
+            graph = sparse.load_npz(graph)
+        if sparse.issparse(graph):
+            if graph.shape != (size, size) or (graph != graph.T).nnz:
+                raise ValueError(f'EnIF graph for {name} must be a symmetric ({size}, {size}) adjacency.')
+            graph = nx.from_scipy_sparse_array(graph)
+        if not isinstance(graph, nx.Graph) or graph.is_directed() or graph.is_multigraph():
+            raise ValueError(f'EnIF graph for {name} must be an undirected simple graph.')
+        if set(graph.nodes) != set(range(size)):
+            raise ValueError(f'EnIF graph for {name} must have nodes 0 through {size - 1}.')
+        return graph.copy()
+
+    info = prior_info[name]
+    if not all(key in info for key in ('nx', 'ny')):
+        return nx.empty_graph(size)
+    shape = (int(info.get('nz', 1)), int(info['nx']), int(info['ny']))
+    if min(shape) < 1 or np.prod(shape) != size:
+        raise ValueError(
+            f'EnIF grid for {name} has {np.prod(shape)} cells but {size} parameter rows. '
+            'Provide parameter_graphs for a reduced or irregular grid.'
+        )
+    cells = np.arange(size).reshape(shape)
+    graph = nx.empty_graph(size)
+    for axis in range(3):
+        left = [slice(None)] * 3
+        right = [slice(None)] * 3
+        left[axis] = slice(None, -1)
+        right[axis] = slice(1, None)
+        graph.add_edges_from(zip(cells[tuple(left)].ravel(), cells[tuple(right)].ravel()))
+    return graph
 
 
 @dataclass(frozen=True)
@@ -220,57 +277,8 @@ class enif_update(AnalysisBase):
     # Helpers
     # ------------------------------------------------------------------
     def _parameter_graph(self, name, size):
-        """Load a group graph or build nearest-neighbour connectivity from its grid.
-
-        Graph nodes are local parameter rows, numbered ``0 .. size-1``.
-        Regular grids use y-fastest ordering, then x, then z, matching PET's
-        layered prior ensembles. Without grid metadata, parameters are
-        independent.
-
-        Parameters
-        ----------
-        name : str
-            State-variable name whose graph to build.
-        size : int
-            Number of parameter rows in the group.
-
-        Returns
-        -------
-        networkx.Graph
-        """
-        scheme = self.scheme
-        graph = scheme.keys_da.get('enif', {}).get('parameter_graphs', {}).get(name)
-        if graph is not None:
-            if isinstance(graph, (str, PathLike)):
-                graph = sparse.load_npz(graph)
-            if sparse.issparse(graph):
-                if graph.shape != (size, size) or (graph != graph.T).nnz:
-                    raise ValueError(f'EnIF graph for {name} must be a symmetric ({size}, {size}) adjacency.')
-                graph = nx.from_scipy_sparse_array(graph)
-            if not isinstance(graph, nx.Graph) or graph.is_directed() or graph.is_multigraph():
-                raise ValueError(f'EnIF graph for {name} must be an undirected simple graph.')
-            if set(graph.nodes) != set(range(size)):
-                raise ValueError(f'EnIF graph for {name} must have nodes 0 through {size - 1}.')
-            return graph.copy()
-
-        info = scheme.prior_info[name]
-        if not all(key in info for key in ('nx', 'ny')):
-            return nx.empty_graph(size)
-        shape = (int(info.get('nz', 1)), int(info['nx']), int(info['ny']))
-        if min(shape) < 1 or np.prod(shape) != size:
-            raise ValueError(
-                f'EnIF grid for {name} has {np.prod(shape)} cells but {size} parameter rows. '
-                'Provide parameter_graphs for a reduced or irregular grid.'
-            )
-        cells = np.arange(size).reshape(shape)
-        graph = nx.empty_graph(size)
-        for axis in range(3):
-            left = [slice(None)] * 3
-            right = [slice(None)] * 3
-            left[axis] = slice(None, -1)
-            right[axis] = slice(1, None)
-            graph.add_edges_from(zip(cells[tuple(left)].ravel(), cells[tuple(right)].ravel()))
-        return graph
+        """The graph of a state variable, ref :func:`parameter_graph`."""
+        return parameter_graph(name, size, self.scheme.keys_da.get('enif', {}), self.scheme.prior_info)
 
     def _observation_precision(self, enY, enE):
         """Inflate observation covariance once; whiten correlated observation errors.

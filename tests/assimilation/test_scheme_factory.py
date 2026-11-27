@@ -22,7 +22,7 @@ ALGORITHMS = {
 
 
 def test_top_level_exports():
-    for name in ALGORITHMS:
+    for name in [*ALGORITHMS, "LowRankGN", "SVGD"]:
         assert hasattr(pipt, name), f"pipt.{name} should be importable"
     assert hasattr(pipt, "build_scheme")
 
@@ -51,9 +51,8 @@ def test_five_algorithms_cover_every_registered_combination():
 def test_registry_size_matches_the_algorithms_specials_and_historical_names():
     """Down from eighteen hand-written classes: 5 algorithms x 3 flavours, ``subspace2``
     on the three schemes that can apply an ensemble transform, ``enif`` on ES-MDA,
-    the two combinations backed by a distinct implementation, and the two historical
-    names (co_lm_enrml, gn_enrml) that each pin a single flavour."""
-    assert len(registry.available_schemes()) == 5 * 3 + 3 + 1 + 2 + 2
+    the hybrid and margis combinations, the two adjoint schemes and the two historical names."""
+    assert len(registry.available_schemes()) == 5 * 3 + 3 + 1 + 2 + 2 + 2
     assert len(ALGORITHMS) == 5               # the public constructors above
     assert len(registry.ALGORITHMS) == 5 + 2  # plus the two historical names
 
@@ -133,6 +132,8 @@ def test_default_analysis_is_approx(monkeypatch):
 def test_bad_flavour_reports_valid_ones():
     with pytest.raises(KeyError, match="no 'nope' analysis flavour"):
         pipt.build_scheme("esmda", {}, {}, None, analysis="nope")
+    with pytest.raises(KeyError, match="Available flavours for 'lowrankgn': laplace"):
+        registry.get_scheme("lowrankgn", "approx")
 
 
 def test_per_flavour_class_names_no_longer_exist():
